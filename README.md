@@ -121,6 +121,12 @@ grounded, meaning it may only assert what traces to a retrieved record. A
 review, not obey.** Human-in-the-loop throughout: the agent prepares; a person
 decides and files.
 
+## Author
+
+Built by **Jennifer Hicks**, a crypto-compliance leader exploring agentic AI for
+regulated financial-crime investigations. Connect on
+[LinkedIn](https://www.linkedin.com/in/hije/).
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
