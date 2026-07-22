@@ -22,8 +22,10 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   RFI surfacing → Advisory Matcher → grounded SAR Drafter → Case Packager) over
   a hash-chained audit trail, with a 7-tab Streamlit demo (incl. network triage
   roster + read-only RFI view) and 44 green tests.
-- **NEXT: publish the walking skeleton to GitHub, then Phase 2** (full network
-  expansion, gas-funding linkage, fuzzy tell matching, eval metrics).
+- **PUBLISHED:** the walking skeleton is live at
+  <https://github.com/hije-1/okojo> (public, MIT).
+- **NEXT: Phase 2** (full 1–7-hop network expansion, gas-funding linkage,
+  RapidFuzz tell matching, On-chain Risk Scorer, P/R/F1 eval harness).
   Full details in `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
@@ -71,6 +73,6 @@ outputs: **pydantic** · UI: **Streamlit** · tests: **pytest**.
 
 ## How to work here
 - Build **phase by phase** per `docs/Build-Plan.md`. Keep commits small and green.
-- Publish the Phase 1 walking skeleton early (it's the first shareable artifact).
+- Keep a steady public commit cadence (the visible history is itself a portfolio signal).
 - Use **plan mode** (Shift+Tab) when standing up a new subsystem.
 - Each new capability ships with an eval against `ground_truth.json`.
