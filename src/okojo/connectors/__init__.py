@@ -149,6 +149,14 @@ class Connectors:
             lambda r: f"{r['funder_address']}->{r['funded_address']}",
         )
 
+    # -- sanctions watchlist ------------------------------------------------ #
+    def sdn_list(self) -> list[Record]:
+        """The synthetic SDN/alias watchlist (Tell Miner fuzzy-match target)."""
+        return self._records(
+            "sdn_list", "SELECT * FROM sdn_list", [],
+            lambda r: r["sdn_id"],
+        )
+
     # -- RFI ---------------------------------------------------------------- #
     def rfi_for(self, uid: int) -> list[Record]:
         return self._records(

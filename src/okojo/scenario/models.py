@@ -79,6 +79,21 @@ class Transaction:
 
 
 @dataclass
+class SdnEntry:
+    """A synthetic sanctions-watchlist entry (the Tell Miner's fuzzy-match target).
+
+    Fully fabricated. Some aliases are deliberate transliteration variants of ring
+    members' names, so a fuzzy matcher flags the account while an exact-match
+    screen would miss it; others are decoys that must not match (precision)."""
+
+    sdn_id: str
+    primary_name: str
+    aliases: str              # ';'-separated alias strings
+    program: str              # synthetic sanctions program label
+    entity_type: str          # "individual" | "company"
+
+
+@dataclass
 class Rfi:
     rfi_id: str
     uid: int

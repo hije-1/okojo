@@ -19,6 +19,7 @@ _EDGE_STYLE = {
     "shared_device": ("#7c3aed", False),
     "reused_kyc": ("#16a34a", False),
     "gas_funding": ("#dc2626", True),  # dashed — the controller tell
+    "gas_control": ("#b91c1c", True),  # dashed — controller-collapse attribution
 }
 
 
@@ -61,7 +62,19 @@ def render(expansion: NetworkExpansion, out_path: Union[str, Path], height: str 
 
     for nid, data in expansion.graph.nodes(data=True):
         color, shape, title = _node_style(data)
-        net.add_node(nid, label=str(data.get("label", nid)), color=color, shape=shape, title=title)
+        # Size and border encode risk so the eye lands on the exposed cluster:
+        # bigger node = higher risk; a red border marks the high-risk tier.
+        risk = float(data.get("risk", 0.0))
+        reasons = data.get("risk_reasons") or []
+        if reasons:
+            title += f" | risk {risk:.2f}: {', '.join(reasons)}"
+        node_kwargs = {"size": 12 + risk * 28}
+        if risk >= 0.6:
+            node_kwargs["borderWidth"] = 3
+            node_kwargs["color"] = {"background": color, "border": "#dc2626"}
+        else:
+            node_kwargs["color"] = color
+        net.add_node(nid, label=str(data.get("label", nid)), shape=shape, title=title, **node_kwargs)
 
     for u, v, data in expansion.graph.edges(data=True):
         etype = data.get("etype", "transaction")

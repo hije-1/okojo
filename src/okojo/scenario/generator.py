@@ -61,6 +61,7 @@ from .models import (
     IpLog,
     KycDoc,
     Rfi,
+    SdnEntry,
     Transaction,
 )
 
@@ -98,6 +99,72 @@ def _vpn_ip(rng: random.Random) -> str:
 def _tehran_ip(rng: random.Random) -> str:
     # RFC-5737 TEST-NET-2 — synthetic; stands in for a sanctioned-jurisdiction IP.
     return f"198.51.100.{rng.randint(1, 254)}"
+
+
+_VOWEL_SWAP = {"a": "e", "e": "i", "i": "o", "o": "u", "u": "a"}
+
+
+def _alias_variant(name: str) -> str:
+    """A deterministic transliteration-style variant of a name.
+
+    Swaps the first vowel in the last whitespace token, yielding a near-duplicate
+    (~90% similar) that a fuzzy matcher catches but an exact-match sanctions
+    screen would miss — the evasion pattern the Tell Miner is built to defeat.
+    """
+    parts = name.split()
+    if not parts:
+        return name
+    chars = list(parts[-1])
+    for i, ch in enumerate(chars):
+        if ch.lower() in _VOWEL_SWAP:
+            repl = _VOWEL_SWAP[ch.lower()]
+            chars[i] = repl.upper() if ch.isupper() else repl
+            break
+    parts[-1] = "".join(chars)
+    return " ".join(parts)
+
+
+def _uids_with_sanctioned_exposure(
+    txs: list, address_controllers: dict[str, int], sanctioned_addrs: list[str], candidate_uids: list[int]
+) -> list[int]:
+    """UIDs whose funds can reach a synthetic sanctioned endpoint by directed flow.
+
+    Derived purely from already-generated data (no RNG draws), so the label stays
+    in sync with the planted scenario and does not perturb determinism. A uid is
+    "exposed" if a value-transaction path leads from a wallet it controls, or from
+    a transaction it sends, to any synthetic sanctioned address. This is the
+    definitional answer key for the On-chain Risk Scorer — deliberately a plain
+    reachability truth, independent of any scorer heuristics (hop caps, amount
+    weighting) so the eval is not tautological.
+    """
+    from collections import deque
+
+    adj: dict[str, set[str]] = {}
+
+    def _link(a: str, b: str) -> None:
+        adj.setdefault(a, set()).add(b)
+
+    for t in txs:
+        _link(t.from_ref, t.to_ref)
+    for addr, uid in address_controllers.items():
+        _link(f"uid:{uid}", addr)  # a controller can move its own wallet's funds
+
+    sanctioned = set(sanctioned_addrs)
+
+    def _reaches(start: str) -> bool:
+        seen = {start}
+        dq = deque(adj.get(start, ()))
+        while dq:
+            node = dq.popleft()
+            if node in sanctioned:
+                return True
+            if node in seen:
+                continue
+            seen.add(node)
+            dq.extend(adj.get(node, ()))
+        return False
+
+    return sorted(u for u in candidate_uids if _reaches(f"uid:{u}"))
 
 
 # --------------------------------------------------------------------------- #
@@ -340,15 +407,21 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     t = _tx(f"uid:{key_to_uid['RECIDIVIST']}", controller_addr["SHELL_CN"], 4_850_000, "aggregation fee - partner share", "withdrawal")
     betraying_remarks.append({"tx_id": t.tx_id, "address": controller_addr["SHELL_CN"], "reveals": "remark references an off-book aggregation fee-share arrangement", "controller_uid": key_to_uid["RECIDIVIST"]})
 
-    # hops -> sanctioned endpoints
+    # hops -> sanctioned endpoints (direct sanctioned exposure)
+    sanctioned_exposure_tx_ids: list[str] = []
+    sanctioned_exposure_addresses: list[str] = []
     for h in hop_addrs:
-        _tx(h, rng.choice(sanctioned_addrs), rng.uniform(2.0e6, 8.0e6), "", "onchain")
+        t = _tx(h, rng.choice(sanctioned_addrs), rng.uniform(2.0e6, 8.0e6), "", "onchain")
+        sanctioned_exposure_tx_ids.append(t.tx_id)
+        sanctioned_exposure_addresses.append(h)
 
     # bidirectional near-equal flows between trust and a shell (layering tell)
+    layering_tx_ids: list[str] = []
     for _ in range(3):
         amt = rng.uniform(1.0e6, 2.0e6)
-        _tx(controller_addr["TRUST"], controller_addr["SHELL_NZ"], amt, "internal transfer", "onchain")
-        _tx(controller_addr["SHELL_NZ"], controller_addr["TRUST"], amt * rng.uniform(0.985, 0.999), "internal transfer", "onchain")
+        t1 = _tx(controller_addr["TRUST"], controller_addr["SHELL_NZ"], amt, "internal transfer", "onchain")
+        t2 = _tx(controller_addr["SHELL_NZ"], controller_addr["TRUST"], amt * rng.uniform(0.985, 0.999), "internal transfer", "onchain")
+        layering_tx_ids.extend([t1.tx_id, t2.tx_id])
 
     # noise transactions
     noise_uids = [a.uid for a in accounts if a.role_in_ring == "noise"]
@@ -406,6 +479,36 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         ],
     )
 
+    # ---- derived Phase-2 labels (no RNG; stay in sync by construction) ---- #
+    # Answer keys for the On-chain Risk Scorer + network sanctioned-exposure eval,
+    # the IP-leak detector, and the layering detector. Computed from the data
+    # already planted above, so the CSVs remain byte-identical.
+    sanctioned_exposure_uids = _uids_with_sanctioned_exposure(
+        txs, address_controllers, sanctioned_addrs, [a.uid for a in accounts]
+    )
+    sanctioned_ip_leak_uids = sorted(leak_uids)
+
+    # ---- synthetic SDN / alias watchlist (Tell Miner fuzzy-match target) -- #
+    # Watchlisted ring members carry an alias that is a transliteration variant of
+    # their registered name (evasion of exact-match screening); decoys must not
+    # match any account. Built from already-generated names — no RNG, no CSV drift.
+    accounts_by_uid = {a.uid: a for a in accounts}
+    sdn_entries: list[SdnEntry] = []
+    sdn_alias_matches: list[dict] = []
+    for sdn_id, key in [("SDN-0001", "KINGPIN"), ("SDN-0002", "RECIDIVIST")]:
+        acct = accounts_by_uid[key_to_uid[key]]
+        variant = _alias_variant(acct.entity_name)
+        sdn_entries.append(SdnEntry(
+            sdn_id=sdn_id, primary_name=variant, aliases=variant,
+            program="SYNTHETIC-IRGC-STYLE", entity_type="individual",
+        ))
+        sdn_alias_matches.append({"uid": acct.uid, "sdn_id": sdn_id, "watchlist_name": variant})
+    # decoys — themed but unrelated to the ring (precision / false-positive test)
+    sdn_entries.append(SdnEntry("SDN-0003", "Bandar Petrochemical Front",
+                                "Bandar Petrochemical Front;BPF Trading", "SYNTHETIC-IRGC-STYLE", "company"))
+    sdn_entries.append(SdnEntry("SDN-0004", "Reza Oil Logistics",
+                                "Reza Oil Logistics;ROL Shipping", "SYNTHETIC-IRGC-STYLE", "company"))
+
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
         "readme": "Fabricated data. Labels below are the answer key for scoring Okojo's capabilities.",
@@ -420,6 +523,12 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "gas_funding_tells": [asdict(g) for g in gas_funds],
         "betraying_remarks": betraying_remarks,
         "structured_transfer_tx_ids": structured_tx_ids,
+        "sanctioned_exposure_uids": sanctioned_exposure_uids,
+        "sanctioned_exposure_addresses": sorted(set(sanctioned_exposure_addresses)),
+        "sanctioned_exposure_tx_ids": sanctioned_exposure_tx_ids,
+        "sanctioned_ip_leak_uids": sanctioned_ip_leak_uids,
+        "layering_tx_ids": layering_tx_ids,
+        "sdn_alias_matches": sdn_alias_matches,
         "rfi_lies": [
             {"rfi_id": rfi.rfi_id, "claim_id": c["claim_id"], "text": c["text"], "contradicted_by": c["contradicted_by"]}
             for c in rfi.claims
@@ -438,6 +547,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("addresses.csv", addresses)
     _write("gas_funding.csv", gas_funds)
     _write("transactions.csv", txs)
+    _write("sdn_list.csv", sdn_entries)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -461,6 +571,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "gas_funding_tells": len(gas_funds),
         "transactions": len(txs),
         "structured_transfers": len(structured_tx_ids),
+        "sanctioned_exposure_uids": len(sanctioned_exposure_uids),
+        "layering_transfers": len(layering_tx_ids),
+        "sdn_entries": len(sdn_entries),
+        "sdn_alias_matches": len(sdn_alias_matches),
         "betraying_remarks": len(betraying_remarks),
         "rfi_claims": len(rfi.claims),
         "rfi_lies": len(ground_truth["rfi_lies"]),

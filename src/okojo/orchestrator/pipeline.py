@@ -22,7 +22,7 @@ from ..audit import AuditLog
 from ..config import REPO_ROOT
 from ..connectors import Connectors
 from ..network import NetworkExpansion, expand, render
-from ..remarks import RemarkTell, mine_remarks
+from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import RfiView, load_rfi
 from ..sar import SarDraft, build_sar
 
@@ -35,6 +35,7 @@ class CaseResult:
     expansion: NetworkExpansion
     graph_html_path: Optional[Path]
     tells: list[RemarkTell]
+    alias_hits: list[AliasMatch]
     rfi: Optional[RfiView]
     advisory: Optional[AdvisoryMatch]
     sar: SarDraft
@@ -98,10 +99,13 @@ def run_case(
             render(expansion, graph_html_path)
             audit.append("network_expander", "graph_rendered", target=_rel(graph_html_path))
 
-        # 3) Remark / Tell Miner
+        # 3) Remark / Tell Miner (+ SDN/alias screening of account names)
         audit.append("remark_miner", "tool_call")
         tells = mine_remarks(conn)
         audit.append("remark_miner", "mined", detail=f"{len(tells)} remark tell(s)")
+        alias_hits = screen_aliases(conn)
+        audit.append("remark_miner", "alias_screened",
+                     detail=f"{len(alias_hits)} account name(s) match the synthetic watchlist")
 
         # 4) Advisory Matcher (event-triggered on RFI text)
         audit.append("advisory_matcher", "tool_call")
@@ -138,6 +142,7 @@ def run_case(
             expansion=expansion,
             graph_html_path=graph_html_path,
             tells=tells,
+            alias_hits=alias_hits,
             rfi=rfi_view,
             advisory=advisory,
             sar=sar,

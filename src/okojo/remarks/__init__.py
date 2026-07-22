@@ -3,5 +3,6 @@
 from __future__ import annotations
 
 from .miner import RemarkTell, mine_remarks
+from .screening import AliasMatch, screen_aliases
 
-__all__ = ["RemarkTell", "mine_remarks"]
+__all__ = ["RemarkTell", "mine_remarks", "AliasMatch", "screen_aliases"]
