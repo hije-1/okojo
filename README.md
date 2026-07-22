@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="okojo-logo.png" alt="Okojo logo" width="180">
+</p>
+
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
 > **Status:** Phase 1 — walking skeleton. One synthetic case now flows end-to-end
