@@ -1,0 +1,131 @@
+# Decision Log & Context Transfer
+
+This file preserves the reasoning behind Okojo so that anyone (or any agent)
+picking up the project has the full context that would otherwise live only in a
+chat history. Read it before changing scope, architecture, or the data model.
+Companion docs: `Strategy.md` (full write-up) and `Build-Plan.md` (dated plan).
+
+_Last updated at handoff from the planning phase (Phase 0 complete)._
+
+---
+
+## 1. Goal & audience
+A public GitHub portfolio project for a **senior crypto-compliance executive who
+is AI-forward**. It must read as sophisticated to a compliance hiring manager
+*and* show genuine hands-on agentic-AI engineering ("balance of both"). Built
+from scratch, solo, ~20 hrs/week.
+
+## 2. Scope decision — one flagship, not a suite
+A single, deliberately-scoped flagship with a documented roadmap beats a
+scattered set of demos: for a senior audience, choosing what to build and what to
+defer *is* the signal. The flagship is an **agentic crypto-investigations
+co-pilot** ("Okojo") that fuses several top pain points under one narrative.
+
+## 3. How capabilities were chosen
+Ten candidate pain points were scored 1–5 on six dimensions: **Data** (buildable
+with public/synthetic data), **Build** (solo-feasible), **Agentic** (real
+tool-use/reasoning, not a classifier), **Domain** (compliance/FIU sophistication),
+**Safe** (publishable — no PII/opsec/reputational hazard), **Wow**
+(distinctiveness). Top tier: network/cluster mapping, SAR quality, unified subject
+timeline, multilingual OSINT. Full table in `Strategy.md`.
+
+## 4. Expert-review fixes (applied to the design)
+A dual AI-architect / crypto-compliance review produced eight fixes, all now
+baked into the plan:
+1. **Name the agentic decision points** vs. the deterministic backbone; frame the
+   determinism as a compliance/auditability feature.
+2. **Add an evaluation harness** (precision/recall vs. labels; SAR-quality rubric;
+   advisory-match FP rate; ablations). This is why the generator emits
+   `ground_truth.json`.
+3. **Elliptic↔OFAC address-space correction:** Elliptic's anonymized nodes do NOT
+   line up with OFAC's real crypto addresses. Keep Elliptic for the
+   graph/illicit-classification capability; use an *explicitly labeled synthetic
+   address-tagging layer* for OFAC-style sanctions matching. Never conflate the two.
+4. **SAR grounding contract:** the drafter may assert only facts traceable to a
+   retrieved record; provenance pointers; schema-validated; reject uncitable claims.
+5. **Operationalize the SAR "quality" rubric** against FinCEN's narrative
+   expectations (who/what/when/where/why/how; predicate offense; subject & network;
+   on-chain evidence).
+6. **Calibrate language** (proposes/surfaces/drafts, not "instantly/autonomously").
+7. **Right-size the MVP** to a walking skeleton first, then thicken.
+8. **Broaden the regulatory frame** (STR vs. SAR, FATF Travel Rule, EU AMLD/MiCA)
+   as roadmap; leverages the builder's global background.
+
+## 5. Typology review (patterns only, never PII)
+The design was pressure-tested against publicly documented investigation
+typologies — FinCEN's Iranian-oil / "shadow-banking" advisories, OFAC
+designations, and published exchange enforcement actions. **We replicate
+behavioral patterns, never identities, addresses, or documents.** Outcomes:
+- **Promoted to headline capabilities:** the **RFI Contradiction-Checker** and the
+  **Remark/Tell Miner** — in documented investigations these signals, more than
+  blockchain analytics, are what crack attribution and expose false narratives.
+- **Gas-funding linkage** became a named tool in the Network Expander (a move
+  that repeatedly unmasks "non-custodial" controllers).
+- **Persistent case graph** added for cross-case recidivism (the documented
+  failure mode of an account clearing multiple prior "retain & monitor" reviews
+  before being connected to a wider network).
+- **New pain points identified:** PP-11 tell mining, PP-12 remediation
+  sweeps, PP-13 ML alert auto-closure QA, PP-14 tokenized-commodity issuance tracing.
+- **Governance capture** is the decisive documented failure mode (blocked
+  investigator access, vanishing records, "internal account" shields). We frame
+  the fix as a product feature: the tamper-evident audit trail + treating
+  "internal account" tags as *flag-for-review, not obey*.
+
+## 6. The synthetic demo scenario
+Re-anchored on a fabricated but pattern-faithful **oil / sanctions-evasion
+network** that exercises every capability and ties to public FinCEN advisories.
+The generator (`src/okojo/scenario/`) plants: a shell-entity ring with cutout
+directors; reused KYC docs across "separate" entities; shared devices; sanctioned-
+jurisdiction IP interleaved with VPN; structured just-under round-number transfers;
+gas-funded "non-custodial" hops; betraying withdrawal remarks; a licensed-trust RFI
+narrative with ground-truth lies; a recidivist account; and an "internal account,
+do-not-block" red herring. All labels are in `ground_truth.json`.
+
+## 7. MVP core vs. committed v1.0 capstone vs. roadmap
+Membership in v1.0 is decided on **payoff-to-*marginal*-cost, not payoff alone.**
+- **MVP core:** components 1–8 (Profile Aggregator, Network Expander, Risk Scorer,
+  Tell Miner, RFI Contradiction-Checker, Advisory Matcher, SAR Drafter+Critic,
+  Case Packager + case graph).
+- **Committed v1.0 capstone:** **PP-12 Designation-Triggered Remediation Sweep**
+  (component 9). Promoted from roadmap because it is the most regulator-relevant
+  capability (FinCEN's aggressive Iran program) *and* cheap to build last — it
+  re-orchestrates finished components rather than adding a new subsystem.
+- **Roadmap (post-v1.0, ordered by payoff):** PP-13 (ML auto-closure QA) and #8
+  (vendor reconciliation) first; then PP-14 (tokenized-commodity tracing — kept out
+  of v1.0 despite timeliness because it needs new contract-tracing tooling with
+  little reuse), #5 (multilingual OSINT), #4/#7 (LE-request/MLAT routing). Build
+  these in public after launch to keep the repo visibly growing.
+
+## 8. Data sources
+- **On-chain graph:** Elliptic / Elliptic++ (public, labeled BTC graph). NOTE:
+  this is the **free public research *dataset*** (anonymized node IDs, no real
+  addresses), **not** Elliptic's licensed product — no license is required. The
+  repo never uses real crypto addresses; the OFAC-style match runs on the
+  synthetic address-tagging layer (see the address-space fix in §4).
+- **Fiat/crypto transactions:** IBM "Transactions for AML" (IT-AML) — start with
+  the **HI-Small** variant. (AMLSim is IT-AML's *simulator* predecessor; AMLNet is a
+  third-party alternative with rich per-tx metadata.)
+- **Sanctions:** OFAC SDN/Consolidated lists (+ OpenSanctions structured version).
+- **FinCEN advisories:** public 508-PDFs (Iran illicit-oil/shadow-banking; China CMLN).
+- **Personas/devices/remarks/RFIs:** synthetic via the scenario generator (Faker).
+
+## 9. Naming & guardrail decisions
+- Device identifier is **`device_fingerprint`**, a generic internal-exchange schema term.
+- Synthetic + public data only; human-in-the-loop; grounding contract; tamper-evident
+  audit trail as centerpiece; calibrated language. See `CLAUDE.md` for the enforced list.
+
+## 10. Evaluation approach
+`data/synthetic/ground_truth.json` is the answer key. Every capability is scored
+against it (e.g., recall of network members, precision of flagged RFI
+contradictions, detection of the sanctioned-exposure sweep). Keep it in sync when
+the generator changes.
+
+## 11. Open threads / next actions
+- **Phase 1 (next):** mock connectors over the synthetic data → Profile Aggregator
+  (unified anomaly-flagged timeline) → minimal LangGraph orchestrator with
+  append-only audit logging → tiny end-to-end flow → **publish the walking skeleton
+  to GitHub.** Details in `Build-Plan.md`.
+- Decide the LLM provider/model for the reasoning components (kept provider-agnostic
+  so far).
+- Set up the public GitHub repo + a steady commit cadence (the public history is
+  itself a portfolio signal).

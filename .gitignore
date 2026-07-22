@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.env
+
+# Data — never commit real datasets or large generated output
+data/raw/
+data/external/
+data/synthetic/*
+!data/synthetic/.gitkeep
+# Runtime case output (graph HTML, audit logs)
+data/cases/
+
+# Notebooks / scratch
+.ipynb_checkpoints/
+scratch/
+.pytest_cache/
+
+# Local agent/session config (permissions etc.)
+.claude/
+
+# Advisory PDFs are extracted to committed text, never committed as binaries
+*.pdf
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Internal working docs (not product docs)
+HANDOFF.md
+CLAUDE.local.md
+docs/PRE-PUBLISH.md
+docs/phase1-readiness-checklist.md
