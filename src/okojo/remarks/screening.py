@@ -15,6 +15,7 @@ from pydantic import BaseModel
 from rapidfuzz import fuzz
 
 from ..connectors import Connectors
+from ..entity import EntityBackbone, build_backbone
 from ..provenance import Provenance
 
 # WRatio threshold (0-100). Transliteration variants score ~90+; unrelated
@@ -33,35 +34,37 @@ class AliasMatch(BaseModel):
     provenance: list[Provenance]
 
 
-def screen_aliases(conn: Connectors, threshold: int = SCREEN_THRESHOLD) -> list[AliasMatch]:
+def screen_aliases(
+    conn: Connectors,
+    threshold: int = SCREEN_THRESHOLD,
+    backbone: Optional[EntityBackbone] = None,
+) -> list[AliasMatch]:
     """Fuzzy-screen every account name against the synthetic SDN/alias watchlist.
 
     Returns the strongest above-threshold match per account (a name resembling a
-    watchlisted alias despite exact-match evasion).
+    watchlisted alias despite exact-match evasion). Account names and watchlist
+    aliases are sourced from the shared :class:`EntityBackbone` (one canonical
+    entity view); pass a prebuilt ``backbone`` to reuse one across components.
     """
-    watch: list[tuple] = []  # (sdn_record, alias_string)
-    for row in conn.sdn_list():
-        for alias in str(row["aliases"]).split(";"):
-            alias = alias.strip()
-            if alias:
-                watch.append((row, alias))
+    bb = backbone if backbone is not None else build_backbone(conn)
+    watch = bb.watchlist_aliases()  # (WatchlistEntity, alias), in screen order
 
     hits: list[AliasMatch] = []
-    for acct in conn.all_accounts():
-        name = str(acct["entity_name"])
-        best: Optional[tuple] = None  # (score, sdn_record, alias)
-        for row, alias in watch:
+    for entity in bb.entities:
+        name = entity.name
+        best: Optional[tuple] = None  # (score, watchlist_entity, alias)
+        for we, alias in watch:
             s = fuzz.WRatio(name, alias)
             if s >= threshold and (best is None or s > best[0]):
-                best = (s, row, alias)
+                best = (s, we, alias)
         if best is not None:
-            s, row, alias = best
+            s, we, alias = best
             sdn_prov = Provenance(
-                source="sdn_list", row_key=row["sdn_id"], detail="synthetic watchlist alias",
+                source="sdn_list", row_key=we.sdn_id, detail="synthetic watchlist alias",
             )
             hits.append(AliasMatch(
-                uid=acct["uid"], entity_name=name, sdn_id=row["sdn_id"],
-                matched_alias=alias, score=round(s, 1), program=str(row["program"]),
-                provenance=[sdn_prov, acct.provenance],
+                uid=entity.uid, entity_name=name, sdn_id=we.sdn_id,
+                matched_alias=alias, score=round(s, 1), program=str(we.program),
+                provenance=[sdn_prov, entity.provenance],
             ))
     return hits

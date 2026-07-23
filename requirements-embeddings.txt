@@ -1,0 +1,19 @@
+# Optional advisory-RAG embeddings backend (Phase 3).
+#
+# Installs the local sentence-transformers model used for the *semantic* signal of
+# the advisory matcher. This is a LOCAL model (offline, no API key, no network call
+# at inference) — the offline / no-secrets / deterministic property is a compliance
+# and reproducibility feature, not an accident.
+#
+# It is OPTIONAL on purpose: it pulls torch (hundreds of MB), which the core install
+# and CI do not need. Without it, okojo.advisory.embeddings falls back to a
+# deterministic dependency-free lexical embedder, so every test still runs — the CI
+# scorecards are produced by that fallback (see docs/advisory-methodology.md), not by
+# real neural embeddings. Install this to enable the real embedding backend:
+#
+#   pip install -r requirements-embeddings.txt
+#
+# After installing, re-calibrate the semantic threshold against the gold set for this
+# embedder and record it in docs/advisory-methodology.md (the cosine geometry differs
+# from the lexical fallback).
+sentence-transformers==3.3.1

@@ -11,8 +11,18 @@ rapidfuzz==3.10.1
 duckdb==1.1.3
 # Phase 1+ structured outputs / validation (grounding contract)
 pydantic==2.9.2
-# Phase 3 advisory RAG (uncomment when you reach Phase 3)
-# chromadb==0.5.20
+# Phase 3 advisory RAG — retrieval math (exact in-memory cosine; no vector DB).
+# For a static corpus of ~dozens-low-hundreds of chunks an exact brute-force
+# cosine is right-sized and fully deterministic; a vector DB (FAISS/Chroma) adds
+# weight for no benefit at this scale. FAISS IndexFlatIP is a drop-in later,
+# behind the same retrieval interface. (numpy is already present via pandas;
+# pinned here since retrieval now depends on it directly.)
+numpy==2.5.1
+# Phase 3 advisory RAG — local embeddings are OPTIONAL. The real semantic backend
+# (sentence-transformers / torch, hundreds of MB) lives in requirements-embeddings.txt
+# so the core install and CI stay lean; without it a deterministic lexical fallback
+# takes over (okojo.advisory.embeddings) and the whole suite still runs.
+#   pip install -r requirements-embeddings.txt   # to enable real embeddings
 # Phase 6+ orchestration (uncomment when you wire the state machine)
 # langgraph==0.2.45
 # Phase 1+ UI (minimal Streamlit demo — the walking-skeleton money-shot)

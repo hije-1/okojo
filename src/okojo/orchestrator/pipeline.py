@@ -16,11 +16,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
 
-from ..advisory import AdvisoryMatch, match_advisory
+from ..advisory import (
+    AdvisoryMatch,
+    build_advisory_retriever,
+    build_structured_context,
+    load_advisories,
+    match_advisories,
+    retrieval_config,
+)
+from ..advisory.embeddings import get_embedder
 from ..aggregator import ProfileTimeline, build_profile
 from ..audit import AuditLog
 from ..config import REPO_ROOT
 from ..connectors import Connectors
+from ..entity import build_backbone
 from ..network import NetworkExpansion, expand, render
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import RfiView, load_rfi
@@ -42,6 +51,7 @@ class CaseResult:
     advisory: Optional[AdvisoryMatch]
     sar: SarDraft
     audit_log_path: Path
+    advisory_embedder: str = ""
     audit_records: list[dict] = field(default_factory=list)
     audit_verified: bool = False
 
@@ -109,19 +119,47 @@ def run_case(
         audit.append("risk_scorer", "scoring_config", detail=json.dumps(risk.config))
         audit.append("risk_scorer", "scored", detail=json.dumps(risk.summary()))
 
+        # One shared entity backbone — the screener, tell miner, and advisory
+        # matcher all query the SAME canonical entity view (not private copies).
+        backbone = build_backbone(conn)
+
         # 3) Remark / Tell Miner (+ SDN/alias screening of account names)
         audit.append("remark_miner", "tool_call")
-        tells = mine_remarks(conn)
+        tells = mine_remarks(conn, backbone=backbone)
         audit.append("remark_miner", "mined", detail=f"{len(tells)} remark tell(s)")
-        alias_hits = screen_aliases(conn)
+        alias_hits = screen_aliases(conn, backbone=backbone)
         audit.append("remark_miner", "alias_screened",
                      detail=f"{len(alias_hits)} account name(s) match the synthetic watchlist")
 
-        # 4) Advisory Matcher (event-triggered on RFI text)
+        # 4) Advisory Matcher (event-triggered on RFI text; hybrid retrieval +
+        #    corroboration gate over the shared backbone). One embedder + one
+        #    retriever per advisory, built once.
         audit.append("advisory_matcher", "tool_call")
+        embedder = get_embedder()
+        advisories = load_advisories()
+        retrievers = {a.advisory_id: build_advisory_retriever(a, embedder) for a in advisories}
+        # Stamp the versioned retrieval config into the hash chain (reproducibility),
+        # mirroring the risk_scorer/scoring_config stamp; record the active embedder
+        # so the run is reproducible down to the semantic backend that produced it.
+        audit.append("advisory_matcher", "retrieval_config", detail=json.dumps(retrieval_config()))
+        audit.append("advisory_matcher", "embedder_active", detail=embedder.name)
+
         rfis = conn.rfi_for(subject_uid)
         docs = [(r["response_text"], r.provenance) for r in rfis]
-        advisory = match_advisory(docs) if docs else None
+        # Structured corroboration evidence: the case's raw jurisdictions (from the
+        # backbone) plus grounded watchlist / on-chain-exposure pointers, if any.
+        watchlist_prov = alias_hits[0].provenance[0] if alias_hits else None
+        exposure_prov = next(
+            (s.provenance[0] for s in risk.scores if s.exposure_path and s.provenance), None
+        )
+        structured = build_structured_context(
+            backbone, watchlist_provenance=watchlist_prov, exposure_provenance=exposure_prov,
+        )
+        matches = (
+            match_advisories(docs, advisories, retrievers=retrievers, structured=structured)
+            if docs else []
+        )
+        advisory = matches[0] if matches else None
         audit.append("advisory_matcher", "matched",
                      detail=(advisory.advisory_id if advisory else "no match"),
                      provenance=(advisory.provenance if advisory else None))
@@ -158,6 +196,7 @@ def run_case(
             advisory=advisory,
             sar=sar,
             audit_log_path=audit_path,
+            advisory_embedder=embedder.name,
             audit_records=records,
             audit_verified=verified,
         )

@@ -1,0 +1,101 @@
+{
+  "readme": "Crafted gold key for the advisory-matcher FP-rate + wrong-advisory-discrimination eval (Phase 3). COMMITTED (unlike the generated data/synthetic answer key) and hand-authored so the eval is stable and does not perturb the seeded generator. All text is synthetic/paraphrased from public FinCEN advisory typologies. Each case carries the structured case-evidence flags the corroboration gate checks against and an `expect_advisory` (the advisory id it should surface, or null for none). Two evals read this file: (1) the single-advisory Iran FP-rate scorecard + gate ablation, which scopes to cases whose `expect_advisory` is the Iran advisory or null (the topical-but-uncorroborated D1/D2 are the false positives the gate exists to remove); and (2) the multi-advisory discrimination scorecard, which runs match_advisories over all four advisories and checks each case surfaces the RIGHT advisory (or none).",
+  "cases": [
+    {
+      "id": "P1-keyword-corroborated",
+      "text": "Crude oil and petroleum cargo settled through a UAE free-trade-zone trading company with counterparties in Hong Kong.",
+      "expect_match": true,
+      "expect_advisory": "FIN-2025-A002",
+      "note": "Keyword (oil/petroleum/crude/trading company/free trade zone) + AE jurisdiction + on-chain exposure.",
+      "structured": {"jurisdictions": ["AE"], "watchlist": false, "exposure": true}
+    },
+    {
+      "id": "P2-semantic-corroborated",
+      "text": "Concealed beneficial ownership moving value through correspondent banking to access US dollars for parties near a high-risk jurisdiction.",
+      "expect_match": true,
+      "expect_advisory": "FIN-2025-A002",
+      "note": "No trigger term; paraphrase of a shadow-banking indicator. Corroborated by HK jurisdiction + watchlist linkage.",
+      "structured": {"jurisdictions": ["HK"], "watchlist": true, "exposure": false}
+    },
+    {
+      "id": "P3-both-signals-corroborated",
+      "text": "A Hong Kong front company with opaque ownership sends large unexplained payments to UAE trading companies for petroleum shipments.",
+      "expect_match": true,
+      "expect_advisory": "FIN-2025-A002",
+      "note": "Keyword + semantic + structured all fire.",
+      "structured": {"jurisdictions": ["HK", "AE"], "watchlist": false, "exposure": true}
+    },
+    {
+      "id": "P4-russia-corroborated",
+      "text": "A shell company and third-party intermediary purchased a private aircraft and real estate for a sanctioned oligarch, moving dual-use goods to evade export control.",
+      "expect_match": true,
+      "expect_advisory": "FIN-2022-Alert001",
+      "note": "Discrimination positive: Russia keywords + RU jurisdiction. Must surface the Russia alert, not the Iran advisory.",
+      "structured": {"jurisdictions": ["RU"], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "P5-fentanyl-corroborated",
+      "text": "Frequent convertible virtual currency payments to a darknet marketplace vendor of fentanyl and synthetic opioid, with funnel account cash withdrawn near the southwest border.",
+      "expect_match": true,
+      "expect_advisory": "FIN-2019-A006",
+      "note": "Discrimination positive: fentanyl keywords + MX jurisdiction (only the fentanyl advisory names MX).",
+      "structured": {"jurisdictions": ["MX"], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "P6-dprk-corroborated",
+      "text": "Stolen virtual currency from a DeFi exchange theft attributed to Lazarus was laundered through a virtual currency mixer and a cross-chain bridge, alongside overseas IT worker payments.",
+      "expect_match": true,
+      "expect_advisory": "FIN-2017-A008",
+      "note": "Discrimination positive: DPRK keywords + KP jurisdiction (only the DPRK advisory names KP).",
+      "structured": {"jurisdictions": ["KP"], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "D1-topical-uncorroborated",
+      "text": "We trade crude oil and petroleum products as a fully licensed commodities trading company.",
+      "expect_match": false,
+      "expect_advisory": null,
+      "note": "GATE FP: Iran keyword fires but there is no structured corroboration (unrelated jurisdiction, no watchlist, no exposure). Reappears when the gate is off.",
+      "structured": {"jurisdictions": [], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "D2-petrochemical-uncorroborated",
+      "text": "Domestic petrochemical supplier invoicing a US customer for industrial cleaning solvents.",
+      "expect_match": false,
+      "expect_advisory": null,
+      "note": "GATE FP: Iran keyword (petrochemical) but jurisdiction (US) is not advisory-named, no watchlist, no exposure.",
+      "structured": {"jurisdictions": ["US"], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "D3-offtopic-payroll",
+      "text": "Quarterly payroll disbursement for the regional marketing team.",
+      "expect_match": false,
+      "expect_advisory": null,
+      "note": "No keyword, no semantic hit -> no primary hit even though corroboration would exist.",
+      "structured": {"jurisdictions": ["AE"], "watchlist": false, "exposure": true}
+    },
+    {
+      "id": "D4-offtopic-receipt",
+      "text": "Annual gym membership renewal receipt paid by personal debit card.",
+      "expect_match": false,
+      "expect_advisory": null,
+      "note": "Off-topic, no corroboration.",
+      "structured": {"jurisdictions": [], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "D5-domestic-transfer",
+      "text": "Routine domestic bank transfer between two personal savings accounts.",
+      "expect_match": false,
+      "expect_advisory": null,
+      "note": "Semantic decoy: bank/transfer wording, but below the semantic threshold and no keyword.",
+      "structured": {"jurisdictions": [], "watchlist": false, "exposure": false}
+    },
+    {
+      "id": "D6-russia-topical-uncorroborated",
+      "text": "A commodities firm shipped dual-use goods and dealt in luxury goods as a fully licensed exporter.",
+      "expect_match": false,
+      "expect_advisory": null,
+      "note": "Cross-advisory GATE FP: Russia keywords (dual-use, luxury goods) fire but there is no corroboration (no RU jurisdiction, no watchlist, no exposure), so no advisory surfaces even with four in play.",
+      "structured": {"jurisdictions": [], "watchlist": false, "exposure": false}
+    }
+  ]
+}

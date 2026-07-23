@@ -36,10 +36,20 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   parameters; doc↔code anti-drift test), and a "show the math" UI (per-account
   decomposition, methodology/version panel, RapidFuzz name-diff in calibrated
   language). Scores byte-identical (scorecard unchanged). 77 green tests.
+- **Phase 3 (Advisory Matcher / RAG hardening): COMPLETE.** Hybrid advisory
+  matching over three signals (keyword + semantic red-flag retrieval + structured
+  corroboration) gated by a corroboration rule, a 4-advisory corpus with
+  wrong-advisory discrimination, one shared `EntityBackbone` deduped across the
+  screener/miner/matcher, a versioned `retrieval_config()` stamped into the audit
+  chain, a public `docs/advisory-methodology.md` (doc↔code anti-drift test), and a
+  three-signal "show the retrieval" Advisory tab. Retrieval is exact in-memory
+  cosine (no vector DB) over a local sentence-transformers embedder with a
+  deterministic lexical fallback (optional `requirements-embeddings.txt`). FP-rate
+  P/R/F1=1.0 (0/6) + discrimination 12/12; screener/scorer byte-identical;
+  generator byte-identical. 107 green tests (1 skipped: the ST backend when torch
+  is absent).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Phase 3** (Advisory Matcher / RAG hardening — hybrid retrieval, a
-  corroboration threshold, one deduped entity backbone, an FP-rate eval; first
-  embedding/RAG dependency → Chroma-vs-FAISS decision). Full details in
+- **NEXT: Phase 4** (SAR Drafter + Critic + grounding). Full details in
   `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live

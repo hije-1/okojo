@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from rapidfuzz import fuzz
 
 from ..connectors import Connectors
+from ..entity import EntityBackbone, build_backbone
 from ..provenance import Provenance
 
 # Curated control/illicit-arrangement phrases -> why the phrase matters.
@@ -27,13 +28,6 @@ DEFAULT_SIGNAL_PHRASES: dict[str, str] = {
     "aggregation wallet": "pooled/aggregation wallet - not a client address (attribution tell)",
     "aggregation fee": "off-book aggregation fee-share arrangement (fee-skim tell)",
     "custody": "custody labelling - a control claim to test, not accept",
-}
-
-# Generic tokens to exclude when deriving alias terms from entity names.
-_STOP_TOKENS = {
-    "and", "the", "group", "trading", "limited", "ltd", "llc", "inc", "plc",
-    "company", "co", "partners", "holdings", "trust", "capital", "global",
-    "international", "services", "sons", "llp", "gmbh",
 }
 
 # Fuzzy thresholds (0-100). Phrases use partial_ratio (a short phrase inside a
@@ -53,29 +47,23 @@ class RemarkTell(BaseModel):
     provenance: Provenance
 
 
-def _derive_alias_terms(conn: Connectors) -> list[str]:
-    """Distinctive name tokens from non-noise (ring) accounts, used to catch
-    remarks that name a controller (e.g. an 'Old <firstname> wallet' nickname)."""
-    terms: set[str] = set()
-    for acct in conn.all_accounts():
-        if acct["role_in_ring"] == "noise":
-            continue
-        for token in str(acct["entity_name"]).replace(",", " ").split():
-            t = token.strip(".").lower()
-            if len(t) >= 4 and t.isalpha() and t not in _STOP_TOKENS:
-                terms.add(t)
-    return sorted(terms)
-
-
 def mine_remarks(
     conn: Connectors,
     alias_terms: Optional[Iterable[str]] = None,
     signal_phrases: Optional[dict[str, str]] = None,
     phrase_threshold: int = _PHRASE_THRESHOLD,
     alias_threshold: int = _ALIAS_THRESHOLD,
+    backbone: Optional[EntityBackbone] = None,
 ) -> list[RemarkTell]:
     phrases = signal_phrases if signal_phrases is not None else DEFAULT_SIGNAL_PHRASES
-    aliases = list(alias_terms) if alias_terms is not None else _derive_alias_terms(conn)
+    if alias_terms is not None:
+        aliases = list(alias_terms)
+    else:
+        # Distinctive name tokens from non-noise (ring) accounts, used to catch
+        # remarks that name a controller (e.g. an 'Old <firstname> wallet'
+        # nickname). Sourced from the shared backbone — one derivation.
+        bb = backbone if backbone is not None else build_backbone(conn)
+        aliases = bb.distinctive_name_tokens()
 
     hits: list[RemarkTell] = []
     for tx in conn.remarks():

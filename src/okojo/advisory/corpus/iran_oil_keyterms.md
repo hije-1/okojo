@@ -7,6 +7,7 @@
 - **SAR key term:** IRAN-2025-A002
 - **SAR filing instruction:** reference the key term `IRAN-2025-A002` in SAR field 2 ("Filing Institution Note to FinCEN") and in the narrative.
 - **Associated SAR fields:** 33(a) Terrorist Financing; 36 Money Laundering; 38 Other Suspicious Activities.
+- **Jurisdictions:** IR, AE, HK, SG, CN
 
 > Concise extract of the numbered red-flag indicators and key terms only — paraphrased
 > from the public-domain advisory. The full PDF is intentionally **not** committed to the repo.

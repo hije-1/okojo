@@ -21,6 +21,7 @@ import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
 
+from okojo.advisory import RETRIEVAL_VERSION, retrieval_config
 from okojo.connectors import Connectors
 from okojo.network import build_roster
 from okojo.orchestrator import run_case
@@ -525,11 +526,48 @@ def main() -> None:
         if res.advisory:
             a = res.advisory
             st.markdown(f"**{a.advisory_id}** — {a.title}")
-            st.markdown(f"Matched term(s): **{', '.join(a.matched_terms)}**")
+            if a.signals:
+                badge = "  ·  ".join(f"`{s}`" for s in a.signals)
+                corr = "  ·  **corroborated**" if a.corroborated else ""
+                st.markdown(f"Signals that fired: {badge}{corr}")
             st.success(f"SAR key term to cite: **{a.sar_key_term}**  ·  SAR fields: {a.sar_fields}")
+
+            # Signal 1 — keyword / regex over the case text.
+            if a.matched_terms:
+                terms = ", ".join(f"`{t}`" for t in a.matched_terms)
+                st.markdown(f"**Keyword** — matched trigger term(s): {terms}")
+
+            # Signal 2 — semantic red-flag indicators surfaced from the case text.
+            if a.semantic_indicators:
+                st.markdown("**Semantic** — red-flag indicators surfaced from the case text:")
+                for si in a.semantic_indicators:
+                    st.caption(f"{si.rf_id} (cosine {si.score:.2f}) — {si.text}  ·  {si.provenance.cite()}")
+
+            # Signal 3 — structured corroborators tying the case to this advisory.
+            if a.corroborators:
+                st.markdown("**Structured** — corroborators tying the case to this advisory:")
+                for c in a.corroborators:
+                    st.caption(f"[{c.kind}] {c.detail}  ·  {c.provenance.cite()}")
+
             with st.expander(f"Red-flag indicators ({len(a.red_flags)})"):
                 for rf in a.red_flags:
                     st.markdown(f"- {rf}")
+
+            with st.expander("Show the retrieval"):
+                cfg = retrieval_config()
+                st.markdown(
+                    f"- Active embedder this run: `{res.advisory_embedder}`\n"
+                    f"- Configured embedder: `{cfg['embedder']}` "
+                    f"(deterministic fallback `{cfg['embedder_fallback']}`)\n"
+                    f"- Semantic threshold: `{cfg['semantic_threshold']}`  ·  top-k: `{cfg['top_k']}`\n"
+                    f"- Corroboration rule: {cfg['corroboration_rule']}\n"
+                    f"- Retrieval methodology version: `v{RETRIEVAL_VERSION}`"
+                )
+                st.caption(
+                    "The matcher surfaces and flags advisory relevance for human review — "
+                    "it does not determine or file. See docs/advisory-methodology.md."
+                )
+                st.json(cfg)
         else:
             st.info("No advisory matched (event-triggered on RFI key terms).")
 
