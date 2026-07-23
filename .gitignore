@@ -28,6 +28,9 @@ scratch/
 # Advisory PDFs are extracted to committed text, never committed as binaries
 *.pdf
 
+# Streamlit — commit the theme (config.toml), never the secrets file
+.streamlit/secrets.toml
+
 # OS / editor
 .DS_Store
 .idea/

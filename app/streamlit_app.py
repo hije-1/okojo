@@ -25,9 +25,22 @@ from okojo.network import build_roster
 from okojo.orchestrator import run_case
 from okojo.orchestrator.pipeline import default_out_dir
 
-st.set_page_config(page_title="Okojo — Crypto-Investigations Co-Pilot", layout="wide")
+# Brand logo lives at the repo root; resolve off it so the path holds regardless
+# of the working directory the app is launched from.
+_LOGO_PATH = str(Path(__file__).resolve().parents[1] / "okojo-logo.png")
 
-_SEVERITY_COLOR = {"high": "#dc2626", "medium": "#f59e0b", "low": "#0ea5e9"}
+st.set_page_config(
+    page_title="Okojo — Crypto-Investigations Co-Pilot",
+    page_icon=_LOGO_PATH,
+    layout="wide",
+)
+# The logo is rendered as a fixed-width image at the top of the sidebar (see
+# main()) rather than via st.logo(): st.logo tops out ~32px, too small to read.
+
+# Semantic colours (kept off brand blue — blue is chrome only). "low" uses a
+# friendly green (universal "go" = lowest concern), so the brand blue never
+# collides with a severity/risk meaning.
+_SEVERITY_COLOR = {"high": "#dc2626", "medium": "#f59e0b", "low": "#16a34a"}
 _RISK_GREY = "#6b7280"
 
 # Human-readable labels for the machine anomaly codes surfaced as roster chips.
@@ -135,7 +148,7 @@ _ROSTER_CSS = """
 /* Severity risk-rail = the card's own left border (bound to the card box). */
 [class*="st-key-roster_row_high_"]   { border-left: 4px solid #dc2626; }
 [class*="st-key-roster_row_medium_"] { border-left: 4px solid #f59e0b; }
-[class*="st-key-roster_row_low_"]    { border-left: 4px solid #0ea5e9; }
+[class*="st-key-roster_row_low_"]    { border-left: 4px solid #16a34a; }
 [class*="st-key-roster_row_none_"]   { border-left: 4px solid #6b7280; }
 /* Cancel Streamlit's -16px markdown-container margin (assumes a trailing <p>;
    our cards end in a <div>, so it would otherwise pull the chips past the border). */
@@ -252,6 +265,10 @@ def main() -> None:
         option_uids.append(st.session_state.subject_uid)
 
     with st.sidebar:
+        # Centered logo at ~5/12 of the sidebar width (middle = 10/24): side
+        # spacers center the middle column that carries the image.
+        _, _logo_col, _ = st.columns([7, 10, 7])
+        _logo_col.image(_LOGO_PATH, use_container_width=True)
         st.header("Case selector")
         st.selectbox(
             "Subject",

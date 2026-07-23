@@ -1,0 +1,9 @@
+# Okojo — Streamlit theme (brand chrome only).
+# Semantic colors (risk bands, anomaly severity, warning callouts) live in the
+# app code and are deliberately NOT set here — blue is brand chrome, nothing more.
+[theme]
+base = "light"
+primaryColor = "#3B9ED5"              # Okojo brand blue
+backgroundColor = "#FFFFFF"           # clean near-white
+secondaryBackgroundColor = "#EEF3F7"  # very light blue-gray
+textColor = "#1A2330"                 # dark slate text
