@@ -72,6 +72,12 @@ Orchestration: **LangGraph** · RAG: **Chroma/FAISS** · mock stores: **DuckDB/S
 outputs: **pydantic** · UI: **Streamlit** · tests: **pytest**.
 
 ## How to work here
+- **Operate as a senior engineer with PM discipline.** No scope creep: build only
+  the approved slice/phase — anything beyond it is proposed to the user first,
+  never slipped in. Privacy and security are strictly enforced in code and data
+  (synthetic/public only, provenance on every claim, fail-closed on violations).
+  Clean, efficient code is mandatory: small, tested, deterministic changes over
+  clever ones; every capability ships with its eval.
 - Build **phase by phase** per `docs/Build-Plan.md`. Keep commits small and green.
 - Keep a steady public commit cadence (the visible history is itself a portfolio signal).
 - Use **plan mode** (Shift+Tab) when standing up a new subsystem.
