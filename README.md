@@ -4,10 +4,12 @@
 
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
-> **Status:** Phase 1 — walking skeleton. One synthetic case now flows end-to-end
-> through a thin version of every stage (profile → network → tells → RFI →
-> advisory → grounded SAR), over a tamper-evident audit trail, with a minimal Streamlit demo.
-> This repository is being built in the open as a portfolio project; the remaining
+> **Status:** Phases 0–4 complete, built in the open. A synthetic case flows
+> end-to-end — unified profile → 1–7-hop network expansion → on-chain risk
+> scoring → remark/tell mining + sanctions screening → hybrid FinCEN-advisory
+> matching → a **grounded, self-critiquing SAR draft** — over a tamper-evident,
+> hash-chained audit trail, with an 8-tab Streamlit demo. **Next (Phase 5):** the
+> RFI Contradiction-Checker. This repository is a portfolio project; the remaining
 > capabilities land phase by phase (see the roadmap).
 
 Okojo is a research prototype of an **agentic AI co-pilot for financial-crime
@@ -17,8 +19,8 @@ on-chain entity cluster, mines user-generated tells, checks a subject's
 request-for-information (RFI) answers against the evidence, grounds its findings
 in the relevant FinCEN advisories, and drafts an intelligence-rich Suspicious
 Activity Report — handing a human a decision-ready package with a complete,
-tamper-evident audit trail. (Phase 1 surfaces the RFI read-only; claim-by-claim
-contradiction checking lands in Phase 5.)
+tamper-evident audit trail. (The current build surfaces the RFI read-only;
+claim-by-claim contradiction checking lands in Phase 5.)
 
 ---
 
@@ -58,7 +60,7 @@ python scripts/generate_scenario.py
 # run the tests
 pytest -q
 
-# launch the walking-skeleton demo (pick a subject, watch the case flow end-to-end)
+# launch the demo (pick a subject, watch the case flow end-to-end)
 streamlit run app/streamlit_app.py
 ```
 
@@ -66,14 +68,18 @@ Output is written to `data/synthetic/` (git-ignored). Because generation is
 fully deterministic (seeded), the dataset regenerates identically — so only the
 generator is committed, never the data.
 
-### The walking skeleton (Phase 1)
+### End-to-end case flow
 
-Given a flagged subject, the thin orchestrator runs the mock connectors →
-Profile Aggregator (anomaly-flagged timeline) → Network Expander (subject-seeded
-graph) → Remark/Tell Miner → FinCEN Advisory Matcher → grounded SAR
-drafter → Case Packager, logging every step to an append-only, hash-chained
-audit trail. Every asserted fact carries a provenance pointer; the SAR drafter
-fails closed on any uncitable claim.
+Given a flagged subject, the orchestrator runs the mock connectors → Profile
+Aggregator (anomaly-flagged timeline) → Network Expander (1–7-hop; gas-funding /
+device / reused-KYC linkage) → On-chain Risk Scorer → Remark/Tell Miner +
+sanctions/alias screening → FinCEN Advisory Matcher → a grounded SAR Drafter +
+Critic → Case Packager, logging every step to an append-only, hash-chained audit
+trail. Every asserted fact carries a provenance pointer that must resolve to a
+real evidence row, and the SAR draft is graded against a FinCEN rubric with a
+bounded, deterministic revision loop — failing closed on any uncitable or
+unresolvable claim, and flagging (never fabricating) whatever the evidence cannot
+support.
 
 ### What the generator plants
 
@@ -109,6 +115,11 @@ inspectable state machine (legibility is a compliance feature):
 7. **SAR Drafter + Critic** — grounded, self-critiquing narrative generation.
 8. **Case Packager + persistent case graph** — decision-ready package, append-only audit log, cross-case recidivism.
 9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
+
+**Built so far (Phases 1–4):** components 1–4, 6, and 7 (the RFI, component 5, is
+currently surfaced read-only). **Next (Phase 5):** the RFI Contradiction-Checker;
+components 8–9 follow in later phases. The numbering reflects the target design,
+not build order.
 
 **Roadmap (post-v1.0):** ML alert auto-closure QA · vendor reconciliation ·
 tokenized-commodity issuance tracing · multilingual OSINT verifier · LE-request/MLAT routing.

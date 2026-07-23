@@ -1,4 +1,4 @@
-"""Okojo — Streamlit demo (Phase 2).
+"""Okojo — Streamlit demo (Phase 4).
 
 Pick a synthetic subject and watch one case flow end-to-end: an anomaly-flagged
 timeline, the network graph with gas-funding collapse, per-account on-chain
@@ -253,7 +253,7 @@ def main() -> None:
         "Okojo — Agentic Crypto-Investigations Co-Pilot</h1>",
         unsafe_allow_html=True,
     )
-    st.caption("Phase 2 · **fully synthetic data** · a human reviews, decides, and files.")
+    st.caption("Phase 4 · **fully synthetic data** · a human reviews, decides, and files.")
 
     try:
         conn = get_connectors()

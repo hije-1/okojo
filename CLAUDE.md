@@ -48,8 +48,21 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   P/R/F1=1.0 (0/6) + discrimination 12/12; screener/scorer byte-identical;
   generator byte-identical. 107 green tests (1 skipped: the ST backend when torch
   is absent).
+- **Phase 4 (SAR Drafter + Critic + grounding): COMPLETE.** The template-first SAR
+  Drafter hardened into a grounded, self-critiquing generator: grounding is now
+  **fail-closed on *unresolvable* citations** (every claim pointer must resolve to
+  a real evidence row, not merely be non-empty), a **deterministic FinCEN-rubric
+  Critic** (who/what/when/where/why/how + subject-and-network + on-chain evidence)
+  grades the draft, and a **bounded, deterministic revision loop** fills gaps from
+  evidence in hand or **flags them for human review (never fabricated)**. A
+  versioned `critic_config()` stamped into the audit chain, a public
+  `docs/sar-critic-methodology.md` (doc↔code anti-drift test), an eval with a
+  with/without-Critic ablation on a separate committed gold key (WITH P/R/F1=1.0
+  vs WITHOUT recall 0.56), and a "Critic review" UI (grade + revision trail +
+  human-fallback banner). Screener/scorer/advisory scorecards byte-identical;
+  generator byte-identical. 131 green tests (1 skipped: the ST backend).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Phase 4** (SAR Drafter + Critic + grounding). Full details in
+- **NEXT: Phase 5** (RFI Contradiction-Checker). Full details in
   `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
