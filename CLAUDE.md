@@ -22,10 +22,17 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   RFI surfacing → Advisory Matcher → grounded SAR Drafter → Case Packager) over
   a hash-chained audit trail, with a 7-tab Streamlit demo (incl. network triage
   roster + read-only RFI view) and 44 green tests.
-- **PUBLISHED:** the walking skeleton is live at
-  <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Phase 2** (full 1–7-hop network expansion, gas-funding linkage,
-  RapidFuzz tell matching, On-chain Risk Scorer, P/R/F1 eval harness).
+- **Phase 2 (Graph, gas-funding & tells): COMPLETE.** Full 1–7-hop Network
+  Expander (device/reused-KYC/gas-funding linkage + gas controller-collapse),
+  On-chain Risk Scorer (graded sanctioned exposure by amount + hop distance),
+  RapidFuzz Remark/Tell Miner + SDN/alias screening, and a P/R/F1 eval harness
+  with a consolidated Phase-2 scorecard. Streamlit demo grown to a Sanctions-first
+  8-tab compliance view (watchlist screening + on-chain exposure, gas-collapse
+  callout, per-account risk chips). 70 green tests.
+- **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
+- **NEXT: Slice 4b** (scoring explainability & defensibility — score
+  decomposition, versioned methodology doc, "show the math" UI, audit-stamped
+  reproducibility), then **Phase 3** (Advisory Matcher / RAG hardening).
   Full details in `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
