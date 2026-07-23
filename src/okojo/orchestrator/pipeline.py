@@ -25,6 +25,7 @@ from ..network import NetworkExpansion, expand, render
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import RfiView, load_rfi
 from ..sar import SarDraft, build_sar
+from ..scorer import RiskScoring, score_risk
 
 
 @dataclass
@@ -34,6 +35,7 @@ class CaseResult:
     profile: ProfileTimeline
     expansion: NetworkExpansion
     graph_html_path: Optional[Path]
+    risk: RiskScoring
     tells: list[RemarkTell]
     alias_hits: list[AliasMatch]
     rfi: Optional[RfiView]
@@ -99,6 +101,11 @@ def run_case(
             render(expansion, graph_html_path)
             audit.append("network_expander", "graph_rendered", target=_rel(graph_html_path))
 
+        # 2b) On-chain Risk Scorer (graded sanctioned exposure: amount + hop distance)
+        audit.append("risk_scorer", "tool_call", target=f"uid:{subject_uid}")
+        risk = score_risk(conn, expansion)
+        audit.append("risk_scorer", "scored", detail=json.dumps(risk.summary()))
+
         # 3) Remark / Tell Miner (+ SDN/alias screening of account names)
         audit.append("remark_miner", "tool_call")
         tells = mine_remarks(conn)
@@ -141,6 +148,7 @@ def run_case(
             profile=profile,
             expansion=expansion,
             graph_html_path=graph_html_path,
+            risk=risk,
             tells=tells,
             alias_hits=alias_hits,
             rfi=rfi_view,

@@ -273,6 +273,7 @@ def expand(conn: Connectors, subject_uid: int, max_hops: int = 2) -> NetworkExpa
                     tn = b.ensure_ref(tx["to_ref"])
                     b.add_edge(
                         fn, tn, "transaction", tx.provenance.cite(),
+                        tx_id=str(tx["tx_id"]),
                         amount=float(tx["amount_usdt"]), remark=(tx["remark"] or ""),
                         structured=bool(tx["is_structured_round_number"]),
                     )
