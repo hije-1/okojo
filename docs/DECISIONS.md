@@ -90,11 +90,14 @@ Membership in v1.0 is decided on **payoff-to-*marginal*-cost, not payoff alone.*
   (component 9). Promoted from roadmap because it is the most regulator-relevant
   capability (FinCEN's aggressive Iran program) *and* cheap to build last — it
   re-orchestrates finished components rather than adding a new subsystem.
-- **Roadmap (post-v1.0, ordered by payoff):** PP-13 (ML auto-closure QA) and #8
-  (vendor reconciliation) first; then PP-14 (tokenized-commodity tracing — kept out
-  of v1.0 despite timeliness because it needs new contract-tracing tooling with
-  little reuse), #5 (multilingual OSINT), #4/#7 (LE-request/MLAT routing). Build
-  these in public after launch to keep the repo visibly growing.
+- **Roadmap (post-v1.0, ordered by payoff):** the **Audit Narrator** (grounded
+  summarizer over Okojo's own hash-chained audit log — makes the tamper-evident
+  trail *reviewable*, not just provable; low marginal cost, reuses the native log)
+  first; then PP-13 (ML auto-closure QA) and #8 (vendor reconciliation); then PP-14
+  (tokenized-commodity tracing — kept out of v1.0 despite timeliness because it
+  needs new contract-tracing tooling with little reuse), #5 (multilingual OSINT),
+  #4/#7 (LE-request/MLAT routing). Build these in public after launch to keep the
+  repo visibly growing. (See §13.)
 
 ## 8. Data sources
 - **On-chain graph:** Elliptic / Elliptic++ (public, labeled BTC graph). NOTE:
@@ -145,3 +148,19 @@ _Added Day 3 (Phase 2 complete)._
   Rationale: an outside contributor would hold copyright in their lines under MIT,
   and relicensing later would then require their consent. **Revisit alongside the
   license at v1.0** — a DCO or CLA would be the mechanism if PRs are ever opened.
+
+## 13. Audit Narrator added to the roadmap (post-v1.0)
+_Added Day 3 (Phase 2 + Slice 4b complete)._
+
+- **Audit Narrator added to the roadmap (user-proposed).** Prioritized *ahead of
+  PP-13* because it reuses Okojo's native hash-chained audit log — no new data and
+  no new privacy surface — and directly strengthens the audit-trail centerpiece:
+  it makes a *provable* log *reviewable*. A grounded summarizer over the log emits
+  (a) a plain-language, citation-backed case narrative and (b) an actor/pattern
+  access review that flags unusual access for human review.
+- **Guardrails carry over unchanged:** the grounding contract and calibrated
+  language apply — every summary sentence cites the log entries behind it, and
+  anomalies are *flagged for human review, never concluded*.
+- **Deliberately not built now — roadmap discipline holds.** Logged here as scope;
+  build order stays per `docs/Build-Plan.md`. Candidate to pull into v1.0 only if
+  schedule cushion allows.

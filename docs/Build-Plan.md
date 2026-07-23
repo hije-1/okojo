@@ -83,6 +83,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 ### Phase 9 — Buffer, launch & narrative (Weeks 18–20: Nov 17–Dec 5, flexible)
 - Absorb overruns (agentic builds always overrun somewhere).
 - Companion essay in your exec voice — designing agentic AI for regulated compliance workflows, using the sanctions-evasion scenario as the worked example. High-leverage while job-hunting.
+- **Audit Narrator (post-v1.0, high priority / low marginal cost).** A grounded summarization agent over Okojo's own hash-chained audit log, producing (a) a plain-language case narrative — what each agent did, in order, with citations to the log entries behind every sentence — and (b) an access review for auditors: activity grouped by actor and pattern, with unusual access surfaced as flags for human review (never conclusions). Rationale: raw access/audit logs in real institutions are endpoint-level clickstream that even experienced practitioners struggle to read; a tamper-evident log that no one can read still hides anomalies in plain sight. The Narrator makes the centerpiece audit trail legible, closing the loop from "provable" to "reviewable." Marginal cost is low: the input is the structured, provenance-carrying log Okojo already emits. Candidate to pull into v1.0 if schedule cushion allows.
 - Optional, if time remains: begin the next roadmap module — ML alert auto-closure QA (PP-13) or vendor reconciliation (#8).
 - **Milestone:** launched, documented, and shareable.
 
