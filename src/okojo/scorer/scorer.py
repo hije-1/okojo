@@ -53,6 +53,30 @@ _GAS_BASE = 0.5        # base contextual score for gas-only controllers (mirrors
 _BAND_HIGH = 0.6
 _BAND_MEDIUM = 0.3
 
+# Version of this scoring methodology. Bump on any change to a constant or the
+# formula; the config is stamped into the audit trail so any historical score is
+# exactly reproducible, and mirrored (+ regression-tested) by
+# ``docs/scoring-methodology.md``.
+SCORING_VERSION = "1.0.0"
+
+
+def scoring_config() -> dict:
+    """The full, versioned scoring configuration — the tunable *policy parameters*
+    behind every score. This is the single source of truth: it is stamped into
+    the audit trail for reproducibility and regression-tested against the
+    published methodology doc so the two can never silently drift.
+    """
+    return {
+        "version": SCORING_VERSION,
+        "membership_edge_types": sorted(_MONEY_FLOW_ETYPES),
+        "decay": _DECAY,
+        "floor": _FLOOR,
+        "amount_ref_usdt": _A_REF,
+        "gas_base": _GAS_BASE,
+        "band_high": _BAND_HIGH,
+        "band_medium": _BAND_MEDIUM,
+    }
+
 
 def _acct_node(uid: int) -> str:
     """Account node id — mirrors the scheme in ``network.expander``."""
@@ -83,6 +107,37 @@ def _amount_factor(amount: float) -> float:
 
 
 @dataclass
+class ScoreDecomposition:
+    """The arithmetic behind a single score, exposed so the UI, the audit trail,
+    and a future SAR all read one source of truth. Every score is the product of
+    two factors: a ``base`` factor (tainted-amount weight for a money-flow row, or
+    the fixed gas-base for a gas-only echo) and a ``proximity`` factor (per-hop
+    decay). ``round(min(1.0, base_factor * proximity_factor), 3)`` reproduces the
+    score exactly.
+    """
+
+    kind: str               # "money_flow" | "gas_only"
+    base_label: str         # "amount" | "gas_base" — what the base factor represents
+    base_factor: float      # amount factor in [floor, 1], or the gas-base constant
+    proximity_factor: float # per-hop decay = decay ** (hop - 1)
+    product: float          # base_factor * proximity_factor (pre-clamp)
+    score: float            # final = round(min(1.0, product), 3)
+    formula: str            # human-readable, e.g. "0.600 = amount 1.000 × proximity 0.600"
+
+
+def _decompose(kind: str, base_label: str, base_factor: float, proximity: float) -> tuple[float, ScoreDecomposition]:
+    """Compute a score and its decomposition together, so the two never diverge."""
+    product = base_factor * proximity
+    score = round(min(1.0, product), 3)
+    shown = "gas-base" if base_label == "gas_base" else base_label
+    formula = f"{score:.3f} = {shown} {base_factor:.3f} × proximity {proximity:.3f}"
+    return score, ScoreDecomposition(
+        kind=kind, base_label=base_label, base_factor=base_factor,
+        proximity_factor=proximity, product=product, score=score, formula=formula,
+    )
+
+
+@dataclass
 class RiskScore:
     """Per-account graded exposure — a leaf item, so it carries provenance."""
 
@@ -94,6 +149,7 @@ class RiskScore:
     tainted_amount_usdt: float      # value this account's wallets push onward toward the endpoint
     reasons: list[str]
     provenance: list[Provenance]
+    decomposition: ScoreDecomposition  # the "show the math" breakdown of ``score``
 
 
 @dataclass
@@ -104,6 +160,8 @@ class RiskScoring:
     max_hops: int
     scores: list[RiskScore] = field(default_factory=list)   # exposed + gas-only; score desc, uid asc
     exposed_uids: list[int] = field(default_factory=list)   # money-flow only; the eval prediction handle
+    version: str = SCORING_VERSION                          # scoring methodology version (reproducibility)
+    config: dict = field(default_factory=scoring_config)    # the policy parameters this run used
 
     def gas_only_uids(self) -> list[int]:
         return [s.uid for s in self.scores if not s.exposure_path]
@@ -234,7 +292,7 @@ def score_risk(conn: Connectors, expansion: NetworkExpansion) -> RiskScoring:
         hop = dist[nid]
         owned = _controlled_nodes(g, nid)
         amount, tx_ids = _tainted_outflow(g, owned, toward)
-        score = round(min(1.0, _amount_factor(amount) * _hop_decay(hop)), 3)
+        score, decomposition = _decompose("money_flow", "amount", _amount_factor(amount), _hop_decay(hop))
 
         reasons = ["sanctioned_flow_exposure"]
         if _has_direct_sanctioned_tx(g, owned):
@@ -252,7 +310,7 @@ def score_risk(conn: Connectors, expansion: NetworkExpansion) -> RiskScoring:
         scores.append(RiskScore(
             uid=uid, score=score, band=_band(score), exposure_path=True,
             hop_distance=hop, tainted_amount_usdt=round(amount, 2),
-            reasons=reasons, provenance=provenance,
+            reasons=reasons, provenance=provenance, decomposition=decomposition,
         ))
         exposed_uids.append(uid)
 
@@ -264,11 +322,12 @@ def score_risk(conn: Connectors, expansion: NetworkExpansion) -> RiskScoring:
         gas_prov = _gas_provenance(conn, expansion)
         for controller in gas_only_controllers:
             gas_hop = max(1, gas_dist.get(_acct_node(controller), 1))
-            score = round(_GAS_BASE * _hop_decay(gas_hop), 3)
+            score, decomposition = _decompose("gas_only", "gas_base", _GAS_BASE, _hop_decay(gas_hop))
             scores.append(RiskScore(
                 uid=controller, score=score, band=_band(score), exposure_path=False,
                 hop_distance=gas_hop, tainted_amount_usdt=0.0,
                 reasons=["gas_only_link"], provenance=gas_prov.get(controller, []),
+                decomposition=decomposition,
             ))
 
     scores.sort(key=lambda s: (-s.score, s.uid))

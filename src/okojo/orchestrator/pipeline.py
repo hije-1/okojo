@@ -104,6 +104,9 @@ def run_case(
         # 2b) On-chain Risk Scorer (graded sanctioned exposure: amount + hop distance)
         audit.append("risk_scorer", "tool_call", target=f"uid:{subject_uid}")
         risk = score_risk(conn, expansion)
+        # Stamp the versioned scoring config into the hash chain, so any historical
+        # score can be reproduced exactly (defensibility / reproducibility).
+        audit.append("risk_scorer", "scoring_config", detail=json.dumps(risk.config))
         audit.append("risk_scorer", "scored", detail=json.dumps(risk.summary()))
 
         # 3) Remark / Tell Miner (+ SDN/alias screening of account names)

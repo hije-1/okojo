@@ -18,8 +18,9 @@ from ..connectors import Connectors
 from ..provenance import Provenance
 
 # WRatio threshold (0-100). Transliteration variants score ~90+; unrelated
-# names sit well below, so ~85 cleanly separates true hits from noise.
-_SCREEN_THRESHOLD = 85
+# names sit well below, so ~85 cleanly separates true hits from noise. Public so
+# the UI and the methodology doc cite one source of truth.
+SCREEN_THRESHOLD = 85
 
 
 class AliasMatch(BaseModel):
@@ -32,7 +33,7 @@ class AliasMatch(BaseModel):
     provenance: list[Provenance]
 
 
-def screen_aliases(conn: Connectors, threshold: int = _SCREEN_THRESHOLD) -> list[AliasMatch]:
+def screen_aliases(conn: Connectors, threshold: int = SCREEN_THRESHOLD) -> list[AliasMatch]:
     """Fuzzy-screen every account name against the synthetic SDN/alias watchlist.
 
     Returns the strongest above-threshold match per account (a name resembling a

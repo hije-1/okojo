@@ -11,6 +11,7 @@ Run it:
 
 from __future__ import annotations
 
+import difflib
 import sys
 from pathlib import Path
 
@@ -24,6 +25,8 @@ from okojo.connectors import Connectors
 from okojo.network import build_roster
 from okojo.orchestrator import run_case
 from okojo.orchestrator.pipeline import default_out_dir
+from okojo.remarks import SCREEN_THRESHOLD
+from okojo.scorer import SCORING_VERSION, scoring_config
 
 # Brand logo lives at the repo root; resolve off it so the path holds regardless
 # of the working directory the app is launched from.
@@ -94,6 +97,27 @@ def _chip(text: str, color: str) -> str:
         f"border-radius:10px;font-size:0.72rem;font-weight:600;line-height:1.5;"
         f"color:{color};background:{color}1a;border:1px solid {color}55;'>{text}</span>"
     )
+
+
+def _diff_html(a: str, b: str) -> tuple[str, str]:
+    """Return (a_html, b_html) with the characters that differ highlighted, so a
+    reviewer can see *exactly* where a name and a watchlist alias diverge
+    (e.g. Hill -> Holl). Amber marks are chrome, not a semantic risk colour."""
+    sm = difflib.SequenceMatcher(a=a, b=b, autojunk=False)
+    mark = "<span style='background:#fde68a;color:#1a2330;border-radius:2px;padding:0 1px;'>"
+    a_out: list[str] = []
+    b_out: list[str] = []
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        aseg, bseg = a[i1:i2], b[j1:j2]
+        if tag == "equal":
+            a_out.append(aseg)
+            b_out.append(bseg)
+        else:
+            if aseg:
+                a_out.append(f"{mark}{aseg}</span>")
+            if bseg:
+                b_out.append(f"{mark}{bseg}</span>")
+    return "".join(a_out), "".join(b_out)
 
 
 def _roster_card_html(row, risk=None) -> str:
@@ -335,6 +359,29 @@ def main() -> None:
             st.caption("source: " + "; ".join(
                 p.cite() for h in res.alias_hits for p in h.provenance
             ))
+            with st.expander("How the name match works — show the math"):
+                st.markdown(
+                    f"**Algorithm:** RapidFuzz `WRatio` (a weighted character/token "
+                    f"similarity, 0–100). **Threshold:** a score **≥ {SCREEN_THRESHOLD}** "
+                    "is surfaced for review — transliteration variants score ~90+, "
+                    "unrelated decoys sit well below."
+                )
+                st.markdown(
+                    "The score is a **name-similarity confidence for human review — "
+                    "not a confirmed identity match, and not a risk score.** "
+                    "A “92”, for instance, means the two strings are 92/100 similar "
+                    "(a reason to *look*), nothing more. A person adjudicates."
+                )
+                for h in res.alias_hits:
+                    name_html, alias_html = _diff_html(h.entity_name, h.matched_alias)
+                    st.markdown(
+                        f"<div style='margin:6px 0;font-size:0.9rem;'>"
+                        f"uid {h.uid} · similarity <b>{h.score:.0f}</b> / 100 "
+                        f"(threshold {SCREEN_THRESHOLD}) · program {h.program}<br>"
+                        f"account name:&nbsp;&nbsp;{name_html}<br>"
+                        f"watchlist alias: {alias_html}</div>",
+                        unsafe_allow_html=True,
+                    )
         else:
             st.info("No watchlist name hits across the dataset.")
 
@@ -343,7 +390,7 @@ def main() -> None:
         st.caption(
             "Graded exposure to the synthetic sanctioned set by tainted amount and hop "
             "distance (money-flow path only). Bands: high ≥ 0.60, medium 0.30–0.60. "
-            "A full breakdown of how each score is derived is the next slice."
+            "Every score decomposes into named factors — expand *show the math* below."
         )
         if res.risk.scores:
             rdf = pd.DataFrame([
@@ -354,9 +401,39 @@ def main() -> None:
                 for s in res.risk.scores
             ])
             st.dataframe(rdf, use_container_width=True, hide_index=True)
+
+            with st.expander("Score breakdown — show the math (per account)"):
+                st.caption(
+                    "Each score is a transparent product of an **amount** factor "
+                    "(tainted value on a fixed log scale) and a **proximity** factor "
+                    "(per-hop decay). Gas-only rows use a fixed gas-base instead of amount."
+                )
+                for s in res.risk.scores:
+                    d = s.decomposition
+                    st.markdown(
+                        f"**uid {s.uid}** · {names.get(s.uid, s.uid)} · _{d.kind}_  \n"
+                        f"`{d.formula}`  → **{s.score:.3f}** ({s.band})"
+                    )
+
             with st.expander("Provenance (per scored account)"):
                 for s in res.risk.scores:
                     st.caption(f"uid {s.uid}: " + "; ".join(p.cite() for p in s.provenance))
+
+            with st.expander(f"Scoring methodology & version (v{SCORING_VERSION})"):
+                cfg = scoring_config()
+                st.markdown(
+                    f"Methodology **v{cfg['version']}**, stamped into the audit trail for "
+                    "reproducibility. These are **tunable policy parameters, not universal "
+                    "constants** — full rationale in `docs/scoring-methodology.md`."
+                )
+                st.markdown(
+                    f"- **Membership edges:** `{', '.join(cfg['membership_edge_types'])}` "
+                    "(gas/relationship edges excluded from the fund-flow metric)\n"
+                    f"- **Per-hop decay:** `{cfg['decay']}`  ·  **amount floor:** "
+                    f"`{cfg['floor']}`  ·  **saturates at:** ${cfg['amount_ref_usdt']:,.0f}\n"
+                    f"- **Bands:** high ≥ `{cfg['band_high']:.2f}`, medium ≥ "
+                    f"`{cfg['band_medium']:.2f}`  ·  **gas-base:** `{cfg['gas_base']}`"
+                )
         else:
             st.info("No on-chain sanctioned exposure for this cluster.")
 

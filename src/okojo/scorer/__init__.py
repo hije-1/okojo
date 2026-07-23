@@ -5,6 +5,20 @@ Synthetic address-tagging layer only; never conflated with Elliptic.
 
 from __future__ import annotations
 
-from .scorer import RiskScore, RiskScoring, score_risk
+from .scorer import (
+    SCORING_VERSION,
+    RiskScore,
+    RiskScoring,
+    ScoreDecomposition,
+    score_risk,
+    scoring_config,
+)
 
-__all__ = ["RiskScore", "RiskScoring", "score_risk"]
+__all__ = [
+    "RiskScore",
+    "RiskScoring",
+    "ScoreDecomposition",
+    "score_risk",
+    "scoring_config",
+    "SCORING_VERSION",
+]

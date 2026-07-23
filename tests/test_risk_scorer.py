@@ -7,10 +7,14 @@ gas-funding is never dropped) rather than exact scores.
 
 from __future__ import annotations
 
-from okojo.network import expand
-from okojo.scorer import score_risk
+import networkx as nx
+import pytest
+
+from okojo.network import NetworkExpansion, expand
+from okojo.scorer import SCORING_VERSION, score_risk, scoring_config
 
 _A_REF = 1_000_000  # tainted USDT at/above which the amount factor saturates
+_DECAY = 0.6        # per-hop decay (mirrors scorer._DECAY)
 
 
 def _scoring(conn, trust_uid, hops: int = 3):
@@ -98,3 +102,81 @@ def test_determinism(conn, trust_uid):
         for s in r.scores
     ]
     assert key(a) == key(b)
+
+
+# -- Slice 4b: decomposition & reproducibility -------------------------------- #
+
+def test_decomposition_reproduces_score(conn, trust_uid):
+    """Every score is exactly its own decomposition — recomputing from the two
+    factors yields the same number (the 'show the math' contract)."""
+    r = _scoring(conn, trust_uid)
+    assert r.scores
+    for s in r.scores:
+        d = s.decomposition
+        assert d is not None
+        assert round(min(1.0, d.base_factor * d.proximity_factor), 3) == s.score
+        assert d.product == d.base_factor * d.proximity_factor
+        assert d.score == s.score
+
+
+def test_decomposition_kind_and_labels(conn, trust_uid):
+    """Decomposition kind tracks money-flow vs gas-only, and the proximity factor
+    is pure hop decay."""
+    r = _scoring(conn, trust_uid)
+    for s in r.scores:
+        d = s.decomposition
+        assert (d.kind == "money_flow") is s.exposure_path
+        assert d.proximity_factor == pytest.approx(_DECAY ** (s.hop_distance - 1))
+        if s.exposure_path:
+            assert d.base_label == "amount"
+            assert 0.0 < d.base_factor <= 1.0
+        else:
+            assert d.base_label == "gas_base"
+
+
+def test_scoring_config_and_version(conn, trust_uid):
+    """The result carries the version + config it was computed under."""
+    r = _scoring(conn, trust_uid)
+    assert r.version == SCORING_VERSION
+    assert r.config == scoring_config()
+    cfg = scoring_config()
+    assert cfg["version"] == SCORING_VERSION
+    assert set(cfg) == {
+        "version", "membership_edge_types", "decay", "floor",
+        "amount_ref_usdt", "gas_base", "band_high", "band_medium",
+    }
+    # membership is exactly the money-flow edge set — the gold-key semantics
+    assert cfg["membership_edge_types"] == ["controls", "transaction"]
+
+
+def test_gas_only_decomposition_uses_gas_base():
+    """A gas-only controller (no money-flow path) is scored gas_base × proximity
+    and kept OUT of the exposure metric. Exercised with a minimal synthetic graph,
+    since the TRUST scenario's gas controllers also move money (0 gas-only rows)."""
+    g = nx.MultiDiGraph()
+    g.add_node("addr:SANC", kind="address", address="SANC", sanctioned=True)
+    g.add_node("acct:2", kind="account", uid=2)
+    g.add_node("addr:FUNDED", kind="address", address="FUNDED", sanctioned=False)
+    # gas link only — no transaction/controls path to the sanctioned endpoint
+    g.add_edge("acct:2", "addr:FUNDED", key="gas_control", etype="gas_control")
+    exp = NetworkExpansion(
+        graph=g, subject_uid=2, max_hops=2,
+        gas_funding_links=[{"controller_uid": 2, "funder_address": "F", "funded_address": "FUNDED"}],
+    )
+
+    class _FakeConn:
+        def gas_funds(self):
+            return []
+
+    r = score_risk(_FakeConn(), exp)
+    by_uid = {s.uid: s for s in r.scores}
+    assert 2 in by_uid, "gas-only controller must still surface"
+    gas_row = by_uid[2]
+    assert gas_row.exposure_path is False
+    assert gas_row.reasons == ["gas_only_link"]
+    assert 2 not in r.exposed_uids  # kept out of the money-flow metric
+    d = gas_row.decomposition
+    assert d.kind == "gas_only"
+    assert d.base_label == "gas_base"
+    assert d.base_factor == pytest.approx(0.5)
+    assert round(min(1.0, d.base_factor * d.proximity_factor), 3) == gas_row.score
