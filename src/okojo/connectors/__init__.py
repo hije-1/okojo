@@ -68,6 +68,12 @@ class Connectors:
         )
         return recs[0] if recs else None
 
+    def all_kyc(self) -> list[Record]:
+        return self._records(
+            "kyc_docs", "SELECT * FROM kyc_docs", [],
+            lambda r: r["kyc_doc_id"],
+        )
+
     def accounts_with_kyc(self, kyc_doc_id: str) -> list[Record]:
         """All accounts opened with a given KYC document (>1 == reused-KYC tell)."""
         return self._records(
@@ -89,9 +95,21 @@ class Connectors:
             lambda r: f"{r['device_fingerprint']}:uid:{r['uid']}",
         )
 
+    def all_devices(self) -> list[Record]:
+        return self._records(
+            "devices", "SELECT * FROM devices", [],
+            lambda r: f"{r['device_fingerprint']}:uid:{r['uid']}",
+        )
+
     def ip_logs_for(self, uid: int) -> list[Record]:
         return self._records(
             "ip_logs", "SELECT * FROM ip_logs WHERE uid = ? ORDER BY timestamp", [uid],
+            lambda r: f"uid:{r['uid']}@{r['timestamp']}",
+        )
+
+    def all_ip_logs(self) -> list[Record]:
+        return self._records(
+            "ip_logs", "SELECT * FROM ip_logs", [],
             lambda r: f"uid:{r['uid']}@{r['timestamp']}",
         )
 
@@ -108,6 +126,12 @@ class Connectors:
             lambda r: r["address"],
         )
         return recs[0] if recs else None
+
+    def all_addresses(self) -> list[Record]:
+        return self._records(
+            "addresses", "SELECT * FROM addresses", [],
+            lambda r: r["address"],
+        )
 
     def sanctioned_addresses(self) -> list[Record]:
         return self._records(

@@ -1,0 +1,26 @@
+{
+  "readme": "Gold key for the SAR Critic rubric eval (Phase 4). For each subject (selected by seed-stable role, not a hard-coded uid), 'expect_covered' is the set of FinCEN-rubric elements the case's evidence genuinely supports -- i.e. the coverage a correct, grounded SAR should reach. This is a SEPARATE committed key (like tests/data/advisory_gold.json) so it never perturbs the seeded generator. The eval scores the drafter-critic's covered set against this: with the Critic loop, coverage should equal the gold (P=R=1.0); without it (the template-first base draft), recall is strictly lower -- the loop's measured value. Elements the evidence cannot support are deliberately absent from the gold and are flagged for human review at runtime, never fabricated.",
+  "rubric_elements": ["who", "what", "when", "where", "why", "how", "subject_and_network", "on_chain_evidence"],
+  "subjects": [
+    {
+      "role": "ultimate_controller",
+      "note": "Full evidentiary picture: sanctioned on-chain exposure + all mechanisms. Every rubric element is coverable.",
+      "expect_covered": ["who", "what", "when", "where", "why", "how", "subject_and_network", "on_chain_evidence"]
+    },
+    {
+      "role": "licensed_trust_intermediary",
+      "note": "Matches the Iran advisory (why via advisory) plus on-chain exposure; fully coverable.",
+      "expect_covered": ["who", "what", "when", "where", "why", "how", "subject_and_network", "on_chain_evidence"]
+    },
+    {
+      "role": "privileged_internal_redherring",
+      "note": "The 'internal account' red herring: sparse direct evidence. No sanctioned exposure and no advisory, so why / how / on_chain_evidence are NOT coverable and are flagged for human review.",
+      "expect_covered": ["who", "what", "when", "where", "subject_and_network"]
+    },
+    {
+      "role": "noise",
+      "note": "Peripheral account: no anomalies (no 'what'), no exposure, no advisory. Only identity, timeframe, geography, and network-context are coverable.",
+      "expect_covered": ["who", "when", "where", "subject_and_network"]
+    }
+  ]
+}

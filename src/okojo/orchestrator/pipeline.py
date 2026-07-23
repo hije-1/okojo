@@ -33,7 +33,14 @@ from ..entity import build_backbone
 from ..network import NetworkExpansion, expand, render
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import RfiView, load_rfi
-from ..sar import SarDraft, build_sar
+from ..sar import (
+    Critique,
+    CritiqueHistory,
+    SarDraft,
+    critic_config,
+    draft_with_critic,
+    validate_grounding,
+)
 from ..scorer import RiskScoring, score_risk
 
 
@@ -50,6 +57,8 @@ class CaseResult:
     rfi: Optional[RfiView]
     advisory: Optional[AdvisoryMatch]
     sar: SarDraft
+    critique: Optional[Critique]
+    critique_history: Optional[CritiqueHistory]
     audit_log_path: Path
     advisory_embedder: str = ""
     audit_records: list[dict] = field(default_factory=list)
@@ -170,11 +179,37 @@ def run_case(
                      detail=(rfi_view.rfi_id if rfi_view else "no rfi"),
                      provenance=(rfi_view.provenance if rfi_view else None))
 
-        # 5) SAR Drafter (grounded, template-first)
+        # 5) SAR Drafter + Critic (grounded, self-critiquing). draft_with_critic
+        #    builds a grounded first draft (fail-closed on any uncitable or
+        #    unresolvable claim), grades it against the FinCEN rubric, and runs a
+        #    deterministic, bounded revision loop that fills gaps from evidence in
+        #    hand or flags the residue for human review. Every step is stamped.
         audit.append("sar_drafter", "tool_call", target=f"uid:{subject_uid}")
-        sar = build_sar(conn, profile, expansion, tells, advisory)
+        audit.append("sar_critic", "critic_config", detail=json.dumps(critic_config()))
+        sar, critique_history = draft_with_critic(conn, profile, expansion, tells, advisory)
+        crit = critique_history.final
+
+        grounding = validate_grounding(conn, sar)
+        audit.append("sar_drafter", "grounding_validated", target=f"uid:{subject_uid}",
+                     detail=json.dumps(grounding.summary()))
         audit.append("sar_drafter", "drafted", target=f"uid:{subject_uid}",
                      detail=f"{len(sar.claims)} grounded claim(s)")
+        # First-pass grade, then one record per bounded revision pass.
+        audit.append("sar_critic", "graded", target=f"uid:{subject_uid}",
+                     detail=json.dumps(critique_history.initial.summary()))
+        for i, (addressed, c) in enumerate(
+            zip(critique_history.revisions, critique_history.critiques[1:]), start=1
+        ):
+            audit.append("sar_critic", "revision", target=f"uid:{subject_uid}",
+                         detail=json.dumps({"iteration": i, "addressed": addressed,
+                                            "coverage": round(c.coverage, 3)}))
+        if critique_history.converged:
+            audit.append("sar_critic", "converged", target=f"uid:{subject_uid}",
+                         detail=json.dumps(crit.summary()))
+        else:
+            audit.append("sar_critic", "human_fallback", target=f"uid:{subject_uid}",
+                         detail=json.dumps({"flagged": critique_history.flagged,
+                                            "coverage": round(crit.coverage, 3)}))
 
         # 6) Case Packager
         audit.append("case_packager", "packaged", target=f"uid:{subject_uid}",
@@ -195,6 +230,8 @@ def run_case(
             rfi=rfi_view,
             advisory=advisory,
             sar=sar,
+            critique=crit,
+            critique_history=critique_history,
             audit_log_path=audit_path,
             advisory_embedder=embedder.name,
             audit_records=records,
