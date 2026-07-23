@@ -129,3 +129,19 @@ the generator changes.
   so far).
 - Set up the public GitHub repo + a steady commit cadence (the public history is
   itself a portfolio signal).
+
+## 12. Licensing & contribution policy
+_Added Day 3 (Phase 2 complete)._
+
+- **MIT retained through the portfolio phase — deliberate.** It maximizes the
+  repo's job-search value and costs nothing long-term: the author remains the sole
+  copyright holder and can relicense future versions at any time (already-published
+  versions remain MIT regardless). **Revisit at the v1.0 launch** — the natural
+  inflection point — where the options include relicensing future work (e.g.,
+  BSL/PolyForm), open-core, or keeping the prototype MIT as the credibility layer
+  for a separate commercial product.
+- **Contribution policy (protects the relicensing option).** External *code*
+  contributions are not accepted at this time; issues and feedback are welcome.
+  Rationale: an outside contributor would hold copyright in their lines under MIT,
+  and relicensing later would then require their consent. **Revisit alongside the
+  license at v1.0** — a DCO or CLA would be the mechanism if PRs are ever opened.

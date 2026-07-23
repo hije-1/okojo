@@ -131,6 +131,13 @@ Built by **Jennifer Hicks**, a crypto-compliance leader exploring agentic AI for
 regulated financial-crime investigations. Connect on
 [LinkedIn](https://www.linkedin.com/in/hije/).
 
+## Contributing
+
+Issues, feedback, and discussion are very welcome — please open an issue if
+something's unclear, broken, or worth debating. The project is **not accepting
+pull requests at this time** (it's a solo portfolio build), but that may change
+down the road. Thanks for taking a look!
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
