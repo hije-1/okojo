@@ -29,11 +29,18 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   with a consolidated Phase-2 scorecard. Streamlit demo grown to a Sanctions-first
   8-tab compliance view (watchlist screening + on-chain exposure, gas-collapse
   callout, per-account risk chips). 70 green tests.
+- **Slice 4b (scoring explainability & defensibility): COMPLETE.** Score
+  decomposition as a first-class field (base × proximity factors + exact formula),
+  a versioned `scoring_config()` stamped into the audit chain for reproducibility,
+  a public `docs/scoring-methodology.md` (rationale per constant as tunable policy
+  parameters; doc↔code anti-drift test), and a "show the math" UI (per-account
+  decomposition, methodology/version panel, RapidFuzz name-diff in calibrated
+  language). Scores byte-identical (scorecard unchanged). 77 green tests.
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Slice 4b** (scoring explainability & defensibility — score
-  decomposition, versioned methodology doc, "show the math" UI, audit-stamped
-  reproducibility), then **Phase 3** (Advisory Matcher / RAG hardening).
-  Full details in `docs/Build-Plan.md`.
+- **NEXT: Phase 3** (Advisory Matcher / RAG hardening — hybrid retrieval, a
+  corroboration threshold, one deduped entity backbone, an FP-rate eval; first
+  embedding/RAG dependency → Chroma-vs-FAISS decision). Full details in
+  `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.
