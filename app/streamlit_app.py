@@ -1,8 +1,9 @@
-"""Okojo — minimal Streamlit walking-skeleton demo (Phase 1).
+"""Okojo — Streamlit demo (Phase 2).
 
 Pick a synthetic subject and watch one case flow end-to-end: an anomaly-flagged
-timeline, the network graph, remark tells, the matched FinCEN advisory, a
-grounded SAR draft, and the tamper-evident audit trail.
+timeline, the network graph with gas-funding collapse, per-account on-chain
+sanctioned-exposure scoring, remark tells, SDN/alias watchlist screening, the
+matched FinCEN advisory, a grounded SAR draft, and the tamper-evident audit trail.
 
 Run it:
     streamlit run app/streamlit_app.py
@@ -82,16 +83,23 @@ def _chip(text: str, color: str) -> str:
     )
 
 
-def _roster_card_html(row) -> str:
+def _roster_card_html(row, risk=None) -> str:
     """Designed chip card for one roster account (signals + badges).
 
     The severity risk-rail is the card container's own left border (see
-    ``_ROSTER_CSS``), keyed per row, so it stays bound to the card box.
+    ``_ROSTER_CSS``), keyed per row, so it stays bound to the card box. ``risk``
+    (a ``RiskScore`` or ``None``) adds an on-chain sanctioned-exposure chip — a
+    distinct signal from the anomaly-severity rail, so the two aren't conflated.
     """
     star = "★ " if row.is_subject else ""
     role = _ROLE_LABEL.get(row.role, row.role)
 
     parts: list[str] = []
+    if risk is not None:
+        parts.append(_chip(
+            f"▲ Exposure {risk.score:.2f} · {risk.band}",
+            _SEVERITY_COLOR.get(risk.band, _RISK_GREY),
+        ))
     for code in row.anomaly_codes[:2]:
         parts.append(_chip(
             _ANOMALY_LABEL.get(code, code),
@@ -136,14 +144,15 @@ _ROSTER_CSS = """
 """
 
 
-def _render_roster(roster) -> None:
+def _render_roster(roster, risk_by_uid=None) -> None:
+    risk_by_uid = risk_by_uid or {}
     st.markdown(_ROSTER_CSS, unsafe_allow_html=True)
     for row in roster:
         sev = row.worst_severity or "none"
         with st.container(key=f"roster_row_{sev}_{row.uid}"):
             c1, c2 = st.columns([5, 1], vertical_alignment="center")
             with c1:
-                st.markdown(_roster_card_html(row), unsafe_allow_html=True)
+                st.markdown(_roster_card_html(row, risk_by_uid.get(row.uid)), unsafe_allow_html=True)
             with c2:
                 if row.is_subject:
                     st.caption("● current")
@@ -206,7 +215,7 @@ def main() -> None:
         "Okojo — Agentic Crypto-Investigations Co-Pilot</h1>",
         unsafe_allow_html=True,
     )
-    st.caption("Phase 1 walking skeleton · **fully synthetic data** · a human reviews, decides, and files.")
+    st.caption("Phase 2 · **fully synthetic data** · a human reviews, decides, and files.")
 
     try:
         conn = get_connectors()
@@ -261,12 +270,13 @@ def main() -> None:
     res = run_case(subject_uid, conn=conn, max_hops=max_hops)
 
     # -- header metrics ---------------------------------------------------- #
-    c1, c2, c3, c4, c5 = st.columns(5)
+    c1, c2, c3, c4, c5, c6 = st.columns(6)
     c1.metric("Anomalies", len(res.profile.anomalies))
     c2.metric("Network reached", res.expansion.summary()["accounts_reached"])
     c3.metric("Sanctioned reached", res.expansion.summary()["sanctioned_addresses_reached"])
     c4.metric("Tells", len(res.tells))
-    c5.metric("Advisory", res.advisory.advisory_id if res.advisory else "—")
+    c5.metric("Watchlist hits", len(res.alias_hits))
+    c6.metric("Advisory", res.advisory.advisory_id if res.advisory else "—")
 
     if res.profile.internal_tag:
         st.warning(
@@ -274,12 +284,67 @@ def main() -> None:
             "**flagged for review, not obeyed.**"
         )
 
-    tabs = st.tabs(
-        ["Timeline", "Network", "Tells", "RFI", "Advisory", "SAR draft", "Audit trail"]
+    names = {a["uid"]: a["entity_name"] for a in accounts}
+
+    (tab_sanctions, tab_timeline, tab_network, tab_tells, tab_rfi,
+     tab_advisory, tab_sar, tab_audit) = st.tabs(
+        ["Sanctions", "Timeline", "Network", "Tells", "RFI", "Advisory", "SAR draft", "Audit trail"]
     )
 
+    # -- Sanctions (gating control: watchlist name-match + on-chain exposure) -- #
+    with tab_sanctions:
+        st.subheader("Sanctions & watchlist screening")
+        st.caption(
+            "The gating compliance control, checked first: does any account match a "
+            "sanctions/watchlist name, and do any account's funds reach a synthetic "
+            "sanctioned endpoint? Two faces of the same question — a name match and a "
+            "fund-flow match."
+        )
+
+        st.markdown("#### Watchlist name screening")
+        st.caption(
+            "Account names fuzzy-matched (RapidFuzz) against the synthetic SDN/alias list. "
+            "Transliteration variants are caught where exact-match screening would miss them; "
+            "unrelated decoys are not. A hit is a name-similarity flag for human review — "
+            "not a confirmed identity match."
+        )
+        if res.alias_hits:
+            adf = pd.DataFrame([
+                {"uid": str(h.uid), "entity_name": h.entity_name, "matched_alias": h.matched_alias,
+                 "sdn_id": h.sdn_id, "score": h.score, "program": h.program}
+                for h in res.alias_hits
+            ])
+            st.dataframe(adf, use_container_width=True, hide_index=True)
+            st.caption("source: " + "; ".join(
+                p.cite() for h in res.alias_hits for p in h.provenance
+            ))
+        else:
+            st.info("No watchlist name hits across the dataset.")
+
+        st.markdown("---")
+        st.markdown("#### On-chain sanctioned exposure")
+        st.caption(
+            "Graded exposure to the synthetic sanctioned set by tainted amount and hop "
+            "distance (money-flow path only). Bands: high ≥ 0.60, medium 0.30–0.60. "
+            "A full breakdown of how each score is derived is the next slice."
+        )
+        if res.risk.scores:
+            rdf = pd.DataFrame([
+                {"uid": str(s.uid), "name": names.get(s.uid, s.uid), "score": s.score,
+                 "band": s.band, "hops_to_sanctioned": s.hop_distance,
+                 "tainted_usdt": s.tainted_amount_usdt, "reasons": ", ".join(s.reasons),
+                 "money_flow": s.exposure_path}
+                for s in res.risk.scores
+            ])
+            st.dataframe(rdf, use_container_width=True, hide_index=True)
+            with st.expander("Provenance (per scored account)"):
+                for s in res.risk.scores:
+                    st.caption(f"uid {s.uid}: " + "; ".join(p.cite() for p in s.provenance))
+        else:
+            st.info("No on-chain sanctioned exposure for this cluster.")
+
     # -- Timeline ---------------------------------------------------------- #
-    with tabs[0]:
+    with tab_timeline:
         st.subheader(f"{res.subject_name} — anomaly-flagged timeline")
         if res.profile.anomalies:
             for a in res.profile.anomalies:
@@ -299,7 +364,7 @@ def main() -> None:
         st.dataframe(ev, use_container_width=True, hide_index=True)
 
     # -- Network ----------------------------------------------------------- #
-    with tabs[1]:
+    with tab_network:
         st.subheader("Network expansion")
         st.caption(
             "Gold ★ = subject · red ▲ = synthetic-sanctioned endpoint · orange = ring account · "
@@ -310,6 +375,23 @@ def main() -> None:
         else:
             st.info("Graph not rendered.")
 
+        # -- gas-funding collapse callout ---------------------------------- #
+        gas_links = res.expansion.gas_funding_links
+        if gas_links:
+            controllers = sorted({l["controller_uid"] for l in gas_links})
+            who = ", ".join(f"uid {c} · {names.get(c, c)}" for c in controllers)
+            st.warning(
+                f"**Gas-funding collapse** — {len(gas_links)} “non-custodial” hop(s) "
+                f"attributed to their gas funder ({who}). A wallet is not independent of "
+                "whoever pays its gas."
+            )
+            gdf = pd.DataFrame([
+                {"funder_address": l["funder_address"], "funded_address": l["funded_address"],
+                 "controller_uid": str(l["controller_uid"])}  # uid is an identifier, not a quantity
+                for l in gas_links
+            ])
+            st.dataframe(gdf, use_container_width=True, hide_index=True)
+
         st.markdown("---")
         st.markdown("#### Connected accounts — triage roster")
         st.caption(
@@ -318,11 +400,12 @@ def main() -> None:
             "account. *Case file on record* means a prior run exists on disk — not a "
             "live case-management status."
         )
+        risk_by_uid = {s.uid: s for s in res.risk.scores}
         roster = build_roster(conn, res.expansion, default_out_dir(subject_uid).parent)
-        _render_roster(roster)
+        _render_roster(roster, risk_by_uid)
 
     # -- Tells ------------------------------------------------------------- #
-    with tabs[2]:
+    with tab_tells:
         st.subheader("Remark tells")
         if res.tells:
             bc = pd.DataFrame([
@@ -335,11 +418,11 @@ def main() -> None:
             st.info("No remark tells.")
 
     # -- RFI --------------------------------------------------------------- #
-    with tabs[3]:
+    with tab_rfi:
         _render_rfi(res.rfi)
 
     # -- Advisory ---------------------------------------------------------- #
-    with tabs[4]:
+    with tab_advisory:
         st.subheader("Regulatory advisory match")
         st.caption(
             "Scope: US / FinCEN advisories → SAR. "
@@ -357,7 +440,7 @@ def main() -> None:
             st.info("No advisory matched (event-triggered on RFI key terms).")
 
     # -- SAR draft --------------------------------------------------------- #
-    with tabs[5]:
+    with tab_sar:
         st.subheader("Grounded SAR draft")
         st.error(res.sar.disclaimer)
         st.caption(res.sar.filing_note)
@@ -371,7 +454,7 @@ def main() -> None:
             st.success("Every claim carries provenance — grounding contract satisfied.")
 
     # -- Audit trail ------------------------------------------------------- #
-    with tabs[6]:
+    with tab_audit:
         st.subheader("Tamper-evident audit trail")
         if res.audit_verified:
             st.success("Hash chain verified — the log is intact and append-only.")
