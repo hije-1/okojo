@@ -1,6 +1,6 @@
 """DuckDB-backed store over the synthetic scenario CSVs.
 
-The generator (``scripts/generate_scenario.py``) writes eight CSVs to
+The generator (``scripts/generate_scenario.py``) writes eleven CSVs to
 ``data/synthetic/``. This module loads them into an in-memory DuckDB instance
 (via pandas, so column dtypes are predictable) and exposes a thin query API.
 
@@ -30,6 +30,8 @@ TABLES: dict[str, str] = {
     "gas_funding": "gas_funding.csv",
     "transactions": "transactions.csv",
     "rfi": "rfi.csv",
+    "rfi_prior": "rfi_prior.csv",
+    "registry": "registry.csv",
     "sdn_list": "sdn_list.csv",
 }
 

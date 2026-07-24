@@ -193,3 +193,46 @@ class Connectors:
             "rfi", "SELECT * FROM rfi", [],
             lambda r: r["rfi_id"],
         )
+
+    def prior_rfis_for(self, uid: int) -> list[Record]:
+        """The subject's earlier RFI answers, oldest first.
+
+        Separate from :meth:`rfi_for` (the RFI under review) so the contradiction
+        checker can test a claim against what the same subject said before.
+        """
+        return self._records(
+            "rfi_prior", "SELECT * FROM rfi_prior WHERE uid = ? ORDER BY asked_date", [uid],
+            lambda r: r["rfi_id"],
+        )
+
+    def all_prior_rfis(self) -> list[Record]:
+        return self._records(
+            "rfi_prior", "SELECT * FROM rfi_prior", [],
+            lambda r: r["rfi_id"],
+        )
+
+    # -- corporate registry (OSINT) ----------------------------------------- #
+    def registry_for(self, uid: int) -> list[Record]:
+        """Registry rows naming this uid as either the company or an officer."""
+        return self._records(
+            "registry",
+            "SELECT * FROM registry WHERE company_uid = ? OR officer_uid = ? "
+            "ORDER BY registry_id",
+            [uid, uid],
+            lambda r: r["registry_id"],
+        )
+
+    def registry_officers(self, company_uid: int) -> list[Record]:
+        """Officers appointed to a given company."""
+        return self._records(
+            "registry",
+            "SELECT * FROM registry WHERE company_uid = ? ORDER BY registry_id",
+            [company_uid],
+            lambda r: r["registry_id"],
+        )
+
+    def all_registry(self) -> list[Record]:
+        return self._records(
+            "registry", "SELECT * FROM registry ORDER BY registry_id", [],
+            lambda r: r["registry_id"],
+        )

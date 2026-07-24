@@ -100,3 +100,43 @@ class Rfi:
     question: str
     response_text: str
     claims: list = field(default_factory=list)   # list[dict]: {claim_id, text, ground_truth}
+
+
+@dataclass
+class RegistryRecord:
+    """A synthetic corporate-registry officer appointment (OSINT substrate).
+
+    Fabricated: company numbers, officer names, and every date derive from
+    personas the generator already created, so no new identity is introduced.
+    Supports the RFI Contradiction-Checker's registry probe - notably two
+    entities an RFI calls unrelated sharing one director over an overlapping
+    window. ``company_uid`` / ``officer_uid`` are the scenario's ground-truth
+    join keys, the same convention as ``Address.controller_uid``."""
+
+    registry_id: str
+    company_number: str
+    company_name: str
+    jurisdiction: str
+    incorporation_date: str
+    officer_name: str
+    officer_role: str
+    appointed_date: str
+    resigned_date: str        # "" == currently serving
+    company_uid: int
+    officer_uid: int
+
+
+@dataclass
+class PriorRfi:
+    """An earlier RFI answer from the same subject.
+
+    Kept in its own table so the RFI under review (``rfi.csv``) stays exactly as
+    it is. Carries no ground-truth label: a prior answer is *evidence* the
+    contradiction checker tests against, never an answer key."""
+
+    rfi_id: str
+    uid: int
+    asked_date: str
+    question: str
+    response_text: str
+    claims: list = field(default_factory=list)   # list[dict]: {claim_id, text}

@@ -195,3 +195,48 @@ _Added Day 4 (Phase 4 complete; pre-Phase-5)._
   ready-made diligence evidence.
 - **Not legal advice.** At an actual sale, IP counsel handles reps & warranties;
   this entry records the process, not a legal opinion.
+
+## 15. One-time scenario re-baseline: reconciling the RFI's C2 rebuttals
+_Added Day 4 (Phase 5, Slice A). Companion to §14._
+
+- **The problem.** The generator declared RFI claim C2 — *"[SHELL_NZ] is a separate
+  legal entity with no ownership or management relationship"* — false, and listed
+  three rebuttals: a reused KYC document, a shared device fingerprint, and a common
+  controller. **None of the three was ever planted.** The reused-KYC pairs are
+  SIBLING/SHELL_AE and EMPLOYEE/EMPLOYEE-2; no shared device pairs the trust with
+  SHELL_NZ; and there was no corporate-registry table at all. The answer key
+  asserted evidence the dataset did not contain, so the Phase-5 contradiction
+  checker could not have refuted C2 from the data — it would have had to trust the
+  label, which is exactly the tautology the evals exist to prevent.
+- **Why the old legs could not simply be planted.** Adding either would mean adding
+  rows to `accounts.csv` or `devices.csv` — frozen tables whose byte-identical
+  regeneration every prior phase depends on. C2 is therefore **re-based** onto three
+  sources that either already exist or arrive in new tables: the corporate
+  registry's **common director** across the two entities over an overlapping
+  appointment window, the subject's **own prior RFI answer** conceding a management
+  services agreement, and the **bidirectional near-equal layering flows** that
+  already run between the two entities' controller wallets.
+- **One list, three consumers.** `_RFI_CLAIM_SOURCES` in the generator is now the
+  single definition behind (a) each claim's `contradicted_by` prose, (b)
+  `ground_truth["rfi_claim_key"].expected_sources`, and (c) which checkers are
+  expected to fire. Guard tests pin them together, so the drift that produced this
+  defect cannot recur silently.
+- **C4 was already sound** — its sanctioned-exposure, structured-transfer and
+  gas-funding legs all resolve to planted rows, so its claim is byte-for-byte
+  unchanged. A test asserts each leg resolves.
+- **Scope of the change, and how it was verified.** Eight of the nine pre-existing
+  CSVs are **byte-identical**; `rfi.csv` changes in exactly one cell —
+  `claims_json` → C2 → `contradicted_by` — with rows, columns, ordering, `question`
+  and `response_text` unchanged, confirmed by a field-level diff rather than a file
+  hash. `ground_truth.json` gains `rfi_claim_key` (all four claims, so the
+  *qualified* and *unverifiable* branches have gold values, not just the lies),
+  `prior_rfi_ids` and `registry_shared_officer_uids`. Two new tables,
+  `registry.csv` and `rfi_prior.csv`, are built with **zero RNG draws** from
+  personas, jurisdictions and dates already generated — no new identity enters the
+  repo. The phase-1, phase-2 and advisory scorecards re-run with **zero delta**.
+- **A one-time re-baseline, not a standing exemption.** The determinism contract is
+  restored in full immediately: `test_deterministic` now byte-compares **every**
+  table (including the new `rfi.csv` content and both new tables), and a companion
+  test regenerates under two different `PYTHONHASHSEED` values — catching
+  set-ordering nondeterminism that a same-process double-regeneration structurally
+  cannot see, and which would otherwise pass locally and diverge on CI.

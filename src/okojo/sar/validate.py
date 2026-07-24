@@ -58,6 +58,8 @@ class GroundingResolver:
         add(conn.all_transactions())
         add(conn.gas_funds())
         add(conn.all_rfis())
+        add(conn.all_prior_rfis())
+        add(conn.all_registry())
         add(conn.sdn_list())
         self._valid = valid
 

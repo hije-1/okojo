@@ -60,6 +60,8 @@ from .models import (
     GasFund,
     IpLog,
     KycDoc,
+    PriorRfi,
+    RegistryRecord,
     Rfi,
     SdnEntry,
     Transaction,
@@ -186,6 +188,82 @@ _RING_SPEC = [
 ]
 
 _NOISE_ACCOUNTS = 12  # ordinary users so the ring isn't trivially separable
+
+
+# --------------------------------------------------------------------------- #
+# Which evidence rebuts which RFI claim — ONE definition, three consumers.
+#
+# Consumed by (a) the claim's ``contradicted_by`` prose in ``rfi.csv``, (b)
+# ``ground_truth["rfi_claim_key"]``'s ``expected_sources`` (the eval's answer
+# key), and (c) which Phase-5 checkers are expected to fire. A guard test asserts
+# all three agree, so they can never silently drift apart again.
+#
+# They HAD drifted: C2 originally cited reused-KYC and shared-device rebuttals
+# that were never planted (the reused-KYC pairs are SIBLING/SHELL_AE and
+# EMPLOYEE/EMPLOYEE-2; no shared device pairs the trust with SHELL_NZ). Neither
+# could be planted without adding rows to the frozen accounts/devices tables, so
+# C2 is re-based onto three sources that exist: the corporate registry's common
+# director, the subject's own prior RFI answer, and the layering flows that
+# already run between the two entities.
+#
+# Ordered lists of (source_key, prose_note) — never a set, so ordering is stable
+# across platforms and hash seeds. The C4 notes are byte-for-byte the originals:
+# C4's rebuttals were always substantiated by planted data and are unchanged.
+_RFI_CLAIM_SOURCES: dict[str, list[tuple[str, str]]] = {
+    "C1": [
+        ("device", "shared device_fingerprint between the trust and accounts it "
+                   "transacts with, undercutting fully segregated custody"),
+    ],
+    "C2": [
+        ("registry", "corporate registry shows a common director across the two "
+                     "entities over an overlapping appointment window"),
+        ("prior_rfi", "the subject's own earlier RFI answer describes a management "
+                      "services agreement with the same entity"),
+        ("onchain", "bidirectional near-equal transfers between the two entities' "
+                    "controller wallets"),
+    ],
+    "C3": [],
+    "C4": [
+        ("onchain", "downstream exposure to synthetic IRGC-style sanctioned addresses"),
+        ("onchain", "structured just-under round-number transfers"),
+        ("onchain", "gas-funded 'non-custodial' hops controlled by the same party"),
+    ],
+}
+
+# Expected adjudication per claim. ``contradicted`` is the eval's positive class;
+# ``qualified`` and ``unverifiable`` are correct non-positive outcomes.
+_RFI_CLAIM_VERDICTS: dict[str, str] = {
+    "C1": "qualified",
+    "C2": "contradicted",
+    "C3": "unverifiable",
+    "C4": "contradicted",
+}
+
+_RFI_CLAIM_ORDER = ["C1", "C2", "C3", "C4"]
+
+
+def _sources_for(claim_id: str) -> list[str]:
+    """Distinct source keys for a claim, sorted — the eval's expected_sources."""
+    return sorted({key for key, _ in _RFI_CLAIM_SOURCES[claim_id]})
+
+
+def _notes_for(claim_id: str) -> list[str]:
+    """The claim's ``contradicted_by`` prose, in declaration order."""
+    return [note for _, note in _RFI_CLAIM_SOURCES[claim_id]]
+
+
+# Corporate-registry appointments: (company_key, officer_key, role, resigned_date).
+# An explicit ordered list — the planted fact is the first two rows, where the
+# licensed trust and SHELL_NZ (which the RFI calls unrelated) share one director.
+_REGISTRY_SPEC = [
+    ("TRUST", "KINGPIN", "director", ""),
+    ("SHELL_NZ", "KINGPIN", "director", SIM_END.isoformat()),
+    ("SHELL_AE", "SIBLING", "director", ""),
+    ("SHELL_TR", "EMPLOYEE", "director", ""),
+    ("SHELL_HK", "SIBLING", "director", ""),
+    ("SHELL_CN", "EMPLOYEE", "director", ""),
+    ("PRIVILEGED", "SIBLING", "director", ""),
+]
 
 
 def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
@@ -429,6 +507,9 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         _tx(f"uid:{rng.choice(noise_uids)}", _tron_addr(rng), rng.uniform(50, 5000), rng.choice(["", "savings", "payment", "trade"]), rng.choice(["deposit", "withdrawal"]))
 
     # ---- RFI with ground-truth contradictions ---------------------------- #
+    # Everything from here on is RNG-FREE: it derives from data already drawn
+    # above, so the pre-existing tables regenerate byte-identically.
+    accounts_by_uid = {a.uid: a for a in accounts}
     shell_nz_name = accounts[[a.uid for a in accounts].index(key_to_uid["SHELL_NZ"])].entity_name
     rfi = Rfi(
         rfi_id="SIM-RFI-0001",
@@ -455,11 +536,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
                 "claim_id": "C2",
                 "text": f"{shell_nz_name} is a separate legal entity with no ownership or management relationship.",
                 "ground_truth": "false",
-                "contradicted_by": [
-                    "reused KYC document links the two entities",
-                    "shared device-fingerprint match between the accounts",
-                    "common controller (KINGPIN) until recent transfer date",
-                ],
+                "contradicted_by": _notes_for("C2"),
             },
             {
                 "claim_id": "C3",
@@ -470,13 +547,66 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
                 "claim_id": "C4",
                 "text": "Client funds derive solely from lawful bitumen/petroleum trade settlement.",
                 "ground_truth": "false",
-                "contradicted_by": [
-                    "downstream exposure to synthetic IRGC-style sanctioned addresses",
-                    "structured just-under round-number transfers",
-                    "gas-funded 'non-custodial' hops controlled by the same party",
-                ],
+                "contradicted_by": _notes_for("C4"),
             },
         ],
+    )
+
+    # ---- corporate-registry OSINT (contradiction substrate) --------------- #
+    # Built from the ordered _REGISTRY_SPEC over personas/jurisdictions/dates
+    # already generated: no new identity, no PII, and no rng draw. The planted
+    # fact is the shared director across the trust and SHELL_NZ, which the RFI
+    # asserts are unrelated.
+    registry: list[RegistryRecord] = []
+    for i, (company_key, officer_key, role, resigned) in enumerate(_REGISTRY_SPEC, start=1):
+        company = accounts_by_uid[key_to_uid[company_key]]
+        officer = accounts_by_uid[key_to_uid[officer_key]]
+        registry.append(RegistryRecord(
+            registry_id=f"REG-{i:04d}",
+            company_number=f"{company.residence_country}-{company.uid}",
+            company_name=company.entity_name,
+            jurisdiction=company.residence_country,
+            incorporation_date=company.registration_date,
+            officer_name=officer.entity_name,
+            officer_role=role,
+            appointed_date=company.registration_date,
+            resigned_date=resigned,
+            company_uid=company.uid,
+            officer_uid=officer.uid,
+        ))
+
+    # ---- the subject's own PRIOR RFI answer ------------------------------- #
+    # Kept in its own table so rfi.csv (the RFI under review) is untouched. The
+    # earlier answer concedes exactly the relationship the current answer denies.
+    # Asked 30 days after the later of the two incorporations, so the earlier
+    # answer cannot reference an entity that did not yet exist. Derived from the
+    # generated registration dates (deterministic, no rng), not a fixed offset.
+    _prior_rfi_date = max(
+        datetime.fromisoformat(accounts_by_uid[key_to_uid["TRUST"]].registration_date),
+        datetime.fromisoformat(accounts_by_uid[key_to_uid["SHELL_NZ"]].registration_date),
+    ) + timedelta(days=30)
+
+    prior_rfi = PriorRfi(
+        rfi_id="SIM-RFI-0000",
+        uid=key_to_uid["TRUST"],
+        asked_date=_prior_rfi_date.date().isoformat(),
+        question=(
+            "Please describe the services you provide to counterparties on this "
+            "platform and any corporate relationships arising from them."
+        ),
+        response_text=(
+            f"We act as settlement agent for {shell_nz_name} under a management "
+            "services agreement, and one of our directors also sits on its board. "
+            "Onboarding and payment instructions for that relationship are handled "
+            "from our office."
+        ),
+        claims=[{
+            "claim_id": "P1",
+            "text": (
+                f"We act as settlement agent for {shell_nz_name} under a management "
+                "services agreement and share a director with it."
+            ),
+        }],
     )
 
     # ---- derived Phase-2 labels (no RNG; stay in sync by construction) ---- #
@@ -492,7 +622,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     # Watchlisted ring members carry an alias that is a transliteration variant of
     # their registered name (evasion of exact-match screening); decoys must not
     # match any account. Built from already-generated names — no RNG, no CSV drift.
-    accounts_by_uid = {a.uid: a for a in accounts}
     sdn_entries: list[SdnEntry] = []
     sdn_alias_matches: list[dict] = []
     for sdn_id, key in [("SDN-0001", "KINGPIN"), ("SDN-0002", "RECIDIVIST")]:
@@ -534,6 +663,26 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             for c in rfi.claims
             if c["ground_truth"] == "false"
         ],
+        # Per-claim answer key for the RFI Contradiction-Checker. Covers ALL four
+        # claims, not just the declared lies, so every adjudication branch has a
+        # gold value: ``contradicted`` is the eval's positive class, while
+        # ``qualified`` and ``unverifiable`` are correct non-positive outcomes
+        # (flagging either as a contradiction is the false positive to catch).
+        # ``expected_sources`` comes from the same _RFI_CLAIM_SOURCES map that
+        # produces each claim's ``contradicted_by`` prose.
+        "rfi_claim_key": [
+            {
+                "rfi_id": rfi.rfi_id,
+                "claim_id": cid,
+                "verdict": _RFI_CLAIM_VERDICTS[cid],
+                "expected_sources": _sources_for(cid),
+            }
+            for cid in _RFI_CLAIM_ORDER
+        ],
+        "prior_rfi_ids": [prior_rfi.rfi_id],
+        "registry_shared_officer_uids": sorted({
+            key_to_uid["TRUST"], key_to_uid["SHELL_NZ"],
+        }),
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -548,12 +697,20 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("gas_funding.csv", gas_funds)
     _write("transactions.csv", txs)
     _write("sdn_list.csv", sdn_entries)
+    _write("registry.csv", registry)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
         [{"rfi_id": rfi.rfi_id, "uid": rfi.uid, "question": rfi.question,
           "response_text": rfi.response_text, "claims_json": json.dumps(rfi.claims)}]
     ).to_csv(out_dir / "rfi.csv", index=False)
+
+    pd.DataFrame(
+        [{"rfi_id": prior_rfi.rfi_id, "uid": prior_rfi.uid,
+          "asked_date": prior_rfi.asked_date, "question": prior_rfi.question,
+          "response_text": prior_rfi.response_text,
+          "claims_json": json.dumps(prior_rfi.claims)}]
+    ).to_csv(out_dir / "rfi_prior.csv", index=False)
 
     (out_dir / "ground_truth.json").write_text(json.dumps(ground_truth, indent=2))
 
@@ -578,5 +735,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "betraying_remarks": len(betraying_remarks),
         "rfi_claims": len(rfi.claims),
         "rfi_lies": len(ground_truth["rfi_lies"]),
+        "registry_records": len(registry),
+        "prior_rfis": 1,
     }
     return summary
