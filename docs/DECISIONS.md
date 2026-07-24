@@ -164,3 +164,34 @@ _Added Day 3 (Phase 2 + Slice 4b complete)._
 - **Deliberately not built now — roadmap discipline holds.** Logged here as scope;
   build order stays per `docs/Build-Plan.md`. Candidate to pull into v1.0 only if
   schedule cushion allows.
+
+## 14. AI-assisted development & code provenance
+_Added Day 4 (Phase 4 complete; pre-Phase-5)._
+
+- **Decision.** Okojo is built with AI assistance (Claude Code) used as a tool
+  under human direction — architecture, scope, security posture, and review are
+  the author's. This is disclosed here, not hidden.
+- **Why this is safe for copyright / eventual sale.** US copyright protects
+  human-authored expression; AI used as a tool under human creative control does
+  not forfeit protection (US Copyright Office, 2025 guidance). The author is the
+  sole human author — an AI cannot be an author, so there is no co-owner to
+  clear, and no vendor holds a rights stake (Anthropic assigns output rights to
+  the user). The `Co-Authored-By: Claude` commit trailer is attribution metadata,
+  NOT a legal assignment of any right.
+- **Sole-authorship posture (preserved).** MIT-licensed for the portfolio phase,
+  but no external PRs are merged — so the author holds copyright to all
+  human-authored expression and retains the right to relicense or sell. (See §12.)
+- **Lifting risk is addressed, not assumed away.** Verbatim reproduction of
+  third-party code by assistants is rare and clusters on generic boilerplate
+  (GitHub's own study: ~0.009% of suggestions, almost all license headers /
+  standard idioms, mostly at empty-context file starts). Copyright also does not
+  protect ideas, methods, or short/common snippets — so the residual concern is
+  narrow, substantive verbatim expression. The Code Provenance & Originality Gate
+  in the pre-publish checklist turns "believed original" into "scanned + logged":
+  dependency-license audit + embedded-notice scan + distinctive-string search each
+  publish, and a snippet-level SCA scan before any sale.
+- **Evidence retained.** The public commit history and dated design docs are the
+  primary record of human authorship and creative control — kept intact as
+  ready-made diligence evidence.
+- **Not legal advice.** At an actual sale, IP counsel handles reps & warranties;
+  this entry records the process, not a legal opinion.
