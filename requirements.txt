@@ -23,8 +23,10 @@ numpy==2.5.1
 # so the core install and CI stay lean; without it a deterministic lexical fallback
 # takes over (okojo.advisory.embeddings) and the whole suite still runs.
 #   pip install -r requirements-embeddings.txt   # to enable real embeddings
-# Phase 6+ orchestration (uncomment when you wire the state machine)
-# langgraph==0.2.45
+# Phase 6 orchestration — the bounded-agency state machine (deterministic:
+# no checkpointer is ever instantiated, tracing env vars stay unset, and the
+# run path makes zero network calls; posture documented in docs/DECISIONS.md).
+langgraph==0.2.45
 # Phase 1+ UI (minimal Streamlit demo — the walking-skeleton money-shot)
 streamlit==1.40.1
 # Tests

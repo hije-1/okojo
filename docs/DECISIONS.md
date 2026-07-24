@@ -240,3 +240,33 @@ _Added Day 4 (Phase 5, Slice A). Companion to §14._
   test regenerates under two different `PYTHONHASHSEED` values — catching
   set-ordering nondeterminism that a same-process double-regeneration structurally
   cannot see, and which would otherwise pass locally and diverge on CI.
+
+## 16. LangGraph adoption: determinism and offline posture under agency
+_Added Day 4 (Phase 6, Slice A)._
+
+- **Decision.** Phase 6 converts the fixed pipeline into a LangGraph state machine
+  (`langgraph==0.2.45`, the pin held since Phase 0). Slice A is deliberately
+  *mechanical*: every node is verbatim code motion of the corresponding stage, in
+  the same order — proven by running all 12 roster subjects through the old linear
+  orchestrator and the new graph with an injected audit clock and byte-comparing
+  the hash-chained audit logs (12/12 identical). "Agency" arrives afterwards as
+  dedicated decision nodes, never as hidden control flow.
+- **Determinism is engineered, not assumed.** No checkpointer is ever
+  instantiated — no UUIDs, wall clock, or state serialization enter the run path
+  (this also sidesteps the checkpoint library's serialization machinery entirely;
+  Okojo never stores or loads a checkpoint). The graph has no fan-out, so the
+  runtime executes exactly one node per superstep in a fixed order, and a shape
+  test pins the exact node/edge sets. A byte-identity test (two clocked runs →
+  identical audit chains) makes the property regression-guarded, not aspirational.
+- **Offline posture, verified and guarded.** The LangChain ecosystem ships an
+  optional telemetry client (langsmith); it activates only via environment
+  variables that Okojo never sets. A guard test clears those variables, blocks
+  socket creation outright, and runs a full case end-to-end: the run path opens
+  zero network sockets. An investigation co-pilot must not phone home; here that
+  is a tested invariant, not a configuration hope.
+- **Dependency discipline.** The install added 21 new transitive packages and
+  changed **zero** existing pins (verified by a before/after freeze diff —
+  pydantic, numpy, pandas et al. untouched). All new licenses are
+  MIT/BSD/Apache except orjson (weak-copyleft MPL-2.0 component; transitive,
+  unmodified, unvendored — the same pre-classified class as certifi, per the
+  provenance-gate rule).
