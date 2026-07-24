@@ -21,6 +21,7 @@ from ..advisory import AdvisoryMatch
 from ..agency import DecisionRecord, RfiFollowUp
 from ..aggregator import ProfileTimeline
 from ..audit import AuditLog
+from ..casegraph import CaseGraphStore, RecidivismView
 from ..config import REPO_ROOT
 from ..connectors import Connectors
 from ..network import NetworkExpansion
@@ -58,6 +59,8 @@ class CaseResult:
     decisions: list[DecisionRecord] = field(default_factory=list)
     secondary_advisory: Optional[AdvisoryMatch] = None
     rfi_followup: Optional[RfiFollowUp] = None
+    # Phase 6: what the persistent case graph knew at case open.
+    recidivism: Optional[RecidivismView] = None
 
 
 def default_out_dir(subject_uid: int) -> Path:
@@ -71,10 +74,21 @@ def run_case(
     max_hops: int = 2,
     render_graph: bool = True,
     audit_clock: Optional[Callable[[], str]] = None,
+    case_store_path: Optional[Path] = None,
 ) -> CaseResult:
     """Execute the case graph for one subject."""
     owns_conn = conn is None
     conn = conn or Connectors()
+    # Case-store resolution is two-tier ON PURPOSE: the shared store under
+    # data/cases/ (cross-case persistence, the Streamlit path) applies only
+    # when the caller did not scope the run — a caller that passes out_dir
+    # (every test) gets a store isolated under that directory, so runs can
+    # never leak history into each other through a shared default.
+    if case_store_path is None:
+        case_store_path = (
+            Path(out_dir) / "case_graph.sqlite" if out_dir is not None
+            else REPO_ROOT / "data" / "cases" / "case_graph.sqlite"
+        )
     out_dir = Path(out_dir) if out_dir else default_out_dir(subject_uid)
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -90,6 +104,7 @@ def run_case(
         "out_dir": out_dir,
         "conn": conn,
         "audit": audit,
+        "case_store": CaseGraphStore(Path(case_store_path)),
     }
     try:
         final = build_case_graph().invoke(initial, config={"recursion_limit": 100})
@@ -117,6 +132,7 @@ def run_case(
             decisions=final.get("decisions", []),
             secondary_advisory=final.get("secondary_advisory"),
             rfi_followup=final.get("rfi_followup"),
+            recidivism=final.get("recidivism"),
         )
     finally:
         if owns_conn:

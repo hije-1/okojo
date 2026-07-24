@@ -44,6 +44,7 @@ _NODES = (
     "human_referral",
     "decide_sar_bar",
     "case_packager",
+    "case_graph_record",
     "audit_finalize",
 )
 
@@ -78,7 +79,8 @@ _EDGES = {
     ("sar_drafter", "decide_sar_bar"),
     ("decide_sar_bar", "case_packager"),
     ("human_referral", "case_packager"),
-    ("case_packager", "audit_finalize"),
+    ("case_packager", "case_graph_record"),
+    ("case_graph_record", "audit_finalize"),
     ("audit_finalize", "__end__"),
 }
 

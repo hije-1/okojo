@@ -15,10 +15,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 from ..aggregator.anomalies import detect_all
 from ..connectors import Connectors
 from .expander import NetworkExpansion
+
+if TYPE_CHECKING:  # avoid a runtime import cycle (casegraph is Phase 6)
+    from ..casegraph import CaseGraphStore
 
 # The internal-tag red herring is surfaced as its own signal (``internal_flagged``),
 # so it is excluded from the generic anomaly-chip list to avoid double-counting.
@@ -43,14 +47,15 @@ def build_roster(
     conn: Connectors,
     expansion: NetworkExpansion,
     cases_dir: Path,
+    store: Optional["CaseGraphStore"] = None,
 ) -> list[RosterRow]:
     """Build the risk-sorted roster of account nodes in ``expansion``.
 
     Address nodes are excluded (they are not cases). Anomalies are computed for
     each account via :func:`detect_all`, which works for any uid, not just the
-    subject. ``has_case_file`` is the only on-disk case signal available in
-    Phase 1 — the presence of ``cases_dir / case_<uid>`` from a prior run (a
-    persistent case store arrives in Phase 6).
+    subject. ``has_case_file`` combines the on-disk signal (a
+    ``cases_dir / case_<uid>`` directory from a prior run) with the Phase 6
+    persistent case graph when a ``store`` is supplied.
     """
     rows: list[RosterRow] = []
     for _nid, data in expansion.graph.nodes(data=True):
@@ -74,7 +79,8 @@ def build_roster(
             anomaly_codes=codes,
             worst_severity=worst,
             internal_flagged=internal_flagged,
-            has_case_file=(cases_dir / f"case_{uid}").exists(),
+            has_case_file=((cases_dir / f"case_{uid}").exists()
+                           or (store is not None and store.has_case(uid))),
         ))
 
     # Subject pinned first, then highest risk, then name for stable ordering.

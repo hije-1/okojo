@@ -63,6 +63,7 @@ from ..agency import (
 )
 from ..aggregator import ProfileTimeline, build_profile
 from ..audit import AuditLog
+from ..casegraph import CaseGraphStore, RecidivismView, casegraph_config
 from ..config import REPO_ROOT
 from ..connectors import Connectors
 from ..entity import EntityBackbone, build_backbone
@@ -119,8 +120,10 @@ class CaseState(TypedDict, total=False):
     out_dir: Path
     conn: Connectors
     audit: AuditLog
+    case_store: CaseGraphStore
     # evidence accumulated by the nodes, in pipeline order
     subject_name: str
+    recidivism: RecidivismView
     profile: ProfileTimeline
     hop_cap: int
     walk: ExpansionWalk
@@ -175,7 +178,25 @@ def _case_open(state: CaseState) -> CaseState:
     # any historical decision trace can be reproduced exactly — mirroring the
     # scoring/retrieval/critic/contradiction config stamps.
     audit.append("agency", "agency_config", detail=json.dumps(agency_config()))
-    return {"subject_name": str(subject["entity_name"])}
+    audit.append("case_graph", "casegraph_config", detail=json.dumps(casegraph_config()))
+
+    # Cross-case memory at case open: what does the persistent case graph
+    # already know about this subject? The recidivism flag is SURFACED for
+    # human review — it never closes, escalates, or decides anything.
+    recidivism = state["case_store"].open_context(conn, subject_uid)
+    if recidivism.is_recidivist:
+        audit.append("case_graph", "recidivism_flagged", target=f"uid:{subject_uid}",
+                     detail=json.dumps({
+                         **recidivism.summary(),
+                         "note": "surfaced for human review at case open; "
+                                 "prior cleared reviews do not exempt a subject",
+                     }),
+                     provenance=subject.provenance)
+    else:
+        audit.append("case_graph", "history_clear", target=f"uid:{subject_uid}",
+                     detail=json.dumps(recidivism.summary()),
+                     provenance=subject.provenance)
+    return {"subject_name": str(subject["entity_name"]), "recidivism": recidivism}
 
 
 def _profile(state: CaseState) -> CaseState:
@@ -441,6 +462,37 @@ def _package(state: CaseState) -> Optional[CaseState]:
     return None  # audit stamp only; None (not {}) is LangGraph's no-state-update
 
 
+def _record_case(state: CaseState) -> Optional[CaseState]:
+    # Persist this case and its entities into the cross-case graph, so future
+    # cases can surface the overlap at open. Idempotent: a re-run replaces the
+    # case's rows, never duplicates them. The recorded audit tip covers every
+    # record up to packaging; the case_recorded stamp itself follows the write
+    # (a record cannot contain its own hash).
+    conn, audit, subject_uid = state["conn"], state["audit"], state["subject_uid"]
+    decisions = state.get("decisions", [])
+    sar_bar = next((d for d in decisions if d.decision_id == "sar_bar"), None)
+    disposition = ("insufficient_evidence" if state.get("sar") is None
+                   else sar_bar.outcome)
+    records = audit.read_all()
+    counterparties = [uid for uid in state["expansion"].reached_account_uids
+                      if uid != subject_uid]
+    case_id = state["case_store"].record_case(
+        conn,
+        subject_uid=subject_uid,
+        subject_name=state["subject_name"],
+        disposition=disposition,
+        sar_bar_outcome=(sar_bar.outcome if sar_bar else None),
+        decision_trace=[d.summary() for d in decisions],
+        audit_tip_hash=records[-1]["hash"],
+        audit_record_count=len(records),
+        counterparty_uids=counterparties,
+    )
+    audit.append("case_graph", "case_recorded", target=case_id,
+                 detail=json.dumps({"disposition": disposition,
+                                    "counterparty_accounts": len(counterparties)}))
+    return None
+
+
 def _finalize(state: CaseState) -> CaseState:
     audit = state["audit"]
     return {"audit_records": audit.read_all(), "audit_verified": audit.verify()}
@@ -472,6 +524,7 @@ _NODES: tuple[tuple[str, object], ...] = (
     ("human_referral", _human_referral),
     ("decide_sar_bar", _decide_sar_bar),
     ("case_packager", _package),
+    ("case_graph_record", _record_case),
     ("audit_finalize", _finalize),
 )
 
@@ -539,6 +592,7 @@ def build_case_graph():
     g.add_edge("decide_sar_bar", "case_packager")
     g.add_edge("human_referral", "case_packager")
 
-    g.add_edge("case_packager", "audit_finalize")
+    g.add_edge("case_packager", "case_graph_record")
+    g.add_edge("case_graph_record", "audit_finalize")
     g.add_edge("audit_finalize", END)
     return g.compile()
