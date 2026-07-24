@@ -1,0 +1,128 @@
+{
+  "readme": [
+    "Expected-decision key for the Phase 6 bounded decision points (agency v1.0.0).",
+    "",
+    "AUTHORSHIP. This key is DOMAIN-AUTHORED: every expected outcome below is",
+    "derived from (a) the scenario facts the generator plants and (b) the",
+    "published decision policy in docs/agency-methodology.md -- and each",
+    "subject's 'basis' entries record that derivation. A live run of the",
+    "implementation was used only to CONFIRM the derived values afterwards,",
+    "never as their source: an eval whose key is copied from the system under",
+    "test measures nothing.",
+    "",
+    "WHY THIS KEY IS COMMITTED RATHER THAN GENERATED. Decision outcomes are a",
+    "function of POLICY (the agency thresholds, the Critic's rubric bar, the",
+    "advisory corroboration gate and rank key), which the scenario generator",
+    "must not know about -- the generator emits facts; the evals own policy",
+    "expectations (the same split as tests/data/sar_rubric_gold.json). The",
+    "generator and data/synthetic/ground_truth.json are untouched by Phase 6,",
+    "so the byte-determinism guards over them are unaffected.",
+    "",
+    "SCOPE. hop_cap=2 is the run_case default the eval runs under. The",
+    "'recidivism_surfaced' field is authored here for stability but is asserted",
+    "by the eval only once the persistent case graph lands (Phase 6 Slice D);",
+    "it derives purely from the planted account fields (prior_review_count,",
+    "account_status) and the published casegraph policy.",
+    "",
+    "Subjects are keyed by role_in_ring (seed-stable), never by uid."
+  ],
+  "agency_version": "1.0.0",
+  "hop_cap": 2,
+  "subjects": [
+    {
+      "role": "ultimate_controller",
+      "basis": {
+        "expand_hop": "The controller shares a planted device with the employee cutout and the trust intermediary (ground_truth.shared_devices group 1) and controls wallets with planted flows into the ring, so hop 1 must discover new accounts (continue); the cap then bounds the walk at hop 2 (stop_cap).",
+        "second_advisory": "Only the trust subject has an RFI on file (SIM-RFI-0001); the advisory matcher is event-triggered on RFI text, so with no document there can be no match.",
+        "re_rfi": "No RFI on file, so the decision cannot apply.",
+        "sufficiency": "Every planted account grounds at least a registration timeline event; the policy floor is 1 event with a resolved subject.",
+        "sar_bar": "Per the committed rubric key (sar_rubric_gold.json) the controller's planted evidence grounds all eight FinCEN rubric elements (sanctioned exposure, device/KYC ring, remarks, structured flows), so the Critic loop converges: clears_bar.",
+        "recidivism_surfaced": "prior_review_count is planted 0-1 for non-recidivist roles and status is active -- below the casegraph policy (>=3 prior reviews or retain_monitor)."
+      },
+      "expected": {
+        "expand_hop": ["continue", "stop_cap"],
+        "second_advisory": {"outcome": "no_match", "advisory_id": null},
+        "re_rfi": {"outcome": "not_applicable", "claim_ids": []},
+        "sufficiency": "sufficient",
+        "sar_bar": "clears_bar",
+        "recidivism_surfaced": false
+      }
+    },
+    {
+      "role": "licensed_trust_intermediary",
+      "basis": {
+        "expand_hop": "The trust shares planted devices with the controller+employee and with SHELL_HK, and its controller wallet runs the planted bidirectional layering flows with SHELL_NZ -- hop 1 must discover new accounts (continue); the cap bounds the walk at hop 2 (stop_cap).",
+        "second_advisory": "The trust's RFI narrative is planted to trigger the Iran-oil advisory (keyword + semantic + structured corroboration), and the case's structured corroborators (ring jurisdictions, watchlist alias, on-chain exposure) let further advisories pass the corroboration gate -- so at least two matches survive and policy surfaces the runner-up. The runner-up's identity follows the matcher's published deterministic rank key (signal count, then matched terms, then corroborators, then semantic, then id) over the 4-advisory corpus: FIN-2019-A006. Confirmed by direct computation; the primary consumed by the SAR is FIN-2025-A002 either way.",
+        "re_rfi": "The generator plants exactly two false claims in SIM-RFI-0001 (ground_truth.rfi_lies: C2, C4), each with rebutting evidence rows, and the contradiction eval pins their adjudication as 'contradicted'; policy recommends a follow-up at >=1 contradicted claim, drafted never sent.",
+        "sufficiency": "Planted account with a full timeline; above the 1-event floor.",
+        "sar_bar": "Per sar_rubric_gold.json the trust's evidence grounds all eight rubric elements, so the Critic loop converges: clears_bar.",
+        "recidivism_surfaced": "prior_review_count is planted 0-1 for non-recidivist roles (the trust's draw is 1) and status is active -- below the casegraph policy."
+      },
+      "expected": {
+        "expand_hop": ["continue", "stop_cap"],
+        "second_advisory": {"outcome": "pull_second", "advisory_id": "FIN-2019-A006"},
+        "re_rfi": {"outcome": "recommend_re_rfi", "claim_ids": ["C2", "C4"]},
+        "sufficiency": "sufficient",
+        "sar_bar": "clears_bar",
+        "recidivism_surfaced": false
+      }
+    },
+    {
+      "role": "privileged_internal_redherring",
+      "basis": {
+        "expand_hop": "The red-herring account shares a planted device with SHELL_AE and SHELL_TR (ground_truth.shared_devices group 2), so hop 1 discovers those accounts (continue); the cap bounds the walk at hop 2 (stop_cap). The internal 'do-not-block' tag is FLAGGED for review and must not alter the walk.",
+        "second_advisory": "No RFI on file -- no advisory can match.",
+        "re_rfi": "No RFI on file, so the decision cannot apply.",
+        "sufficiency": "Planted account with a timeline; above the 1-event floor.",
+        "sar_bar": "The plant is deliberately sparse: no RFI, no advisory, and no flow path into the sanctioned corridor (the account is absent from ground_truth.sanctioned_exposure_uids), so per sar_rubric_gold.json only 5/8 rubric elements are groundable -- the Critic cannot converge: human_review.",
+        "recidivism_surfaced": "prior_review_count planted 0-1, status active -- below the casegraph policy."
+      },
+      "expected": {
+        "expand_hop": ["continue", "stop_cap"],
+        "second_advisory": {"outcome": "no_match", "advisory_id": null},
+        "re_rfi": {"outcome": "not_applicable", "claim_ids": []},
+        "sufficiency": "sufficient",
+        "sar_bar": "human_review",
+        "recidivism_surfaced": false
+      }
+    },
+    {
+      "role": "noise",
+      "basis": {
+        "expand_hop": "Noise accounts are planted with NO ring linkage: a unique KYC document each, only their own unshared device, and transactions whose counterparties are fresh TRON addresses absent from the controller map -- so counterparty discovery cannot resolve an account and hop 1 discovers nothing. Policy stops on the exhausted frontier (provably lossless: the skipped hop would start from an empty frontier).",
+        "second_advisory": "No RFI on file -- no advisory can match.",
+        "re_rfi": "No RFI on file, so the decision cannot apply.",
+        "sufficiency": "Even a noise account grounds registration/transaction timeline events; above the 1-event floor.",
+        "sar_bar": "Per sar_rubric_gold.json a noise account grounds only 4/8 rubric elements (no exposure, no ring linkage, no RFI/advisory) -- the Critic cannot converge: human_review.",
+        "recidivism_surfaced": "prior_review_count planted 0-1, status active -- below the casegraph policy."
+      },
+      "expected": {
+        "expand_hop": ["stop_frontier_exhausted"],
+        "second_advisory": {"outcome": "no_match", "advisory_id": null},
+        "re_rfi": {"outcome": "not_applicable", "claim_ids": []},
+        "sufficiency": "sufficient",
+        "sar_bar": "human_review",
+        "recidivism_surfaced": false
+      }
+    },
+    {
+      "role": "recidivist_mule",
+      "basis": {
+        "expand_hop": "The recidivist shares a planted device with the employee cutout and the reused-KYC second employee (ground_truth.shared_devices group 4), and his planted 4.85M 'aggregation fee - partner share' withdrawal lands on SHELL_CN's controller wallet -- hop 1 must discover new accounts (continue); the cap bounds the walk at hop 2 (stop_cap).",
+        "second_advisory": "No RFI on file -- no advisory can match.",
+        "re_rfi": "No RFI on file, so the decision cannot apply.",
+        "sufficiency": "Planted account with a timeline; above the 1-event floor.",
+        "sar_bar": "The recidivist's planted evidence (shared device, watchlist alias SDN-0002, betraying remark) grounds the who/what/when/where and network elements, but he is absent from ground_truth.sanctioned_exposure_uids (no planted flow path into the sanctioned corridor) and has no RFI or advisory -- so the on-chain-evidence and why elements are ungroundable and the Critic cannot converge: human_review.",
+        "recidivism_surfaced": "THE plant this capability exists for: prior_review_count=5 and account_status=retain_monitor ('cleared five prior reviews'), both above/at the casegraph policy thresholds -- recidivism must be surfaced at case open."
+      },
+      "expected": {
+        "expand_hop": ["continue", "stop_cap"],
+        "second_advisory": {"outcome": "no_match", "advisory_id": null},
+        "re_rfi": {"outcome": "not_applicable", "claim_ids": []},
+        "sufficiency": "sufficient",
+        "sar_bar": "human_review",
+        "recidivism_surfaced": true
+      }
+    }
+  ]
+}
