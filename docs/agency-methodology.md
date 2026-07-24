@@ -1,0 +1,193 @@
+# Agency Methodology (v1.0.0)
+
+**Status:** synthetic-data research prototype. This document explains what
+"agency" means in Okojo, why every agentic decision is deterministic, and what
+each decision rule does — for an investigator, a model-risk reviewer, and an
+external auditor alike.
+
+Three principles govern everything below:
+
+1. **Bounded, rule-based, auditable branching — never wandering.** An "agentic
+   decision point" in Okojo is a pure function of the evidence state: same
+   scenario, same decision trace, every time. There is no stochastic branching
+   and no model-driven exploration. The deterministic backbone is itself the
+   compliance feature: a reviewer can replay any run and land on the identical
+   trace.
+2. **Every decision is logged with its evidence.** Each decision is stamped
+   into the tamper-evident audit chain (`agency / decision`) with its outcome,
+   a plain-language rationale, and the evidence values that drove it. The
+   LangGraph router branches on the *recorded outcome string*, so the path
+   taken through the state machine and the trace in the audit log cannot
+   disagree.
+3. **The thresholds are tunable policy parameters, not universal truths.** The
+   values here are defensible defaults for the synthetic scenario; a deploying
+   institution would calibrate them. They are version-stamped (see §7) so any
+   historical decision trace is reproducible.
+
+A hard boundary above all of it: the agent **proposes, surfaces, drafts, and
+flags — a human always decides and files.** No decision below sends anything,
+blocks anyone, or files anything.
+
+---
+
+## 1. `expand_hop` — expand the network another hop?
+
+**Question:** *is the next BFS hop worth taking, or is the frontier exhausted?*
+
+After each hop the rule looks at three numbers: hops completed, the configured
+hop cap, and how many new accounts the last hop discovered.
+
+- `continue` — the last hop discovered at least `expand_min_new_accounts` (= 1)
+  new account(s) and the cap is not reached: the frontier is productive.
+- `stop_cap` — the cap is reached. The cap (default 2, hard limit 7) is the
+  outer bound on how far attribution may creep; it is a policy dial, not a
+  discovered fact.
+- `stop_frontier_exhausted` — the last hop discovered nothing new. A further
+  hop would start from an empty frontier and add nothing, so stopping here is
+  **provably lossless**: the resulting graph is byte-identical to walking on
+  to the cap.
+
+**Why 1 new account is enough to continue:** a single new account can be the
+controller that collapses the whole ring; discovery is cheap and bounded by
+the cap, so the rule leans toward completeness *within the bound*.
+
+## 2. `second_advisory` — pull a second advisory?
+
+**Question:** *did more than one advisory survive the corroboration gate, and
+should the runner-up be shown to the analyst?*
+
+- `pull_second` — at least `second_advisory_min_matches` (= 2) corroborated
+  matches: the ranked runner-up is **surfaced to the analyst** next to the
+  primary.
+- `single_match` / `no_match` — nothing further to surface.
+
+**Boundary:** the SAR drafter consumes the *primary* match alone. A surfaced
+runner-up is context for the human reviewer, never a second narrative source —
+that keeps the drafted SAR's advisory basis single, citable, and unchanged by
+this decision.
+
+## 3. `re_rfi` — recommend a follow-up RFI?
+
+**Question:** *did the contradiction checker adjudicate any claim in the
+subject's RFI response as* `contradicted`?
+
+- `recommend_re_rfi` — at least `re_rfi_min_contradicted` (= 1) claim was
+  adjudicated `contradicted` (the *only* flag verdict — `qualified` and
+  `unverifiable` never trigger this). One deterministic follow-up question is
+  drafted per contradicted claim, restating the subject's own assertion,
+  naming the rebutting evidence surfaces, and carrying their provenance
+  citations.
+- `no_contradictions` / `not_applicable` — no follow-up is proposed.
+
+**Boundary:** the follow-up RFI is **drafted and proposed, never sent**. A
+human investigator decides whether, when, and how to put questions to a
+subject.
+
+## 4. `sufficiency` — is the evidence sufficient to draft?
+
+**Question:** *can a fail-closed draft attempt even ground its opening facts?*
+
+- `sufficient` — the subject account resolved and at least
+  `sufficiency_min_events` (= 1) grounded timeline event exists: "who" and
+  "when" are citable, which is the minimum the fail-closed drafter needs.
+- `insufficient` — the case is **referred to a human** with the gap named. No
+  draft is attempted; nothing is fabricated.
+
+**Why so low a bar?** The drafter is already fail-closed (every claim must
+resolve to a real evidence row, and rubric gaps are flagged, never invented).
+The sufficiency gate is a *floor* under that machinery, not a duplicate of the
+Critic: it stops the degenerate case where a draft could not cite its own
+subject, and leaves quality judgment to the rubric.
+
+## 5. `sar_bar` — does the SAR clear the bar?
+
+**Question:** *did the bounded Critic revision loop converge on full rubric
+coverage?*
+
+- `clears_bar` — the loop converged (`Critique.meets_bar` at the versioned
+  `critic_config` threshold).
+- `human_review` — coverage fell short; the unmet rubric elements are named
+  and the draft is flagged for human review.
+
+This decision **delegates** to the SAR Critic rather than owning a second
+quality bar — one rubric, one threshold, one version stamp (`critic_config`).
+Either way the case is packaged and a human reviews it; `sar_bar` records the
+disposition, it does not file.
+
+## 6. Determinism, replay, and the decision-trace eval
+
+Every rule takes only explicit evidence values (counts, verdicts, coverage) —
+never a ground-truth label, never a subject or claim id. The full trace for a
+run is: the ordered `DecisionRecord`s in the case result, each mirrored by an
+`agency / decision` audit stamp whose JSON round-trips to the in-memory
+record. The decision trace is evaluated against a committed expected-decision
+key (exact match, scored as precision/recall/F1 over
+`(subject, decision, outcome)` triples), the same way every other Okojo
+capability ships with its eval.
+
+## 7. Reproducibility & versioning
+
+Every run stamps the versioned decision policy into the audit trail
+(`agency / agency_config`), mirroring the scoring, retrieval, critic, and
+contradiction config stamps. The canonical policy for this version is below;
+it is the single source of truth (`okojo.agency.agency_config`) and is
+regression-tested against this document, so the doc and the code can never
+silently drift.
+
+**Version 1.0.0 — canonical policy:**
+
+<!-- agency-config:begin -->
+```json
+{
+  "version": "1.0.0",
+  "decision_points": {
+    "expand_hop": [
+      "continue",
+      "stop_cap",
+      "stop_frontier_exhausted"
+    ],
+    "second_advisory": [
+      "pull_second",
+      "single_match",
+      "no_match"
+    ],
+    "re_rfi": [
+      "recommend_re_rfi",
+      "no_contradictions",
+      "not_applicable"
+    ],
+    "sufficiency": [
+      "sufficient",
+      "insufficient"
+    ],
+    "sar_bar": [
+      "clears_bar",
+      "human_review"
+    ]
+  },
+  "thresholds": {
+    "expand_min_new_accounts": 1,
+    "second_advisory_min_matches": 2,
+    "re_rfi_min_contradicted": 1,
+    "sufficiency_min_events": 1
+  },
+  "sar_bar_rule": "delegates to the Critic: clears_bar iff the bounded revision loop converged (Critique.meets_bar at the critic_config threshold)",
+  "boundaries": {
+    "second_advisory": "surfaced to the analyst only; the SAR drafter consumes the primary match alone",
+    "re_rfi": "a follow-up RFI is drafted and proposed, never sent; a human decides",
+    "insufficient_evidence": "the case is referred to a human; no draft is attempted and nothing is fabricated"
+  }
+}
+```
+<!-- agency-config:end -->
+
+Bump `version` whenever any threshold, outcome set, or rule changes;
+already-audited decision traces remain reproducible under the version they
+were recorded with.
+
+---
+
+*All data referenced here is synthetic (Okojo's seeded generator) or public
+(OFAC SDN structure, FinCEN advisory red-flag typologies). No real identities,
+addresses, or documents are used. This prototype prepares evidence for a human
+reviewer; it does not screen, advise, or file.*

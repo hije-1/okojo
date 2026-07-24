@@ -618,58 +618,68 @@ def main() -> None:
     # -- SAR draft --------------------------------------------------------- #
     with tab_sar:
         st.subheader("Grounded, self-critiquing SAR draft")
-        st.error(res.sar.disclaimer)
-        st.caption(res.sar.filing_note)
-        for i, claim in enumerate(res.sar.claims, start=1):
-            st.markdown(f"**[{i}] ({claim.element})** {claim.statement}")
-            st.caption("source: " + claim.citations())
-        ungrounded = res.sar.ungrounded()
-        if ungrounded:
-            st.error(f"{len(ungrounded)} uncitable claim(s) — grounding contract violated!")
-        else:
-            st.success(
-                "Every claim carries provenance that resolves to a real evidence "
-                "row — grounding contract satisfied (fail-closed)."
+        if res.sar is None:
+            # The sufficiency gate referred the case to a human: no draft was
+            # attempted and nothing was fabricated (see the audit trail's
+            # human_referral record). Not reachable on the planted scenario.
+            st.warning(
+                "No draft was attempted: the evidence-sufficiency gate referred "
+                "this case to a human investigator (insufficient grounded "
+                "evidence for a citable narrative)."
             )
-
-        # -- Critic review (deterministic FinCEN rubric) ------------------- #
-        crit = res.critique
-        history = res.critique_history
-        if crit is not None:
-            st.markdown("---")
-            st.subheader("Critic review (FinCEN rubric)")
-            cov_col, bar_col = st.columns([1, 2])
-            cov_col.metric("Rubric coverage", f"{crit.coverage:.0%}")
-            if crit.meets_bar():
-                bar_col.success("Draft clears the Critic bar — full rubric coverage.")
+        else:
+            st.error(res.sar.disclaimer)
+            st.caption(res.sar.filing_note)
+            for i, claim in enumerate(res.sar.claims, start=1):
+                st.markdown(f"**[{i}] ({claim.element})** {claim.statement}")
+                st.caption("source: " + claim.citations())
+            ungrounded = res.sar.ungrounded()
+            if ungrounded:
+                st.error(f"{len(ungrounded)} uncitable claim(s) — grounding contract violated!")
             else:
-                bar_col.warning(
-                    "Below the Critic bar — uncovered element(s) flagged for analyst review."
+                st.success(
+                    "Every claim carries provenance that resolves to a real evidence "
+                    "row — grounding contract satisfied (fail-closed)."
                 )
 
-            grade_df = pd.DataFrame([
-                {"element": g.label, "covered": "yes" if g.passed else "no",
-                 "required": "yes" if g.required else "no"}
-                for g in crit.grades
-            ])
-            st.dataframe(grade_df, use_container_width=True, hide_index=True)
-
-            if history is not None:
-                if history.revisions:
-                    st.caption(
-                        f"Revision loop: {history.iterations} bounded pass(es), "
-                        f"coverage {history.initial.coverage:.0%} -> {history.final.coverage:.0%}."
-                    )
-                    for k, addressed in enumerate(history.revisions, start=1):
-                        st.caption(f"  pass {k}: added grounded claim(s) for {', '.join(addressed)}")
+            # -- Critic review (deterministic FinCEN rubric) --------------- #
+            crit = res.critique
+            history = res.critique_history
+            if crit is not None:
+                st.markdown("---")
+                st.subheader("Critic review (FinCEN rubric)")
+                cov_col, bar_col = st.columns([1, 2])
+                cov_col.metric("Rubric coverage", f"{crit.coverage:.0%}")
+                if crit.meets_bar():
+                    bar_col.success("Draft clears the Critic bar — full rubric coverage.")
                 else:
-                    st.caption("Revision loop: first draft already cleared the bar (0 passes).")
-                if history.flagged:
-                    st.warning(
-                        "Human-review fallback — the evidence does not support: "
-                        f"{', '.join(history.flagged)}. These are flagged for an analyst, "
-                        "never fabricated."
+                    bar_col.warning(
+                        "Below the Critic bar — uncovered element(s) flagged for analyst review."
                     )
+
+                grade_df = pd.DataFrame([
+                    {"element": g.label, "covered": "yes" if g.passed else "no",
+                     "required": "yes" if g.required else "no"}
+                    for g in crit.grades
+                ])
+                st.dataframe(grade_df, use_container_width=True, hide_index=True)
+
+                if history is not None:
+                    if history.revisions:
+                        st.caption(
+                            f"Revision loop: {history.iterations} bounded pass(es), "
+                            f"coverage {history.initial.coverage:.0%} -> {history.final.coverage:.0%}."
+                        )
+                        for k, addressed in enumerate(history.revisions, start=1):
+                            st.caption(f"  pass {k}: added grounded claim(s) for {', '.join(addressed)}")
+                    else:
+                        st.caption("Revision loop: first draft already cleared the bar (0 passes).")
+                    if history.flagged:
+                        st.warning(
+                            "Human-review fallback — the evidence does not support: "
+                            f"{', '.join(history.flagged)}. These are flagged for an analyst, "
+                            "never fabricated."
+                        )
 
     # -- Audit trail ------------------------------------------------------- #
     with tab_audit:

@@ -1,17 +1,23 @@
 """LangGraph state machine over the deterministic case backbone (Phase 6).
 
-Slice A is a *mechanical* conversion: every node below is verbatim code motion
-of the corresponding stage block from the Phase 1-5 linear pipeline, wired in
-the same fixed order. Outputs, audit stamps, and stamp order are identical to
-the linear orchestrator this replaces (a byte-identity test pins it). Bounded
-agentic decision points arrive as dedicated decision nodes in a later slice.
+The component stages are verbatim code motion of the Phase 1-5 linear
+pipeline, wired in the same fixed order. Around that backbone sit five
+BOUNDED decision points (``okojo.agency``): expand another hop? pull a second
+advisory? re-RFI? evidence sufficient to draft? does the SAR clear the bar?
+Each decision node calls a pure rule of the evidence state, records a
+:class:`DecisionRecord`, and stamps it into the audit chain; the conditional
+edge then routes on the *recorded outcome string*, so the path taken through
+the graph and the decision trace in the tamper-evident log cannot disagree.
 
 Determinism posture (a compliance feature, not an afterthought):
+- Every decision is a deterministic function of the evidence state -- same
+  scenario, same decision trace, every time. No stochastic branching exists.
 - No checkpointer is ever instantiated -- no UUIDs, no wall clock, and no
   state serialization enter the run path.
-- The graph has no fan-out, so the runtime executes exactly one node per
-  superstep in a fixed, inspectable order (``build_case_graph().get_graph()``
-  enumerates it; a shape test pins the node and edge sets).
+- The graph has no parallel fan-out: the runtime executes exactly one node
+  per superstep, and the only branches are the five decision routers
+  (``build_case_graph().get_graph()`` enumerates the topology; a shape test
+  pins the node and edge sets).
 - Tracing/telemetry stays disabled: Okojo never sets the LANGCHAIN_*/
   LANGSMITH_* environment variables, and a guard test asserts the run path
   opens no network sockets.
@@ -44,12 +50,31 @@ from ..advisory import (
     retrieval_config,
 )
 from ..advisory.embeddings import get_embedder
+from ..agency import (
+    DecisionRecord,
+    RfiFollowUp,
+    agency_config,
+    decide_expand,
+    decide_re_rfi,
+    decide_sar_bar,
+    decide_second_advisory,
+    decide_sufficiency,
+    draft_followup,
+)
 from ..aggregator import ProfileTimeline, build_profile
 from ..audit import AuditLog
 from ..config import REPO_ROOT
 from ..connectors import Connectors
 from ..entity import EntityBackbone, build_backbone
-from ..network import NetworkExpansion, expand, render
+from ..network import (
+    ExpansionWalk,
+    NetworkExpansion,
+    clamp_hops,
+    finish_walk,
+    render,
+    start_walk,
+    step_walk,
+)
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import (
     ContradictionTable,
@@ -97,6 +122,8 @@ class CaseState(TypedDict, total=False):
     # evidence accumulated by the nodes, in pipeline order
     subject_name: str
     profile: ProfileTimeline
+    hop_cap: int
+    walk: ExpansionWalk
     expansion: NetworkExpansion
     graph_html_path: Optional[Path]
     risk: RiskScoring
@@ -106,13 +133,35 @@ class CaseState(TypedDict, total=False):
     embedder_name: str
     advisory_matches: list[AdvisoryMatch]
     advisory: Optional[AdvisoryMatch]
+    secondary_advisory: Optional[AdvisoryMatch]
     rfi_view: Optional[RfiView]
     rfi_decomposition: Optional[RfiDecomposition]
     contradictions: Optional[ContradictionTable]
-    sar: SarDraft
-    critique_history: CritiqueHistory
+    rfi_followup: Optional[RfiFollowUp]
+    sar: Optional[SarDraft]
+    critique_history: Optional[CritiqueHistory]
+    # the bounded decision trace, in the order the decisions were taken
+    decisions: list[DecisionRecord]
     audit_records: list[dict]
     audit_verified: bool
+
+
+def _record_decision(state: CaseState, rec: DecisionRecord) -> CaseState:
+    """Append a decision to the trace and stamp it into the audit chain.
+
+    Every bounded decision is logged with its outcome, rationale, and the
+    evidence that drove it; the eval asserts each stamp round-trips to the
+    in-memory record, so the trace the analyst reviews IS the tamper-evident
+    one.
+    """
+    state["audit"].append("agency", "decision", target=rec.decision_id,
+                          detail=json.dumps(rec.summary()))
+    return {"decisions": state.get("decisions", []) + [rec]}
+
+
+def _last_outcome(state: CaseState) -> str:
+    """Router: the branch taken is exactly the last recorded outcome."""
+    return state["decisions"][-1].outcome
 
 
 def _case_open(state: CaseState) -> CaseState:
@@ -122,6 +171,10 @@ def _case_open(state: CaseState) -> CaseState:
         raise ValueError(f"No account with uid {subject_uid}")
     audit.append("orchestrator", "case_open", target=f"uid:{subject_uid}",
                  detail=str(subject["entity_name"]), provenance=subject.provenance)
+    # Stamp the versioned decision policy into the hash chain once per run, so
+    # any historical decision trace can be reproduced exactly — mirroring the
+    # scoring/retrieval/critic/contradiction config stamps.
+    audit.append("agency", "agency_config", detail=json.dumps(agency_config()))
     return {"subject_name": str(subject["entity_name"])}
 
 
@@ -134,12 +187,34 @@ def _profile(state: CaseState) -> CaseState:
     return {"profile": profile}
 
 
-def _network(state: CaseState) -> CaseState:
+def _network_seed(state: CaseState) -> CaseState:
     conn, audit, subject_uid = state["conn"], state["audit"], state["subject_uid"]
-    max_hops = state["max_hops"]
     audit.append("network_expander", "tool_call", target=f"uid:{subject_uid}",
-                 detail=f"max_hops={max_hops}")
-    expansion = expand(conn, subject_uid, max_hops=max_hops)
+                 detail=f"max_hops={state['max_hops']}")
+    return {"walk": start_walk(conn, subject_uid),
+            "hop_cap": clamp_hops(state["max_hops"])}
+
+
+def _network_hop(state: CaseState) -> CaseState:
+    step_walk(state["conn"], state["walk"])
+    return {"walk": state["walk"]}
+
+
+def _decide_expand(state: CaseState) -> CaseState:
+    walk, cap = state["walk"], state["hop_cap"]
+    rec = decide_expand(
+        hops_done=len(walk.hop_stats), cap=cap,
+        new_accounts_last_hop=walk.hop_stats[-1]["new_accounts"],
+    )
+    return _record_decision(state, rec)
+
+
+def _network_finalize(state: CaseState) -> CaseState:
+    conn, audit = state["conn"], state["audit"]
+    # max_hops records the cap the walk ran under: an early frontier-exhausted
+    # stop skipped only provably no-op hops, so the summary (which feeds the
+    # audit chain) is identical to a fixed walk to the cap.
+    expansion = finish_walk(conn, state["walk"], max_hops=state["hop_cap"])
     audit.append("network_expander", "expanded", detail=json.dumps(expansion.summary()))
     graph_html_path: Optional[Path] = None
     if state["render_graph"]:
@@ -218,6 +293,20 @@ def _advisory(state: CaseState) -> CaseState:
             "advisory": advisory}
 
 
+def _decide_second_advisory(state: CaseState) -> CaseState:
+    return _record_decision(state, decide_second_advisory(state["advisory_matches"]))
+
+
+def _attach_secondary(state: CaseState) -> CaseState:
+    # Surfaced for the analyst only — the SAR drafter consumes the primary
+    # match alone (a published boundary in agency_config / the methodology doc).
+    secondary = state["advisory_matches"][1]
+    state["audit"].append("advisory_matcher", "secondary_surfaced",
+                          detail=secondary.advisory_id,
+                          provenance=secondary.provenance)
+    return {"secondary_advisory": secondary}
+
+
 def _rfi(state: CaseState) -> CaseState:
     # RFI surfacing (read-only view for the analyst)
     conn, audit, subject_uid = state["conn"], state["audit"], state["subject_uid"]
@@ -261,6 +350,46 @@ def _contradictions(state: CaseState) -> CaseState:
     return {"rfi_decomposition": decomposition, "contradictions": contradictions}
 
 
+def _decide_re_rfi(state: CaseState) -> CaseState:
+    return _record_decision(state, decide_re_rfi(state["contradictions"]))
+
+
+def _draft_rfi_followup(state: CaseState) -> CaseState:
+    # Drafted and proposed to the human investigator, never sent.
+    followup = draft_followup(state["contradictions"])
+    state["audit"].append(
+        "agency", "rfi_followup_drafted", target=followup.rfi_id,
+        detail=json.dumps({"questions": len(followup.questions),
+                           "claim_ids": [q.claim_id for q in followup.questions]}),
+        provenance=[a.provenance for a in state["contradictions"].contradictions],
+    )
+    return {"rfi_followup": followup}
+
+
+def _decide_sufficiency(state: CaseState) -> CaseState:
+    profile = state["profile"]
+    rec = decide_sufficiency(
+        subject_resolved="subject_name" in state,
+        event_count=len(profile.events),
+    )
+    return _record_decision(state, rec)
+
+
+def _human_referral(state: CaseState) -> CaseState:
+    # The negative branch of the sufficiency gate: no draft is attempted and
+    # nothing is fabricated — the case goes to a human with the gap named.
+    # (Never taken on the planted scenario, where every roster subject grounds
+    # a draft attempt; exercised by unit tests on sparse synthetic states.)
+    audit, subject_uid = state["audit"], state["subject_uid"]
+    audit.append("orchestrator", "human_referral", target=f"uid:{subject_uid}",
+                 detail=json.dumps({
+                     "disposition": "insufficient_evidence",
+                     "note": "referred to a human investigator; no SAR draft "
+                             "attempted (nothing is fabricated)",
+                 }))
+    return {"sar": None, "critique_history": None}
+
+
 def _sar(state: CaseState) -> CaseState:
     # SAR Drafter + Critic (grounded, self-critiquing). draft_with_critic
     # builds a grounded first draft (fail-closed on any uncitable or
@@ -299,6 +428,12 @@ def _sar(state: CaseState) -> CaseState:
     return {"sar": sar, "critique_history": critique_history}
 
 
+def _decide_sar_bar(state: CaseState) -> CaseState:
+    # Records the disposition; both outcomes proceed to packaging, because a
+    # human reviews and decides either way — this decision never files.
+    return _record_decision(state, decide_sar_bar(state["critique_history"]))
+
+
 def _package(state: CaseState) -> Optional[CaseState]:
     audit, subject_uid = state["audit"], state["subject_uid"]
     audit.append("case_packager", "packaged", target=f"uid:{subject_uid}",
@@ -311,19 +446,31 @@ def _finalize(state: CaseState) -> CaseState:
     return {"audit_records": audit.read_all(), "audit_verified": audit.verify()}
 
 
-# Node ids reuse the audit-actor vocabulary so the graph shape reads like the
-# audit trail it produces.
+# Node ids reuse the audit-actor vocabulary where a node is a component stage,
+# and a decide_*/effect vocabulary for the bounded decision points — so the
+# graph shape reads like the audit trail it produces, and every branch in the
+# topology corresponds to a stamped decision outcome.
 _NODES: tuple[tuple[str, object], ...] = (
     ("case_open", _case_open),
     ("profile_aggregator", _profile),
-    ("network_expander", _network),
+    ("network_seed", _network_seed),
+    ("network_hop", _network_hop),
+    ("decide_expand", _decide_expand),
+    ("network_finalize", _network_finalize),
     ("risk_scorer", _risk),
     ("entity_backbone", _backbone),
     ("remark_miner", _tells),
     ("advisory_matcher", _advisory),
+    ("decide_second_advisory", _decide_second_advisory),
+    ("attach_secondary", _attach_secondary),
     ("rfi_reader", _rfi),
     ("rfi_checker", _contradictions),
+    ("decide_re_rfi", _decide_re_rfi),
+    ("draft_rfi_followup", _draft_rfi_followup),
+    ("decide_sufficiency", _decide_sufficiency),
     ("sar_drafter", _sar),
+    ("human_referral", _human_referral),
+    ("decide_sar_bar", _decide_sar_bar),
     ("case_packager", _package),
     ("audit_finalize", _finalize),
 )
@@ -331,12 +478,67 @@ _NODES: tuple[tuple[str, object], ...] = (
 
 @lru_cache(maxsize=1)
 def build_case_graph():
-    """Compile the case graph once; the compiled graph is stateless per-invoke."""
+    """Compile the case graph once; the compiled graph is stateless per-invoke.
+
+    The backbone is fixed; the only branches are the five bounded decision
+    points, each routed by the outcome string of the decision just recorded
+    (so the trace in the audit chain and the path through the graph cannot
+    disagree).
+    """
     g = StateGraph(CaseState)
     for name, fn in _NODES:
         g.add_node(name, fn)
-    g.add_edge(START, _NODES[0][0])
-    for (a, _), (b, _) in zip(_NODES, _NODES[1:]):
-        g.add_edge(a, b)
-    g.add_edge(_NODES[-1][0], END)
+
+    g.add_edge(START, "case_open")
+    g.add_edge("case_open", "profile_aggregator")
+    g.add_edge("profile_aggregator", "network_seed")
+
+    # D1 expand_hop: the first hop always runs (cap >= 1); after each hop the
+    # decision either continues the loop or finalizes the expansion.
+    g.add_edge("network_seed", "network_hop")
+    g.add_edge("network_hop", "decide_expand")
+    g.add_conditional_edges("decide_expand", _last_outcome, {
+        "continue": "network_hop",
+        "stop_cap": "network_finalize",
+        "stop_frontier_exhausted": "network_finalize",
+    })
+
+    g.add_edge("network_finalize", "risk_scorer")
+    g.add_edge("risk_scorer", "entity_backbone")
+    g.add_edge("entity_backbone", "remark_miner")
+    g.add_edge("remark_miner", "advisory_matcher")
+
+    # D2 second_advisory: surface the runner-up match, or move on.
+    g.add_edge("advisory_matcher", "decide_second_advisory")
+    g.add_conditional_edges("decide_second_advisory", _last_outcome, {
+        "pull_second": "attach_secondary",
+        "single_match": "rfi_reader",
+        "no_match": "rfi_reader",
+    })
+    g.add_edge("attach_secondary", "rfi_reader")
+
+    g.add_edge("rfi_reader", "rfi_checker")
+
+    # D3 re_rfi: draft a follow-up for contradicted claims, or move on.
+    g.add_edge("rfi_checker", "decide_re_rfi")
+    g.add_conditional_edges("decide_re_rfi", _last_outcome, {
+        "recommend_re_rfi": "draft_rfi_followup",
+        "no_contradictions": "decide_sufficiency",
+        "not_applicable": "decide_sufficiency",
+    })
+    g.add_edge("draft_rfi_followup", "decide_sufficiency")
+
+    # D4 sufficiency: attempt a fail-closed draft, or refer to a human.
+    g.add_conditional_edges("decide_sufficiency", _last_outcome, {
+        "sufficient": "sar_drafter",
+        "insufficient": "human_referral",
+    })
+
+    # D5 sar_bar: record the disposition; both outcomes package for human review.
+    g.add_edge("sar_drafter", "decide_sar_bar")
+    g.add_edge("decide_sar_bar", "case_packager")
+    g.add_edge("human_referral", "case_packager")
+
+    g.add_edge("case_packager", "audit_finalize")
+    g.add_edge("audit_finalize", END)
     return g.compile()

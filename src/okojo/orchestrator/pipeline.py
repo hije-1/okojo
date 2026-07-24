@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Callable, Optional
 
 from ..advisory import AdvisoryMatch
+from ..agency import DecisionRecord, RfiFollowUp
 from ..aggregator import ProfileTimeline
 from ..audit import AuditLog
 from ..config import REPO_ROOT
@@ -44,13 +45,19 @@ class CaseResult:
     rfi_decomposition: Optional[RfiDecomposition]
     contradictions: Optional[ContradictionTable]
     advisory: Optional[AdvisoryMatch]
-    sar: SarDraft
+    # None only when the sufficiency gate referred the case to a human
+    # (insufficient evidence to ground a draft attempt).
+    sar: Optional[SarDraft]
     critique: Optional[Critique]
     critique_history: Optional[CritiqueHistory]
     audit_log_path: Path
     advisory_embedder: str = ""
     audit_records: list[dict] = field(default_factory=list)
     audit_verified: bool = False
+    # Phase 6: the bounded decision trace and the decision effects.
+    decisions: list[DecisionRecord] = field(default_factory=list)
+    secondary_advisory: Optional[AdvisoryMatch] = None
+    rfi_followup: Optional[RfiFollowUp] = None
 
 
 def default_out_dir(subject_uid: int) -> Path:
@@ -101,12 +108,15 @@ def run_case(
             contradictions=final["contradictions"],
             advisory=final["advisory"],
             sar=final["sar"],
-            critique=critique_history.final,
+            critique=critique_history.final if critique_history else None,
             critique_history=critique_history,
             audit_log_path=audit_path,
             advisory_embedder=final["embedder_name"],
             audit_records=final["audit_records"],
             audit_verified=final["audit_verified"],
+            decisions=final.get("decisions", []),
+            secondary_advisory=final.get("secondary_advisory"),
+            rfi_followup=final.get("rfi_followup"),
         )
     finally:
         if owns_conn:

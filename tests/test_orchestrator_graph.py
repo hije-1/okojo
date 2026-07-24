@@ -17,20 +17,70 @@ import socket
 
 from okojo.orchestrator import build_case_graph, run_case
 
-_BACKBONE = (
+# The full topology: the fixed component backbone plus the five bounded
+# decision points and their effect nodes. Slice B replaced the atomic
+# network_expander node with the seed/hop/decide/finalize loop and inserted
+# the decision nodes -- this pin was updated in the same slice, deliberately:
+# any future topology change must show up as a diff here.
+_NODES = (
     "case_open",
     "profile_aggregator",
-    "network_expander",
+    "network_seed",
+    "network_hop",
+    "decide_expand",
+    "network_finalize",
     "risk_scorer",
     "entity_backbone",
     "remark_miner",
     "advisory_matcher",
+    "decide_second_advisory",
+    "attach_secondary",
     "rfi_reader",
     "rfi_checker",
+    "decide_re_rfi",
+    "draft_rfi_followup",
+    "decide_sufficiency",
     "sar_drafter",
+    "human_referral",
+    "decide_sar_bar",
     "case_packager",
     "audit_finalize",
 )
+
+_EDGES = {
+    ("__start__", "case_open"),
+    ("case_open", "profile_aggregator"),
+    ("profile_aggregator", "network_seed"),
+    ("network_seed", "network_hop"),
+    ("network_hop", "decide_expand"),
+    # D1: continue the hop loop, or finalize (cap / exhausted frontier)
+    ("decide_expand", "network_hop"),
+    ("decide_expand", "network_finalize"),
+    ("network_finalize", "risk_scorer"),
+    ("risk_scorer", "entity_backbone"),
+    ("entity_backbone", "remark_miner"),
+    ("remark_miner", "advisory_matcher"),
+    ("advisory_matcher", "decide_second_advisory"),
+    # D2: surface the runner-up advisory, or move on
+    ("decide_second_advisory", "attach_secondary"),
+    ("decide_second_advisory", "rfi_reader"),
+    ("attach_secondary", "rfi_reader"),
+    ("rfi_reader", "rfi_checker"),
+    ("rfi_checker", "decide_re_rfi"),
+    # D3: draft a follow-up RFI for contradicted claims, or move on
+    ("decide_re_rfi", "draft_rfi_followup"),
+    ("decide_re_rfi", "decide_sufficiency"),
+    ("draft_rfi_followup", "decide_sufficiency"),
+    # D4: attempt a fail-closed draft, or refer to a human
+    ("decide_sufficiency", "sar_drafter"),
+    ("decide_sufficiency", "human_referral"),
+    # D5: record the disposition; both paths package for human review
+    ("sar_drafter", "decide_sar_bar"),
+    ("decide_sar_bar", "case_packager"),
+    ("human_referral", "case_packager"),
+    ("case_packager", "audit_finalize"),
+    ("audit_finalize", "__end__"),
+}
 
 
 def _counter():
@@ -43,14 +93,10 @@ def _counter():
     return clock
 
 
-def test_graph_shape_is_the_fixed_backbone():
+def test_graph_shape_is_pinned():
     g = build_case_graph().get_graph()
-    assert set(g.nodes) == {"__start__", "__end__", *_BACKBONE}
-    expected_edges = (
-        {("__start__", _BACKBONE[0]), (_BACKBONE[-1], "__end__")}
-        | set(zip(_BACKBONE, _BACKBONE[1:]))
-    )
-    assert {(e.source, e.target) for e in g.edges} == expected_edges
+    assert set(g.nodes) == {"__start__", "__end__", *_NODES}
+    assert {(e.source, e.target) for e in g.edges} == _EDGES
 
 
 def test_two_runs_produce_byte_identical_audit_chains(conn, trust_uid, tmp_path):

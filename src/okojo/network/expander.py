@@ -76,6 +76,11 @@ class NetworkExpansion:
     sanctioned_addresses_reached: list[str] = field(default_factory=list)
     gas_funding_links: list[dict] = field(default_factory=list)
     sanctioned_exposed_uids: list[int] = field(default_factory=list)
+    # Per-hop discovery counts ({"hop": n, "new_accounts": k}), recorded for the
+    # Phase 6 hop decision. Deliberately NOT part of summary(): the stepwise
+    # walk and a fixed-cap walk may record different no-op tails while yielding
+    # the identical graph, and summary() feeds the audit chain.
+    hop_stats: list[dict] = field(default_factory=list)
 
     def summary(self) -> dict:
         return {
@@ -245,73 +250,110 @@ def _score_nodes(g: nx.MultiDiGraph, exposed_nodes: set[str], gas_controllers: s
         data["risk"], data["risk_reasons"] = round(min(risk, 1.0), 3), reasons
 
 
-def expand(conn: Connectors, subject_uid: int, max_hops: int = 2) -> NetworkExpansion:
-    max_hops = max(1, min(int(max_hops), _MAX_HOPS_LIMIT))
+def clamp_hops(max_hops: int) -> int:
+    """The one clamp rule for the hop cap (shared by ``expand`` and the
+    Phase 6 agency loop, so both walk under the same bound)."""
+    return max(1, min(int(max_hops), _MAX_HOPS_LIMIT))
+
+
+@dataclass
+class ExpansionWalk:
+    """In-progress stepwise BFS state.
+
+    ``expand`` drives these primitives in a fixed loop; the Phase 6 agency
+    loop steps them one hop at a time, deciding between hops. Both paths run
+    the identical hop code — a hop whose frontier is empty is a no-op, which
+    is what makes an early frontier-exhausted stop provably lossless.
+    """
+
+    builder: _Builder
+    discovered: set[int]
+    frontier: set[int]
+    hop_stats: list[dict] = field(default_factory=list)
+
+
+def start_walk(conn: Connectors, subject_uid: int) -> ExpansionWalk:
     b = _Builder(conn, subject_uid)
     b.add_account(subject_uid)
+    return ExpansionWalk(builder=b, discovered={subject_uid}, frontier={subject_uid})
 
-    discovered: set[int] = {subject_uid}
-    frontier: set[int] = {subject_uid}
 
-    for _ in range(max_hops):
-        next_frontier: set[int] = set()
-        for uid in frontier:
-            acct = conn.get_account(uid)
-            src_acct = b.add_account(uid)
+def step_walk(conn: Connectors, walk: ExpansionWalk) -> int:
+    """Run one BFS hop; returns the number of newly discovered accounts."""
+    b, discovered, frontier = walk.builder, walk.discovered, walk.frontier
+    next_frontier: set[int] = set()
+    for uid in frontier:
+        acct = conn.get_account(uid)
+        src_acct = b.add_account(uid)
 
-            # controls edges + gather this account's refs
-            refs = [f"uid:{uid}"]
-            for addr_rec in conn.addresses_for(uid):
-                addr = addr_rec["address"]
-                refs.append(addr)
-                b.add_edge(src_acct, b.add_address(addr), "controls", addr_rec.provenance.cite())
+        # controls edges + gather this account's refs
+        refs = [f"uid:{uid}"]
+        for addr_rec in conn.addresses_for(uid):
+            addr = addr_rec["address"]
+            refs.append(addr)
+            b.add_edge(src_acct, b.add_address(addr), "controls", addr_rec.provenance.cite())
 
-            # transaction edges + counterparty discovery
-            for ref in refs:
-                for tx in conn.transactions_touching(ref):
-                    fn = b.ensure_ref(tx["from_ref"])
-                    tn = b.ensure_ref(tx["to_ref"])
-                    b.add_edge(
-                        fn, tn, "transaction", tx.provenance.cite(),
-                        tx_id=str(tx["tx_id"]),
-                        amount=float(tx["amount_usdt"]), remark=(tx["remark"] or ""),
-                        structured=bool(tx["is_structured_round_number"]),
-                    )
-                    for r in (tx["from_ref"], tx["to_ref"]):
-                        cid = None
-                        if r.startswith("uid:"):
-                            cid = int(r[4:])
-                        else:
-                            a = conn.get_address(r)
-                            if a is not None and a["controller_uid"] is not None:
-                                cid = int(a["controller_uid"])
-                        if cid is not None and cid not in discovered:
-                            discovered.add(cid)
-                            next_frontier.add(cid)
+        # transaction edges + counterparty discovery
+        for ref in refs:
+            for tx in conn.transactions_touching(ref):
+                fn = b.ensure_ref(tx["from_ref"])
+                tn = b.ensure_ref(tx["to_ref"])
+                b.add_edge(
+                    fn, tn, "transaction", tx.provenance.cite(),
+                    tx_id=str(tx["tx_id"]),
+                    amount=float(tx["amount_usdt"]), remark=(tx["remark"] or ""),
+                    structured=bool(tx["is_structured_round_number"]),
+                )
+                for r in (tx["from_ref"], tx["to_ref"]):
+                    cid = None
+                    if r.startswith("uid:"):
+                        cid = int(r[4:])
+                    else:
+                        a = conn.get_address(r)
+                        if a is not None and a["controller_uid"] is not None:
+                            cid = int(a["controller_uid"])
+                    if cid is not None and cid not in discovered:
+                        discovered.add(cid)
+                        next_frontier.add(cid)
 
-            # shared-device edges
-            for dev in conn.devices_for(uid):
-                for co in conn.accounts_on_device(dev["device_fingerprint"]):
-                    cu = co["uid"]
-                    if cu == uid:
-                        continue
-                    b.add_edge(src_acct, b.add_account(cu), "shared_device", dev.provenance.cite())
-                    if cu not in discovered:
-                        discovered.add(cu)
-                        next_frontier.add(cu)
+        # shared-device edges
+        for dev in conn.devices_for(uid):
+            for co in conn.accounts_on_device(dev["device_fingerprint"]):
+                cu = co["uid"]
+                if cu == uid:
+                    continue
+                b.add_edge(src_acct, b.add_account(cu), "shared_device", dev.provenance.cite())
+                if cu not in discovered:
+                    discovered.add(cu)
+                    next_frontier.add(cu)
 
-            # reused-KYC edges
-            if acct is not None:
-                for co in conn.accounts_with_kyc(acct["kyc_doc_id"]):
-                    cu = co["uid"]
-                    if cu == uid:
-                        continue
-                    b.add_edge(src_acct, b.add_account(cu), "reused_kyc", co.provenance.cite())
-                    if cu not in discovered:
-                        discovered.add(cu)
-                        next_frontier.add(cu)
+        # reused-KYC edges
+        if acct is not None:
+            for co in conn.accounts_with_kyc(acct["kyc_doc_id"]):
+                cu = co["uid"]
+                if cu == uid:
+                    continue
+                b.add_edge(src_acct, b.add_account(cu), "reused_kyc", co.provenance.cite())
+                if cu not in discovered:
+                    discovered.add(cu)
+                    next_frontier.add(cu)
 
-        frontier = next_frontier
+    walk.frontier = next_frontier
+    walk.hop_stats.append(
+        {"hop": len(walk.hop_stats) + 1, "new_accounts": len(next_frontier)}
+    )
+    return len(next_frontier)
+
+
+def finish_walk(conn: Connectors, walk: ExpansionWalk, max_hops: int) -> NetworkExpansion:
+    """Collapse gas funding, score nodes, and assemble the expansion.
+
+    ``max_hops`` records the *cap* the walk ran under (matching ``expand``'s
+    behaviour even when the agency loop stopped early on an exhausted
+    frontier — the skipped hops were provably no-ops).
+    """
+    b, discovered = walk.builder, walk.discovered
+    subject_uid = b.subject_uid
 
     # gas-funding controller-collapse: a gas link from a controller's wallet to a
     # "non-custodial" hop attributes the hop to that controller and pulls the
@@ -359,4 +401,13 @@ def expand(conn: Connectors, subject_uid: int, max_hops: int = 2) -> NetworkExpa
         sanctioned_addresses_reached=sorted(sanctioned),
         gas_funding_links=gas_links,
         sanctioned_exposed_uids=exposed_uids,
+        hop_stats=list(walk.hop_stats),
     )
+
+
+def expand(conn: Connectors, subject_uid: int, max_hops: int = 2) -> NetworkExpansion:
+    max_hops = clamp_hops(max_hops)
+    walk = start_walk(conn, subject_uid)
+    for _ in range(max_hops):
+        step_walk(conn, walk)
+    return finish_walk(conn, walk, max_hops)
