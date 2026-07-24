@@ -1,4 +1,4 @@
-# Agency Methodology (v1.0.0)
+# Agency Methodology (v1.1.0)
 
 **Status:** synthetic-data research prototype. This document explains what
 "agency" means in Okojo, why every agentic decision is deterministic, and what
@@ -73,15 +73,61 @@ subject's RFI response as* `contradicted`?
 
 - `recommend_re_rfi` — at least `re_rfi_min_contradicted` (= 1) claim was
   adjudicated `contradicted` (the *only* flag verdict — `qualified` and
-  `unverifiable` never trigger this). One deterministic follow-up question is
-  drafted per contradicted claim, restating the subject's own assertion,
-  naming the rebutting evidence surfaces, and carrying their provenance
-  citations.
+  `unverifiable` never trigger this). For each contradicted claim the agent
+  prepares **discrete, standalone routine requests** — a worklist, not a
+  pre-assembled letter — one per disclosable evidence leg, each individually
+  usable and each carrying its provenance citations as analyst metadata.
 - `no_contradictions` / `not_applicable` — no follow-up is proposed.
 
-**Boundary:** the follow-up RFI is **drafted and proposed, never sent**. A
-human investigator decides whether, when, and how to put questions to a
-subject.
+**Boundary:** follow-up material is **prepared, never sent**. The human
+investigator owns assembly, sequencing, and whether to put anything to a
+subject at all.
+
+### Disclosure & anti-tipping-off policy
+
+Warning a subject that their activity is under review or has been reported —
+"tipping off" — is a criminal offense under the AML regimes of, among others,
+the US, UK, EU, and UAE. (Stated at the level of principle; this document is
+not legal advice.) The agent's subject-facing output is therefore built to be
+**structurally incapable** of it, with two layers:
+
+1. **Safe by construction.** Requests are generated only from neutral
+   administrative templates ("as part of a periodic review of your file/
+   corporate records...") that cite nothing but the *may-cite* set:
+   - **the subject's own transaction records** — the on-chain leg asks for the
+     counterparty, commercial purpose, and settlement documentation of named
+     transaction ids drawn from the subject's own rows (gas-funding and
+     address-attribution rows are deliberately excluded: citing them would
+     reveal tracing focus);
+   - **routine corporate documentation** — the registry leg asks generally for
+     the register of directors, group structure with beneficial ownership, and
+     all management/service/agency/intercompany agreements, and deliberately
+     does **not** name the denied entity, so the subject's inclusion *or
+     omission* of the relevant agreement is itself informative;
+   - **the subject's own prior responses** — the prior-RFI leg quotes the
+     earlier response by its reference id and asks for the referenced
+     agreement (a quotable phrase is used only when exactly one clean match
+     exists in the evidence; anything less falls back to a generic phrase).
+
+   The *never-reveal* set is absolute: evidence surfaces and analysis methods,
+   device/session linkage (a **device-sourced contradiction generates no
+   subject-facing request at all** — the leg stays internal), wallet
+   attribution or tracing focus, and any typology, suspicion, or reporting
+   status.
+2. **Fail-closed validation.** Every rendered request must pass
+   `assert_no_tipping_off` — a case-insensitive, stem-based screen over both
+   tipping-off vocabulary (SAR/STR, suspicious, reported, sanctions,
+   investigation, "under review", ...) and tradecraft vocabulary (evidence
+   surfaces, device/fingerprint, structuring/layering, typology terms,
+   advisory ids, ...) — run on the **fully rendered** text, after
+   interpolation, because an interpolated value is the likeliest smuggling
+   path. A request that trips the screen is **suppressed and flagged for human
+   authoring — never emitted.**
+
+The boundary runs between audiences, not topics: internal artifacts — the SAR
+narrative, the contradiction table, the case package, the decision rationales
+— legitimately use the real vocabulary and are out of the validator's scope.
+Text meant for a subject's eyes never is.
 
 ## 4. `sufficiency` — is the evidence sufficient to draft?
 
@@ -117,11 +163,15 @@ disposition, it does not file.
 ## 6. Determinism, replay, and the decision-trace eval
 
 Every rule takes only explicit evidence values (counts, verdicts, coverage) —
-never a ground-truth label, never a subject or claim id. The full trace for a
-run is: the ordered `DecisionRecord`s in the case result, each mirrored by an
-`agency / decision` audit stamp whose JSON round-trips to the in-memory
-record. The decision trace is evaluated against a committed expected-decision
-key (exact match, scored as precision/recall/F1 over
+never a ground-truth label, never a subject or claim id. Each
+`DecisionRecord` carries two renderings of the same decision: `rationale`
+(the audit-exact technical wording) and `plain_language` (the same decision
+in compliance-officer terms, for the investigator reading the screen or the
+case package) — both deterministic functions of the same evidence. The full
+trace for a run is: the ordered `DecisionRecord`s in the case result, each
+mirrored by an `agency / decision` audit stamp whose JSON round-trips to the
+in-memory record. The decision trace is evaluated against a committed
+expected-decision key (exact match, scored as precision/recall/F1 over
 `(subject, decision, outcome)` triples), the same way every other Okojo
 capability ships with its eval.
 
@@ -134,12 +184,12 @@ it is the single source of truth (`okojo.agency.agency_config`) and is
 regression-tested against this document, so the doc and the code can never
 silently drift.
 
-**Version 1.0.0 — canonical policy:**
+**Version 1.1.0 — canonical policy:**
 
 <!-- agency-config:begin -->
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "decision_points": {
     "expand_hop": [
       "continue",
@@ -174,8 +224,22 @@ silently drift.
   "sar_bar_rule": "delegates to the Critic: clears_bar iff the bounded revision loop converged (Critique.meets_bar at the critic_config threshold)",
   "boundaries": {
     "second_advisory": "surfaced to the analyst only; the SAR drafter consumes the primary match alone",
-    "re_rfi": "a follow-up RFI is drafted and proposed, never sent; a human decides",
+    "re_rfi": "discrete routine requests are prepared for the human investigator, who owns assembly and sending; the agent never sends anything",
     "insufficient_evidence": "the case is referred to a human; no draft is attempted and nothing is fabricated"
+  },
+  "followup_disclosure": {
+    "may_cite": [
+      "routine corporate documentation requests",
+      "the subject's own prior responses",
+      "the subject's own transaction records"
+    ],
+    "never_reveal": [
+      "device or session linkage",
+      "evidence surfaces or internal analysis methods",
+      "typology, suspicion, or reporting status",
+      "wallet attribution or tracing focus"
+    ],
+    "validator": "assert_no_tipping_off: fail-closed on every rendered subject-facing request; a failing request is suppressed and flagged for human authoring, never emitted"
   }
 }
 ```

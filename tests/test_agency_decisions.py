@@ -14,6 +14,8 @@ import json
 
 from okojo.agency import (
     DECISION_OUTCOMES,
+    TippingOffRisk,
+    assert_no_tipping_off,
     decide_expand,
     decide_re_rfi,
     decide_sar_bar,
@@ -21,11 +23,14 @@ from okojo.agency import (
     decide_sufficiency,
     draft_followup,
 )
+from okojo.entity import build_backbone, name_tokens
 from okojo.orchestrator import run_case
 from okojo.orchestrator.graph import _human_referral
 from okojo.audit import AuditLog
-from okojo.rfi import check_contradictions, decompose
-from okojo.entity import build_backbone
+from okojo.provenance import Provenance
+from okojo.rfi import ContradictionTable, check_contradictions, decompose
+from okojo.rfi.checkers import Rebuttal
+from okojo.rfi.contradiction import ClaimAdjudication
 
 
 # --- D1 expand_hop -----------------------------------------------------------
@@ -81,22 +86,183 @@ def test_re_rfi_recommended_only_on_contradicted_claims(conn, trust_uid, ground_
     assert decide_re_rfi(table).outcome == "no_contradictions"
 
 
-def test_followup_drafts_one_question_per_contradicted_claim(conn, trust_uid):
+def _trust_followup(conn, trust_uid):
     backbone = build_backbone(conn)
     table = check_contradictions(
         conn, trust_uid, backbone, decomposition=decompose(conn, trust_uid),
     )
-    followup = draft_followup(table)
+    return table, draft_followup(table)
+
+
+def test_followup_prepares_discrete_requests_per_claim(conn, trust_uid):
+    """One worklist entry per contradicted claim; requests are discrete,
+    standalone routine asks — never a pre-assembled letter."""
+    table, followup = _trust_followup(conn, trust_uid)
     assert followup.rfi_id == table.rfi_id
     assert [q.claim_id for q in followup.questions] == [
         a.claim_id for a in table.contradictions
     ]
     for q, adj in zip(followup.questions, table.contradictions):
-        # the question restates the subject's own assertion and cites both the
-        # rebuttal surfaces and their provenance
-        assert adj.claim_text in q.question
-        assert q.sources == adj.sources
-        assert q.citations and all(q.citations)
+        assert q.sources == adj.sources          # analyst metadata preserved
+        assert q.suppressed == []                # nothing tripped the screen
+        for r in q.requests:
+            assert r.citations and all(r.citations)
+
+    # C2 (onchain + prior_rfi + registry) carries all three request kinds;
+    # C4 (onchain only) carries exactly the transaction-records ask.
+    by_claim = {q.claim_id: q for q in followup.questions}
+    assert {r.kind for r in by_claim["C2"].requests} == {
+        "transactions", "corporate_records", "prior_response"}
+    assert [r.kind for r in by_claim["C4"].requests] == ["transactions"]
+
+
+def test_followup_onchain_cites_only_the_subjects_own_transactions(conn, trust_uid):
+    """The transaction ask names the exact tx rows from the rebuttal evidence
+    and never cites gas-funding / address-attribution rows (tracing focus)."""
+    table, followup = _trust_followup(conn, trust_uid)
+    by_claim = {q.claim_id: q for q in followup.questions}
+    for adj in table.contradictions:
+        onchain = [r for r in adj.rebuttals if r.source == "onchain"]
+        tx_ids = {p.row_key for r in onchain for p in r.provenance
+                  if p.source == "transactions"}
+        other_rows = {p.row_key for r in onchain for p in r.provenance
+                      if p.source != "transactions"}
+        tx_req = next(r for r in by_claim[adj.claim_id].requests
+                      if r.kind == "transactions")
+        for tx_id in tx_ids:
+            assert tx_id in tx_req.text
+        for row in other_rows:
+            assert row not in tx_req.text
+
+
+def test_followup_never_names_a_ring_entity(conn, trust_uid):
+    """The corporate-records ask deliberately does NOT name the denied entity
+    — no request text may contain any ring entity's distinctive name tokens
+    (the subject's inclusion or omission of the agreement is the signal)."""
+    _, followup = _trust_followup(conn, trust_uid)
+    ring_tokens = set()
+    for a in conn.all_accounts():
+        if a["role_in_ring"] != "noise":
+            ring_tokens.update(name_tokens(a["entity_name"]))
+    for q in followup.questions:
+        for r in q.requests:
+            low = r.text.lower()
+            for tok in ring_tokens:
+                assert tok not in low, (q.claim_id, r.kind, tok)
+
+
+def test_followup_prior_response_quotes_their_own_reference(conn, trust_uid, ground_truth):
+    """The prior-RFI ask quotes the subject's own earlier response by its
+    reference id (their words are disclosable; our cross-referencing is not)."""
+    _, followup = _trust_followup(conn, trust_uid)
+    prior_reqs = [r for q in followup.questions for r in q.requests
+                  if r.kind == "prior_response"]
+    assert prior_reqs, "C2's prior-RFI leg must yield a request"
+    for r in prior_reqs:
+        assert any(pid in r.text for pid in ground_truth["prior_rfi_ids"])
+        assert "In your response to" in r.text
+
+
+def test_device_only_contradiction_yields_no_subject_request():
+    """Device linkage is internal capability — a claim rebutted ONLY by device
+    evidence generates zero subject-facing requests (and is not 'suppressed';
+    it is policy-excluded)."""
+    adj = ClaimAdjudication(
+        claim_id="CX", claim_text="No third party operates this account.",
+        verdict="contradicted", confidence=0.9,
+        provenance=Provenance(source="rfi", row_key="SIM-RFI-9999"),
+        rebuttals=[Rebuttal(
+            source="device",
+            statement="a shared device fingerprint links the account to another",
+            strength=0.9,
+            provenance=[Provenance(source="devices", row_key="fp:abc")],
+        )],
+    )
+    table = ContradictionTable(rfi_id="SIM-RFI-9999", uid=1, adjudications=[adj])
+    followup = draft_followup(table)
+    assert followup.questions[0].requests == []
+    assert followup.questions[0].suppressed == []
+    assert followup.questions[0].sources == ["device"]
+
+
+# --- anti-tipping-off guardrail (subject-facing text only) -------------------
+
+def test_all_live_requests_pass_the_tipping_off_screen(conn, trust_uid):
+    """Positive calibration: every request the live scenario generates passes
+    the validator (the approved neutral templates must remain clean)."""
+    _, followup = _trust_followup(conn, trust_uid)
+    rendered = [r.text for q in followup.questions for r in q.requests]
+    assert rendered
+    for text in rendered:
+        assert_no_tipping_off(text)  # must not raise
+
+
+def test_tipping_off_screen_catches_dangerous_phrasings():
+    """Negative cases: review/reporting status, evidence surfaces, methods,
+    and typology terms are all caught — on fully rendered text."""
+    import pytest
+
+    dangerous = [
+        "This transaction was flagged as suspicious and reported in a SAR.",
+        "Our compliance investigation found your account under review.",
+        "On-chain evidence is inconsistent with your statement.",
+        "Your device fingerprint matches another account.",
+        "These structured transfers suggest layering through shell entities.",
+        "Records indicate exposure to sanctioned Iranian oil smuggling.",
+        "See FinCEN advisory FIN-2025-A002.",
+        # interpolation smuggling: neutral template + poisoned value
+        "In your response to SIM-RFI-0000, a sanctions evasion agreement was "
+        "referenced. Please provide a copy of that agreement.",
+    ]
+    for text in dangerous:
+        with pytest.raises(TippingOffRisk):
+            assert_no_tipping_off(text)
+
+
+def test_admission_is_fail_closed():
+    """A dangerous rendered request is suppressed and flagged for human
+    authoring — never emitted. (Direct test of the admission helper.)"""
+    from okojo.agency.decisions import _admit
+
+    requests, suppressed = [], []
+    _admit(requests, suppressed, kind="transactions",
+           text="We flagged suspicious transfers to sanctioned wallets.",
+           citations=["transactions[SIMTX000000]"])
+    assert requests == []
+    assert suppressed == ["transactions"]
+
+
+def test_poisoned_extraction_falls_back_to_generic_phrase():
+    """If the quotable phrase extracted from evidence would smuggle a banned
+    term into the rendered request, the generic phrase is used instead."""
+    adj = ClaimAdjudication(
+        claim_id="CY", claim_text="We deny any relationship with that entity.",
+        verdict="contradicted", confidence=0.9,
+        provenance=Provenance(source="rfi", row_key="SIM-RFI-9998"),
+        rebuttals=[Rebuttal(
+            source="prior_rfi",
+            statement="the earlier answer concedes a sanctions evasion agreement",
+            strength=0.9,
+            provenance=[Provenance(source="rfi_prior", row_key="SIM-RFI-0000")],
+        )],
+    )
+    table = ContradictionTable(rfi_id="SIM-RFI-9998", uid=1, adjudications=[adj])
+    followup = draft_followup(table)
+    reqs = followup.questions[0].requests
+    assert len(reqs) == 1 and reqs[0].kind == "prior_response"
+    assert "sanction" not in reqs[0].text.lower()
+    assert "an arrangement bearing on this matter" in reqs[0].text
+    assert_no_tipping_off(reqs[0].text)
+
+
+def test_plain_language_on_every_decision(conn, trust_uid, tmp_path):
+    """Every decision carries a non-empty, ASCII plain-language gloss (it is
+    stamped into the chain and packaged, so it must be audit-safe)."""
+    res = run_case(trust_uid, conn=conn, out_dir=tmp_path / "case", render_graph=False)
+    assert res.decisions
+    for d in res.decisions:
+        assert d.plain_language.strip()
+        assert d.plain_language.isascii()
 
 
 # --- D4 sufficiency ----------------------------------------------------------

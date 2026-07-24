@@ -340,7 +340,9 @@ def _render_decisions(res) -> None:
             _chip(f"{i}. {d.decision_id}", "#475569") + " " + _chip(d.outcome, color),
             unsafe_allow_html=True,
         )
-        st.markdown(d.rationale)
+        st.markdown(d.plain_language)
+        if d.rationale != d.plain_language:
+            st.caption(f"Audit-exact rationale: {d.rationale}")
         with st.expander("Driving evidence"):
             st.json(d.evidence)
         st.markdown("")
@@ -354,14 +356,35 @@ def _render_decisions(res) -> None:
         )
 
     if res.rfi_followup is not None:
-        st.markdown("#### Drafted follow-up RFI (proposed, never sent)")
+        st.markdown("#### Follow-up RFI worklist (prepared, never sent)")
         st.caption(
-            "One deterministic question per contradicted claim, citing the "
-            "rebutting evidence. A human investigator decides whether to send it."
+            "Discrete routine requests per contradicted claim — a worklist, not a "
+            "letter. Assembly, sequencing, and sending are the analyst's decisions. "
+            "Every request cites only the subject's own records and has passed the "
+            "fail-closed anti-tipping-off screen; device-linked findings never "
+            "generate subject-facing requests."
         )
+        _REQUEST_KIND = {
+            "transactions": "Transaction records request",
+            "corporate_records": "Corporate documentation request",
+            "prior_response": "Prior-response follow-up",
+        }
         for q in res.rfi_followup.questions:
-            st.markdown(f"**{q.claim_id}** — {q.question}")
-            st.caption(f"Rebutting sources: {', '.join(q.sources)}")
+            st.markdown(f"**Claim {q.claim_id}** — rebutted by: {', '.join(q.sources)} "
+                        "(analyst-only metadata)")
+            if not q.requests:
+                st.caption(
+                    "No subject-facing request for this claim — its rebuttals are "
+                    "internal-only surfaces (e.g. device linkage is never hinted at)."
+                )
+            for r in q.requests:
+                st.markdown(f"- **{_REQUEST_KIND.get(r.kind, r.kind)}:** {r.text}")
+            if q.suppressed:
+                st.warning(
+                    f"{len(q.suppressed)} request(s) suppressed by the "
+                    "anti-tipping-off screen and flagged for human authoring: "
+                    f"{', '.join(q.suppressed)}."
+                )
 
 
 def main() -> None:

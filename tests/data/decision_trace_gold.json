@@ -1,6 +1,8 @@
 {
   "readme": [
-    "Expected-decision key for the Phase 6 bounded decision points (agency v1.0.0).",
+    "Expected-decision key for the Phase 6 bounded decision points (agency v1.1.0;",
+    "the 1.0.0 -> 1.1.0 bump changed only presentation and the follow-up disclosure",
+    "policy -- no outcome, claim id, or basis below moved).",
     "",
     "AUTHORSHIP. This key is DOMAIN-AUTHORED: every expected outcome below is",
     "derived from (a) the scenario facts the generator plants and (b) the",
@@ -26,7 +28,7 @@
     "",
     "Subjects are keyed by role_in_ring (seed-stable), never by uid."
   ],
-  "agency_version": "1.0.0",
+  "agency_version": "1.1.0",
   "hop_cap": 2,
   "subjects": [
     {

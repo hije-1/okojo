@@ -130,7 +130,8 @@ def test_agency_never_perturbs_the_sar(conn, trust_uid, tmp_path):
     assert res.secondary_advisory.advisory_id not in sar_text
     assert res.rfi_followup is not None
     for q in res.rfi_followup.questions:
-        assert q.question not in sar_text
+        for r in q.requests:
+            assert r.text not in sar_text
 
 
 def test_gold_agency_version_matches_code():

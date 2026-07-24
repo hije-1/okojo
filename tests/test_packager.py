@@ -53,7 +53,7 @@ def test_package_structure_pinned(conn, trust_uid, tmp_path):
     assert pkg["advisory"]["primary"]["advisory_id"] == res.advisory.advisory_id
     assert (pkg["advisory"]["secondary_surfaced"]["advisory_id"]
             == res.secondary_advisory.advisory_id)
-    assert pkg["rfi_followup"]["note"].startswith("drafted and proposed")
+    assert pkg["rfi_followup"]["note"].startswith("discrete routine requests")
     assert pkg["sar_draft"]["claims"]
     assert pkg["critic"]["meets_bar"] is True
     assert pkg["recidivism"]["is_recidivist"] is False

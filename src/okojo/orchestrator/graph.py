@@ -380,12 +380,19 @@ def _decide_re_rfi(state: CaseState) -> CaseState:
 
 
 def _draft_rfi_followup(state: CaseState) -> CaseState:
-    # Drafted and proposed to the human investigator, never sent.
+    # Discrete routine requests prepared for the human investigator (who owns
+    # assembly and sending); every subject-facing text has passed the
+    # fail-closed anti-tipping-off validator, and suppressed counts are
+    # stamped so a refused request is visible in the chain.
     followup = draft_followup(state["contradictions"])
     state["audit"].append(
         "agency", "rfi_followup_drafted", target=followup.rfi_id,
-        detail=json.dumps({"questions": len(followup.questions),
-                           "claim_ids": [q.claim_id for q in followup.questions]}),
+        detail=json.dumps({
+            "claims": len(followup.questions),
+            "claim_ids": [q.claim_id for q in followup.questions],
+            "requests": sum(len(q.requests) for q in followup.questions),
+            "suppressed": sum(len(q.suppressed) for q in followup.questions),
+        }),
         provenance=[a.provenance for a in state["contradictions"].contradictions],
     )
     return {"rfi_followup": followup}

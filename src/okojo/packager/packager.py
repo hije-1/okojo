@@ -146,7 +146,10 @@ def build_package(state: Mapping[str, Any], audit_records: list[dict],
     if followup is not None:
         package["rfi_followup"] = {
             "rfi_id": followup.rfi_id,
-            "note": "drafted and proposed to the human investigator, never sent",
+            "note": "discrete routine requests prepared for the human "
+                    "investigator, who owns assembly and sending; every "
+                    "subject-facing text passed the fail-closed "
+                    "anti-tipping-off screen; the agent never sends anything",
             "questions": [q.model_dump() for q in followup.questions],
         }
 
