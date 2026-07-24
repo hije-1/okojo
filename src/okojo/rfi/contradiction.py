@@ -33,6 +33,7 @@ from pydantic import BaseModel
 
 from ..connectors import Connectors
 from ..entity import EntityBackbone
+from ..provenance import Provenance
 from .checkers import (
     EXCLUSIVE_CONTROL_TERMS,
     RELATIONSHIP_AFFIRMATION_TERMS,
@@ -113,12 +114,18 @@ def _confidence(rebuttals: list[Rebuttal]) -> float:
 
 
 class ClaimAdjudication(BaseModel):
-    """One claim, its verdict, and every piece of evidence behind it."""
+    """One claim, its verdict, and every piece of evidence behind it.
+
+    ``provenance`` points at the RFI row the claim was drawn from, so a
+    downstream consumer (the SAR drafter) can cite **both** sides of a
+    contradiction — the assertion and its rebuttal — without re-querying.
+    """
 
     claim_id: str
     claim_text: str
     verdict: str
     confidence: float
+    provenance: Provenance
     rebuttals: list[Rebuttal] = []
 
     @property
@@ -200,6 +207,7 @@ def check_contradictions(
             claim_text=claim.text,
             verdict=adjudicate_claim(rebuttals, claim.text),
             confidence=_confidence(rebuttals),
+            provenance=claim.provenance,
             rebuttals=rebuttals,
         ))
 

@@ -22,6 +22,7 @@ from ..connectors import Connectors
 from ..network import NetworkExpansion
 from ..provenance import Provenance
 from ..remarks import RemarkTell
+from ..rfi import ContradictionTable
 from .schema import SarClaim, SarDraft, assert_grounded
 from .validate import assert_resolvable
 
@@ -38,6 +39,7 @@ def build_sar(
     tells: list[RemarkTell],
     advisory: Optional[AdvisoryMatch],
     max_tells: int = 4,
+    contradictions: Optional[ContradictionTable] = None,
 ) -> SarDraft:
     subject = conn.get_account(profile.subject_uid)
     claims: list[SarClaim] = []
@@ -103,7 +105,7 @@ def build_sar(
             provenance=list(advisory.provenance),
         ))
 
-    # RFI — surfaced (not adjudicated in Phase 1; contradiction-checking is Phase 5).
+    # RFI — the subject's narrative, surfaced alongside the evidence.
     rfis = conn.rfi_for(profile.subject_uid)
     if rfis:
         rfi = rfis[0]
@@ -112,10 +114,30 @@ def build_sar(
             statement=(
                 f"The subject's RFI response ({rfi['rfi_id']}) states funds derive from lawful "
                 "trade settlement; this assertion is surfaced alongside the above evidence for "
-                "analyst review (claim-by-claim contradiction testing is out of scope this phase)."
+                "analyst review."
             ),
             provenance=[rfi.provenance],
         ))
+
+    # CONTRADICTION — each adjudicated contradiction, citing BOTH sides: the RFI
+    # row carrying the assertion and every evidence row rebutting it. Calibrated
+    # deliberately: the draft says the evidence is *inconsistent with* the
+    # assertion and surfaces it for review; it never concludes the subject lied.
+    if contradictions is not None:
+        for adj in contradictions.contradictions:
+            rebuttal_prov = [p for r in adj.rebuttals for p in r.provenance]
+            claims.append(SarClaim(
+                element="contradiction",
+                statement=(
+                    f"RFI {contradictions.rfi_id} claim {adj.claim_id} asserts: "
+                    f'"{adj.claim_text}" The retrieved evidence is inconsistent with that '
+                    f"assertion on {len(adj.sources)} independent source(s) "
+                    f"({', '.join(adj.sources)}; evidence weight {adj.confidence:.2f}): "
+                    + " ".join(r.statement for r in adj.rebuttals)
+                    + " This contradiction is surfaced for analyst review."
+                ),
+                provenance=_dedup([adj.provenance] + rebuttal_prov),
+            ))
 
     filing_note = "Human review required before any filing decision."
     if advisory is not None:

@@ -224,7 +224,9 @@ def run_case(
         #    hand or flags the residue for human review. Every step is stamped.
         audit.append("sar_drafter", "tool_call", target=f"uid:{subject_uid}")
         audit.append("sar_critic", "critic_config", detail=json.dumps(critic_config()))
-        sar, critique_history = draft_with_critic(conn, profile, expansion, tells, advisory)
+        sar, critique_history = draft_with_critic(
+            conn, profile, expansion, tells, advisory, contradictions=contradictions,
+        )
         crit = critique_history.final
 
         grounding = validate_grounding(conn, sar)

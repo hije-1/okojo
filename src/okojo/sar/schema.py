@@ -27,7 +27,9 @@ class UngroundedClaimError(ValueError):
 
 
 class SarClaim(BaseModel):
-    element: str          # who | what | network | tell | advisory | rfi
+    # who | what | when | where | why/predicate | how | network | tell |
+    # advisory | rfi | contradiction
+    element: str
     statement: str
     provenance: list[Provenance]
 

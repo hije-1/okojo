@@ -24,6 +24,7 @@ from ..aggregator import ProfileTimeline
 from ..connectors import Connectors
 from ..network import NetworkExpansion
 from ..remarks import RemarkTell
+from ..rfi import ContradictionTable
 from .critic import Critique, critique
 from .drafter import build_sar, gap_fill_claims
 from .schema import SarDraft, assert_grounded
@@ -81,12 +82,15 @@ def draft_with_critic(
     tells: list[RemarkTell],
     advisory: Optional[AdvisoryMatch],
     max_iterations: int = MAX_REVISION_ITERATIONS,
+    contradictions: Optional[ContradictionTable] = None,
 ) -> tuple[SarDraft, CritiqueHistory]:
     """Draft, critique, and revise within a deterministic bound.
 
     Returns the (possibly revised) draft and the full :class:`CritiqueHistory`.
     """
-    draft = build_sar(conn, profile, expansion, tells, advisory)  # grounded + validated
+    draft = build_sar(  # grounded + validated
+        conn, profile, expansion, tells, advisory, contradictions=contradictions,
+    )
     critiques = [critique(draft)]
     revisions: list[list[str]] = []
 
