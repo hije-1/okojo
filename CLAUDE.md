@@ -78,9 +78,33 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   all four claims. Rubric deliberately untouched (Critic ablation still 1.0 /
   0.56). Slice A was a **one-time scenario re-baseline** — see DECISIONS §15.
   173 green tests (1 skipped: the ST backend).
+- **Phase 6 (Agency, case-graph memory & audit): COMPLETE.** The fixed pipeline
+  now runs as a compiled **LangGraph state machine** (no checkpointer; zero
+  network calls, socket-guard tested; the mechanical conversion proven
+  byte-identical against the prior linear orchestrator across all 12 roster
+  subjects) with **five bounded, deterministic decision points** — expand
+  another hop? pull a second advisory? re-RFI? evidence sufficient to draft?
+  SAR clears the bar? — each a pure rule over the evidence state, stamped into
+  the audit chain with rationale + driving evidence, and routed on the recorded
+  outcome string so the graph path and the audit trace cannot disagree.
+  Decision effects are boundary-guarded: the runner-up advisory is surfaced
+  only, the follow-up RFI is drafted never sent, the insufficient branch refers
+  to a human. A **persistent case graph** (sqlite, idempotent upserts, no
+  timestamps) records every case + its entity surfaces; at case open the
+  "cleared five prior reviews" recidivist is surfaced with calibrated language.
+  The **Case Packager** emits a decision-ready JSON package built ON the hash
+  chain (every record referenced by seq+hash before the `packaged` stamp; the
+  stamp then carries the package's SHA-256), with the internal-tag red herring
+  preserved as a flag, never obeyed. Two new versioned configs
+  (`agency_config()`, `casegraph_config()`) with published methodology docs and
+  doc<->code anti-drift tests (now six). Evals: decision-trace P/R/F1=1.0
+  (25/25 triples vs a **domain-authored** gold key), recidivism-surfacing
+  P/R/F1=1.0; phase1/phase2/advisory/sar/rfi scorecards byte-identical.
+  9-tab demo (Decisions tab, recidivism banner, package download).
+  211 green tests (1 skipped: the ST backend).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Phase 6** (genuine agency, case-graph memory & audit). Full details in
-  `docs/Build-Plan.md`.
+- **NEXT: Phase 7** (UI & portfolio polish, reliability hardening). Full details
+  in `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.
