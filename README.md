@@ -4,12 +4,13 @@
 
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
-> **Status:** Phases 0–4 complete, built in the open. A synthetic case flows
+> **Status:** Phases 0–5 complete, built in the open. A synthetic case flows
 > end-to-end — unified profile → 1–7-hop network expansion → on-chain risk
 > scoring → remark/tell mining + sanctions screening → hybrid FinCEN-advisory
-> matching → a **grounded, self-critiquing SAR draft** — over a tamper-evident,
-> hash-chained audit trail, with an 8-tab Streamlit demo. **Next (Phase 5):** the
-> RFI Contradiction-Checker. This repository is a portfolio project; the remaining
+> matching → a **claim-by-claim RFI contradiction table** → a **grounded,
+> self-critiquing SAR draft** — over a tamper-evident, hash-chained audit trail,
+> with an 8-tab Streamlit demo. **Next (Phase 6):** genuine agency, case-graph
+> memory and audit. This repository is a portfolio project; the remaining
 > capabilities land phase by phase (see the roadmap).
 
 Okojo is a research prototype of an **agentic AI co-pilot for financial-crime
@@ -19,8 +20,10 @@ on-chain entity cluster, mines user-generated tells, checks a subject's
 request-for-information (RFI) answers against the evidence, grounds its findings
 in the relevant FinCEN advisories, and drafts an intelligence-rich Suspicious
 Activity Report — handing a human a decision-ready package with a complete,
-tamper-evident audit trail. (The current build surfaces the RFI read-only;
-claim-by-claim contradiction checking lands in Phase 5.)
+tamper-evident audit trail. (The current build decomposes the RFI response into
+discrete claims and tests each against corporate-registry, prior-RFI, on-chain
+and device evidence, emitting a contradiction table with a citation behind every
+rebuttal.)
 
 ---
 
@@ -116,10 +119,9 @@ inspectable state machine (legibility is a compliance feature):
 8. **Case Packager + persistent case graph** — decision-ready package, append-only audit log, cross-case recidivism.
 9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
 
-**Built so far (Phases 1–4):** components 1–4, 6, and 7 (the RFI, component 5, is
-currently surfaced read-only). **Next (Phase 5):** the RFI Contradiction-Checker;
-components 8–9 follow in later phases. The numbering reflects the target design,
-not build order.
+**Built so far (Phases 1–5):** components 1–7. **Next (Phase 6):** genuine
+agency, case-graph memory and the full audit trail; components 8–9 follow in
+later phases. The numbering reflects the target design, not build order.
 
 **Roadmap (post-v1.0):** ML alert auto-closure QA · vendor reconciliation ·
 tokenized-commodity issuance tracing · multilingual OSINT verifier · LE-request/MLAT routing.

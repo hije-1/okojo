@@ -1,9 +1,10 @@
-"""Okojo — Streamlit demo (Phase 4).
+"""Okojo — Streamlit demo (Phase 5).
 
 Pick a synthetic subject and watch one case flow end-to-end: an anomaly-flagged
 timeline, the network graph with gas-funding collapse, per-account on-chain
 sanctioned-exposure scoring, remark tells, SDN/alias watchlist screening, the
-matched FinCEN advisory, a grounded SAR draft, and the tamper-evident audit trail.
+matched FinCEN advisory, a claim-by-claim RFI contradiction table, a grounded
+SAR draft, and the tamper-evident audit trail.
 
 Run it:
     streamlit run app/streamlit_app.py
@@ -202,22 +203,33 @@ def _render_roster(roster, risk_by_uid=None) -> None:
                     )
 
 
-# RFI claim ground-truth label -> (display text, accent colour). Scenario-declared,
-# not the output of a live contradiction engine.
-_RFI_GT = {
-    "false": ("False — contradicted (scenario)", "#dc2626"),
-    "partly_true_but_omits_control": ("Partly true — omits control", "#f59e0b"),
-    "unverifiable": ("Unverifiable", "#6b7280"),
-    "true": ("Consistent with evidence", "#16a34a"),
+# Adjudicated verdict -> (display text, accent colour). These are the LIVE output
+# of the contradiction checker, not scenario labels.
+_RFI_VERDICT = {
+    "contradicted": ("Contradicted by evidence", "#dc2626"),
+    "qualified": ("Qualified — evidence cuts against part of it", "#f59e0b"),
+    "uncontested": ("Tested, nothing found against it", "#16a34a"),
+    "unverifiable": ("Unverifiable — no evidence speaks to it", "#6b7280"),
+}
+
+# Evidence surface -> how it is described in the UI.
+_RFI_SOURCE_LABEL = {
+    "registry": "Corporate registry",
+    "prior_rfi": "Subject's own prior RFI",
+    "onchain": "On-chain flows",
+    "device": "Device data",
 }
 
 
-def _render_rfi(rfi) -> None:
-    st.subheader("Request for Information (RFI)")
+def _render_rfi(rfi, table=None, decomposition=None) -> None:
+    st.subheader("RFI contradiction table")
     st.caption(
-        "Read-only view of the subject's RFI. Claim assessments are **declared by the "
-        "synthetic scenario** (ground truth), not the output of a live analysis — automated "
-        "claim-by-claim contradiction testing is the Phase 5 RFI Contradiction-Checker."
+        "Each claim in the subject's response is tested against corporate-registry, "
+        "prior-RFI, on-chain and device evidence. Verdicts and confidences below are "
+        "**produced live by the checker**, not scenario labels. Only *contradicted* is a "
+        "flag; *qualified* and *unverifiable* are deliberately kept separate so the "
+        "checker cannot inflate its own hit rate. Every verdict is proposed for human "
+        "review — none is a determination."
     )
     if rfi is None:
         st.info(
@@ -232,18 +244,50 @@ def _render_rfi(rfi) -> None:
     st.markdown("**Account-holder response**")
     st.markdown(f"> {rfi.response_text}")
 
+    if table is None:
+        st.warning("Contradiction checker did not run for this subject.")
+        return
+
+    s = table.summary()
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Claims tested", s["claims"])
+    c2.metric("Contradicted", s["contradicted"])
+    c3.metric("Qualified", s["verdicts"]["qualified"])
+
     st.markdown("---")
-    st.markdown(f"**Decomposed claims ({len(rfi.claims)})**")
-    for c in rfi.claims:
-        label, color = _RFI_GT.get(c.ground_truth, (c.ground_truth or "unlabelled", _RISK_GREY))
-        st.markdown(
-            f"{_chip(f'{c.claim_id} · {label}', color)}<br>{c.text}",
-            unsafe_allow_html=True,
-        )
-        if c.contradicted_by:
-            st.caption("Scenario notes this is contradicted by:")
-            for note in c.contradicted_by:
-                st.markdown(f"- {note}")
+    aligned = {c.claim_id: c for c in (decomposition.claims if decomposition else [])}
+    for adj in table.adjudications:
+        label, color = _RFI_VERDICT.get(adj.verdict, (adj.verdict, _RISK_GREY))
+        chips = _chip(f"{adj.claim_id} · {label}", color)
+        if adj.rebuttals:
+            chips += "  " + _chip(f"evidence weight {adj.confidence:.2f}", "#334155")
+        st.markdown(f"{chips}<br>{adj.claim_text}", unsafe_allow_html=True)
+
+        src = aligned.get(adj.claim_id)
+        if src is not None:
+            st.caption(
+                f"Decomposed from the response (alignment {src.alignment_score:.0f}): "
+                f"“{src.source_sentence}”"
+            )
+
+        if adj.rebuttals:
+            with st.expander(
+                f"{len(adj.rebuttals)} rebuttal(s) across "
+                f"{len(adj.sources)} source(s): {', '.join(adj.sources)}"
+            ):
+                for r in adj.rebuttals:
+                    st.markdown(
+                        f"**{_RFI_SOURCE_LABEL.get(r.source, r.source)}** "
+                        f"· weight {r.strength:.2f}"
+                    )
+                    st.markdown(r.statement)
+                    st.caption(f"Cites: {r.cite()}")
+                    st.markdown("")
+        elif adj.verdict == "unverifiable":
+            st.caption(
+                "No probe can test this assertion — the evidence is silent either way. "
+                "That is a reported outcome, not a pass."
+            )
         st.markdown("")
 
 
@@ -253,7 +297,7 @@ def main() -> None:
         "Okojo — Agentic Crypto-Investigations Co-Pilot</h1>",
         unsafe_allow_html=True,
     )
-    st.caption("Phase 4 · **fully synthetic data** · a human reviews, decides, and files.")
+    st.caption("Phase 5 · **fully synthetic data** · a human reviews, decides, and files.")
 
     try:
         conn = get_connectors()
@@ -514,7 +558,7 @@ def main() -> None:
 
     # -- RFI --------------------------------------------------------------- #
     with tab_rfi:
-        _render_rfi(res.rfi)
+        _render_rfi(res.rfi, res.contradictions, res.rfi_decomposition)
 
     # -- Advisory ---------------------------------------------------------- #
     with tab_advisory:

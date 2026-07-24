@@ -61,8 +61,25 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   vs WITHOUT recall 0.56), and a "Critic review" UI (grade + revision trail +
   human-fallback banner). Screener/scorer/advisory scorecards byte-identical;
   generator byte-identical. 131 green tests (1 skipped: the ST backend).
+- **Phase 5 (RFI Contradiction-Checker): COMPLETE.** The RFI moves from *surfaced*
+  to *adjudicated*: the response is decomposed into discrete claims (sentence
+  split + RapidFuzz alignment, labels never read), then each claim is tested by
+  four adversarial probes — corporate-registry common directorship, the subject's
+  **own prior RFI answer**, on-chain flows, and device sharing — whose
+  applicability is derived from the claim's **text**, never its id. A
+  corroboration gate yields four verdicts (`contradicted` / `qualified` /
+  `uncontested` / `unverifiable`) with a noisy-OR confidence; only *contradicted*
+  is a flag. A versioned `contradiction_config()` is stamped into the audit chain,
+  a public `docs/rfi-contradiction-methodology.md` (doc↔code anti-drift test)
+  publishes every weight, and confirmed contradictions enter the SAR as
+  `element="contradiction"` claims citing **both** the RFI row and the rebutting
+  evidence row (two-stage fail-closed grounding). Eval: detection P/R/F1=1.0
+  (positive class = *contradicted*), verdict + source discrimination 4/4 across
+  all four claims. Rubric deliberately untouched (Critic ablation still 1.0 /
+  0.56). Slice A was a **one-time scenario re-baseline** — see DECISIONS §15.
+  173 green tests (1 skipped: the ST backend).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Phase 5** (RFI Contradiction-Checker). Full details in
+- **NEXT: Phase 6** (genuine agency, case-graph memory & audit). Full details in
   `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
