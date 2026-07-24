@@ -13,10 +13,26 @@ from .claims import (
     decompose,
     split_sentences,
 )
+from .checkers import CHECKERS, SOURCE_KEYS, Rebuttal, run_checkers
+from .contradiction import (
+    CONTRADICTION_VERSION,
+    MIN_CORROBORATING_SOURCES,
+    STRONG_REBUTTAL,
+    VERDICTS,
+    ClaimAdjudication,
+    ContradictionTable,
+    adjudicate_claim,
+    check_contradictions,
+    contradiction_config,
+)
 from .reader import RfiClaim, RfiView, load_rfi
 
 __all__ = [
     "RfiClaim", "RfiView", "load_rfi",
     "ExtractedClaim", "RfiDecomposition", "decompose", "split_sentences",
     "MIN_ALIGNMENT",
+    "Rebuttal", "run_checkers", "CHECKERS", "SOURCE_KEYS",
+    "ClaimAdjudication", "ContradictionTable", "check_contradictions",
+    "adjudicate_claim", "contradiction_config", "CONTRADICTION_VERSION",
+    "STRONG_REBUTTAL", "MIN_CORROBORATING_SOURCES", "VERDICTS",
 ]

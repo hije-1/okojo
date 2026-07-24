@@ -2,7 +2,7 @@
 
 Runs one synthetic case end-to-end through a *thin* version of every stage:
 connectors -> Profile Aggregator -> Network Expander -> Remark Miner ->
-Advisory Matcher -> SAR Drafter -> Case Packager. Control flow is a plain,
+Advisory Matcher -> RFI Contradiction-Checker -> SAR Drafter -> Case Packager. Control flow is a plain,
 legible sequence (the deterministic backbone is itself a compliance feature);
 bounded agentic decision points and LangGraph arrive in Phase 6.
 
@@ -32,7 +32,15 @@ from ..connectors import Connectors
 from ..entity import build_backbone
 from ..network import NetworkExpansion, expand, render
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
-from ..rfi import RfiView, load_rfi
+from ..rfi import (
+    ContradictionTable,
+    RfiDecomposition,
+    RfiView,
+    check_contradictions,
+    contradiction_config,
+    decompose,
+    load_rfi,
+)
 from ..sar import (
     Critique,
     CritiqueHistory,
@@ -55,6 +63,8 @@ class CaseResult:
     tells: list[RemarkTell]
     alias_hits: list[AliasMatch]
     rfi: Optional[RfiView]
+    rfi_decomposition: Optional[RfiDecomposition]
+    contradictions: Optional[ContradictionTable]
     advisory: Optional[AdvisoryMatch]
     sar: SarDraft
     critique: Optional[Critique]
@@ -173,11 +183,39 @@ def run_case(
                      detail=(advisory.advisory_id if advisory else "no match"),
                      provenance=(advisory.provenance if advisory else None))
 
-        # 4b) RFI surfacing (read-only; claim-by-claim adjudication is Phase 5)
+        # 4b) RFI surfacing (read-only view for the analyst)
         rfi_view = load_rfi(conn, subject_uid)
         audit.append("rfi_reader", "rfi_surfaced", target=f"uid:{subject_uid}",
                      detail=(rfi_view.rfi_id if rfi_view else "no rfi"),
                      provenance=(rfi_view.provenance if rfi_view else None))
+
+        # 4c) RFI Contradiction-Checker: decompose the response into discrete
+        #     claims, then test each adversarially against registry, prior-RFI,
+        #     on-chain and device evidence. Only the RFI under review is
+        #     adjudicated; a prior answer is consumed as a rebuttal source.
+        decomposition: Optional[RfiDecomposition] = None
+        contradictions: Optional[ContradictionTable] = None
+        if rfi_view is not None:
+            audit.append("rfi_checker", "tool_call", target=f"uid:{subject_uid}")
+            # Stamp the versioned adjudication policy into the hash chain, so any
+            # historical verdict can be reproduced exactly (defensibility),
+            # mirroring risk_scorer/scoring_config and advisory/retrieval_config.
+            audit.append("rfi_checker", "contradiction_config",
+                         detail=json.dumps(contradiction_config()))
+            decomposition = decompose(conn, subject_uid)
+            audit.append("rfi_checker", "decomposed", target=f"uid:{subject_uid}",
+                         detail=json.dumps(decomposition.summary()),
+                         provenance=decomposition.claims[0].provenance
+                         if decomposition and decomposition.claims else None)
+            contradictions = check_contradictions(
+                conn, subject_uid, backbone, decomposition=decomposition,
+            )
+            audit.append("rfi_checker", "adjudicated", target=f"uid:{subject_uid}",
+                         detail=json.dumps(contradictions.summary()))
+            for adj in contradictions.adjudications:
+                audit.append("rfi_checker", "claim_verdict",
+                             target=f"{contradictions.rfi_id}:{adj.claim_id}",
+                             detail=json.dumps(adj.summary()))
 
         # 5) SAR Drafter + Critic (grounded, self-critiquing). draft_with_critic
         #    builds a grounded first draft (fail-closed on any uncitable or
@@ -228,6 +266,8 @@ def run_case(
             tells=tells,
             alias_hits=alias_hits,
             rfi=rfi_view,
+            rfi_decomposition=decomposition,
+            contradictions=contradictions,
             advisory=advisory,
             sar=sar,
             critique=crit,
