@@ -25,6 +25,7 @@ Determinism posture (a compliance feature, not an afterthought):
 
 from __future__ import annotations
 
+import hashlib
 import json
 import warnings
 from functools import lru_cache
@@ -76,6 +77,7 @@ from ..network import (
     start_walk,
     step_walk,
 )
+from ..packager import build_package
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import (
     ContradictionTable,
@@ -145,6 +147,8 @@ class CaseState(TypedDict, total=False):
     critique_history: Optional[CritiqueHistory]
     # the bounded decision trace, in the order the decisions were taken
     decisions: list[DecisionRecord]
+    package_path: Path
+    package_sha256: str
     audit_records: list[dict]
     audit_verified: bool
 
@@ -455,19 +459,37 @@ def _decide_sar_bar(state: CaseState) -> CaseState:
     return _record_decision(state, decide_sar_bar(state["critique_history"]))
 
 
-def _package(state: CaseState) -> Optional[CaseState]:
-    audit, subject_uid = state["audit"], state["subject_uid"]
-    audit.append("case_packager", "packaged", target=f"uid:{subject_uid}",
-                 detail="decision-ready package assembled (human review required)")
-    return None  # audit stamp only; None (not {}) is LangGraph's no-state-update
+def _package(state: CaseState) -> CaseState:
+    # The decision-ready package, built ON the audit trail: the chain state is
+    # captured BEFORE the packaged stamp (a record cannot contain its own
+    # hash), then the stamp carries the package file's SHA-256 — the log
+    # covers the package and the package pins the log.
+    audit, out_dir = state["audit"], state["out_dir"]
+    records = audit.read_all()
+    package = build_package(state, audit_records=records,
+                            audit_verified=audit.verify())
+    payload = json.dumps(package, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+    package_path = out_dir / "case_package.json"
+    # newline pinned to \n so the on-disk bytes equal the hashed payload on
+    # every platform (write_text would otherwise translate to \r\n on Windows)
+    package_path.write_text(payload, encoding="utf-8", newline="\n")
+    sha = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+    audit.append("case_packager", "packaged", target=_rel(package_path),
+                 detail=json.dumps({
+                     "package": "case_package.json",
+                     "sha256": sha,
+                     "disposition": package["disposition"],
+                     "note": "decision-ready package assembled (human review required)",
+                 }))
+    return {"package_path": package_path, "package_sha256": sha}
 
 
 def _record_case(state: CaseState) -> Optional[CaseState]:
     # Persist this case and its entities into the cross-case graph, so future
     # cases can surface the overlap at open. Idempotent: a re-run replaces the
     # case's rows, never duplicates them. The recorded audit tip covers every
-    # record up to packaging; the case_recorded stamp itself follows the write
-    # (a record cannot contain its own hash).
+    # record through the packaged stamp; the case_recorded stamp itself
+    # follows the write (a record cannot contain its own hash).
     conn, audit, subject_uid = state["conn"], state["audit"], state["subject_uid"]
     decisions = state.get("decisions", [])
     sar_bar = next((d for d in decisions if d.decision_id == "sar_bar"), None)
@@ -486,6 +508,7 @@ def _record_case(state: CaseState) -> Optional[CaseState]:
         audit_tip_hash=records[-1]["hash"],
         audit_record_count=len(records),
         counterparty_uids=counterparties,
+        package_sha256=state.get("package_sha256"),
     )
     audit.append("case_graph", "case_recorded", target=case_id,
                  detail=json.dumps({"disposition": disposition,

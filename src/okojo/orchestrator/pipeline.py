@@ -61,6 +61,9 @@ class CaseResult:
     rfi_followup: Optional[RfiFollowUp] = None
     # Phase 6: what the persistent case graph knew at case open.
     recidivism: Optional[RecidivismView] = None
+    # Phase 6: the decision-ready package, built on the audit trail.
+    package_path: Optional[Path] = None
+    package_sha256: Optional[str] = None
 
 
 def default_out_dir(subject_uid: int) -> Path:
@@ -133,6 +136,8 @@ def run_case(
             secondary_advisory=final.get("secondary_advisory"),
             rfi_followup=final.get("rfi_followup"),
             recidivism=final.get("recidivism"),
+            package_path=final.get("package_path"),
+            package_sha256=final.get("package_sha256"),
         )
     finally:
         if owns_conn:

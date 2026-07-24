@@ -1,4 +1,4 @@
-"""Okojo — Streamlit demo (Phase 5).
+"""Okojo — Streamlit demo (Phase 6).
 
 Pick a synthetic subject and watch one case flow end-to-end: an anomaly-flagged
 timeline, the network graph with gas-funding collapse, per-account on-chain
@@ -23,6 +23,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from okojo.advisory import RETRIEVAL_VERSION, retrieval_config
+from okojo.casegraph import CaseGraphStore
 from okojo.connectors import Connectors
 from okojo.network import build_roster
 from okojo.orchestrator import run_case
@@ -291,13 +292,85 @@ def _render_rfi(rfi, table=None, decomposition=None) -> None:
         st.markdown("")
 
 
+_DECISION_OUTCOME_COLOR = {
+    "continue": "#334155", "stop_cap": _RISK_GREY, "stop_frontier_exhausted": _RISK_GREY,
+    "pull_second": "#334155", "single_match": _RISK_GREY, "no_match": _RISK_GREY,
+    "recommend_re_rfi": "#f59e0b", "no_contradictions": "#16a34a",
+    "not_applicable": _RISK_GREY,
+    "sufficient": "#16a34a", "insufficient": "#f59e0b",
+    "clears_bar": "#16a34a", "human_review": "#f59e0b",
+}
+
+
+def _render_decisions(res) -> None:
+    st.subheader("Bounded decision trace")
+    st.caption(
+        "Every agentic decision is a deterministic rule over the evidence state — "
+        "same case, same trace, every time — and each is stamped into the audit "
+        "chain with its rationale and driving evidence. The agent proposes, "
+        "surfaces, drafts, and flags; a human decides. "
+        "See docs/agency-methodology.md."
+    )
+
+    if res.recidivism is not None:
+        view = res.recidivism
+        st.markdown("#### Case-graph memory at open")
+        if view.is_recidivist:
+            st.error(
+                f"Recidivism surfaced: **{view.prior_review_count} prior review(s)**, "
+                f"status `{view.account_status}` — prior cleared reviews do not "
+                "exempt a subject. Surfaced for human review, not a determination."
+            )
+        else:
+            st.caption(
+                f"History clear at open: {view.prior_review_count} prior review(s), "
+                f"status {view.account_status}."
+            )
+        if view.entity_overlaps:
+            with st.expander(
+                f"{len(view.entity_overlaps)} cross-case entity overlap(s) on record"
+            ):
+                for o in view.entity_overlaps:
+                    st.markdown(f"- `{o.kind}` **{o.key}** seen in: {', '.join(o.case_ids)}")
+
+    st.markdown("#### Decisions taken")
+    for i, d in enumerate(res.decisions, start=1):
+        color = _DECISION_OUTCOME_COLOR.get(d.outcome, _RISK_GREY)
+        st.markdown(
+            _chip(f"{i}. {d.decision_id}", "#475569") + " " + _chip(d.outcome, color),
+            unsafe_allow_html=True,
+        )
+        st.markdown(d.rationale)
+        with st.expander("Driving evidence"):
+            st.json(d.evidence)
+        st.markdown("")
+
+    if res.secondary_advisory is not None:
+        st.markdown("#### Runner-up advisory (surfaced, not drafted)")
+        st.info(
+            f"`{res.secondary_advisory.advisory_id}` also passed the corroboration "
+            "gate and is surfaced for analyst context. The SAR draft consumes the "
+            "primary match alone."
+        )
+
+    if res.rfi_followup is not None:
+        st.markdown("#### Drafted follow-up RFI (proposed, never sent)")
+        st.caption(
+            "One deterministic question per contradicted claim, citing the "
+            "rebutting evidence. A human investigator decides whether to send it."
+        )
+        for q in res.rfi_followup.questions:
+            st.markdown(f"**{q.claim_id}** — {q.question}")
+            st.caption(f"Rebutting sources: {', '.join(q.sources)}")
+
+
 def main() -> None:
     st.markdown(
         "<h1 style='font-size:1.6rem;font-weight:700;margin:0 0 0.25rem;'>"
         "Okojo — Agentic Crypto-Investigations Co-Pilot</h1>",
         unsafe_allow_html=True,
     )
-    st.caption("Phase 5 · **fully synthetic data** · a human reviews, decides, and files.")
+    st.caption("Phase 6 · **fully synthetic data** · a human reviews, decides, and files.")
 
     try:
         conn = get_connectors()
@@ -370,11 +443,20 @@ def main() -> None:
             "**flagged for review, not obeyed.**"
         )
 
+    if res.recidivism is not None and res.recidivism.is_recidivist:
+        st.error(
+            f"**Recidivism surfaced at case open:** {res.recidivism.prior_review_count} "
+            f"prior review(s), status `{res.recidivism.account_status}` — prior cleared "
+            "reviews do not exempt a subject. Surfaced for human review "
+            "(details in the Decisions tab)."
+        )
+
     names = {a["uid"]: a["entity_name"] for a in accounts}
 
     (tab_sanctions, tab_timeline, tab_network, tab_tells, tab_rfi,
-     tab_advisory, tab_sar, tab_audit) = st.tabs(
-        ["Sanctions", "Timeline", "Network", "Tells", "RFI", "Advisory", "SAR draft", "Audit trail"]
+     tab_advisory, tab_decisions, tab_sar, tab_audit) = st.tabs(
+        ["Sanctions", "Timeline", "Network", "Tells", "RFI", "Advisory",
+         "Decisions", "SAR draft", "Audit trail"]
     )
 
     # -- Sanctions (gating control: watchlist name-match + on-chain exposure) -- #
@@ -540,7 +622,9 @@ def main() -> None:
             "live case-management status."
         )
         risk_by_uid = {s.uid: s for s in res.risk.scores}
-        roster = build_roster(conn, res.expansion, default_out_dir(subject_uid).parent)
+        cases_dir = default_out_dir(subject_uid).parent
+        roster = build_roster(conn, res.expansion, cases_dir,
+                              store=CaseGraphStore(cases_dir / "case_graph.sqlite"))
         _render_roster(roster, risk_by_uid)
 
     # -- Tells ------------------------------------------------------------- #
@@ -614,6 +698,10 @@ def main() -> None:
                 st.json(cfg)
         else:
             st.info("No advisory matched (event-triggered on RFI key terms).")
+
+    # -- Decisions (bounded agency + case-graph memory) --------------------- #
+    with tab_decisions:
+        _render_decisions(res)
 
     # -- SAR draft --------------------------------------------------------- #
     with tab_sar:
@@ -694,6 +782,23 @@ def main() -> None:
             for r in res.audit_records
         ])
         st.dataframe(audit_df, use_container_width=True, hide_index=True)
+
+        if res.package_path is not None and res.package_path.exists():
+            st.markdown("---")
+            st.subheader("Decision-ready case package")
+            st.caption(
+                "Assembled ON the audit trail: the package references each chain "
+                "record by (seq, hash), and the chain's `packaged` stamp carries "
+                "the package file's SHA-256 — the log covers the package and the "
+                "package pins the log. Assembled for human review; nothing is filed."
+            )
+            st.download_button(
+                "Download case_package.json",
+                data=res.package_path.read_bytes(),
+                file_name=f"case_{res.subject_uid}_package.json",
+                mime="application/json",
+            )
+            st.caption(f"SHA-256: `{res.package_sha256}`")
 
 
 if __name__ == "__main__":
