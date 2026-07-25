@@ -306,3 +306,9 @@ _Added Day 6 (Phase 7, during UI polish). Companion to §15._
 - **A re-baseline, not an exemption.** As with §15: the determinism contract is
   restored in full immediately, and the eval answer key was untouched — no
   metric moved (all capability scorecards re-verified after the change).
+- **Known gap, recorded (Phase 7).** `PACKAGE_VERSION`
+  (`src/okojo/packager/packager.py`) is the one version constant with no
+  methodology doc and no doc↔code anti-drift guard, unlike the six others
+  (scoring, retrieval, critic, contradiction, agency, casegraph). Deliberately
+  not fixed under polish; it rides with the grounding-completeness slice, where
+  the version-bump and doc-regeneration machinery is already open.

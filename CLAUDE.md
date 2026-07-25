@@ -103,8 +103,25 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   9-tab demo (Decisions tab, recidivism banner, package download).
   211 green tests (1 skipped: the ST backend).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **NEXT: Phase 7** (UI & portfolio polish, reliability hardening). Full details
-  in `docs/Build-Plan.md`.
+- **Phase 7 (UI & portfolio polish, reliability hardening): IN PROGRESS.**
+  Landed so far: the graph-render guard (failure degrades and is audit-stamped,
+  never aborts; happy path byte-identical), the **reliability harness**
+  (`tests/test_reliability.py` — full pipeline over every subject incl. the
+  isolated degenerates: grounding/resolution everywhere, content-verified
+  render, loop bounds incl. the measured LangGraph superstep count, flagged
+  fallback on non-convergence, plus the two-number subject-closure diagnostic
+  that scopes the upcoming grounding-completeness slice), **UI provenance
+  completion** (every surfaced claim renders its pointer; shared `_cites`
+  formatter) + rebuilt Audit/Timeline/Tells tabs (hash chain shown with its
+  hashes; chronological timeline with anomaly pins), a **registration-date
+  coherence re-baseline** (DECISIONS §17; 21 impossible account histories
+  fixed, RNG-free clamp, guard test), and the README rewritten as a board
+  brief (problem framing, mermaid architecture diagram, six-part Responsible
+  AI section incl. anti-tipping-off at principle level). Remaining: demo shot
+  list, the grounding-completeness slice (proposed separately), sign-off.
+  236 green tests (1 skipped). **Three hand-maintained status surfaces** —
+  this block, the README status block, and the app's `_PHASE` caption — update
+  all three at every sign-off.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.

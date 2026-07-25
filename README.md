@@ -4,27 +4,37 @@
 
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
-> **Status:** Phases 0–6 complete, built in the open. A synthetic case flows
-> end-to-end — unified profile → 1–7-hop network expansion → on-chain risk
-> scoring → remark/tell mining + sanctions screening → hybrid FinCEN-advisory
-> matching → a **claim-by-claim RFI contradiction table** → a **grounded,
-> self-critiquing SAR draft** — orchestrated as a **LangGraph state machine with
-> five bounded, deterministic, audit-stamped decision points**, over a
-> **persistent case graph** that surfaces cross-case recidivism at case open,
-> ending in a **decision-ready case package built on the tamper-evident,
-> hash-chained audit trail**, with a 9-tab Streamlit demo. **Next (Phase 7):**
-> UI & portfolio polish, reliability hardening. This repository is a portfolio
-> project; the remaining capabilities land phase by phase (see the roadmap).
+> **Status:** Phases 0–6 complete; Phase 7 (reliability hardening & polish) in
+> progress. Fully synthetic data, built in the open. Details in
+> [Status & roadmap](#status--roadmap).
 
-Okojo is a research prototype of an **agentic AI co-pilot for financial-crime
-investigations at a crypto exchange**. In the full v1.0 design, given a flagged
-account, it assembles a unified subject profile, expands the account into its
-on-chain entity cluster, mines user-generated tells, checks a subject's
-request-for-information (RFI) answers against the evidence, grounds its findings
-in the relevant FinCEN advisories, and drafts an intelligence-rich Suspicious
-Activity Report — handing a human a decision-ready package with a complete,
-tamper-evident audit trail. (The current build covers all of this except the
-designation-triggered remediation sweep, the v1.0 capstone.)
+## The problem
+
+Financial-crime investigation at a crypto exchange fails in well-documented
+ways. Investigators write **defensive SARs** — narratives assembled under
+deadline from whatever a dozen disconnected systems would surrender, thin on
+the on-chain story a regulator actually wants. Reviews run **account by
+account** while the risk lives at the **cluster level** — the shell ring, the
+shared device, the wallet whose gas someone else quietly pays. And the record
+of who looked at what, and why a case was closed, lives in systems that the
+documented failure mode — **governance capture**, where "internal account"
+tags shield subjects and records go missing — was able to defeat.
+
+Okojo is a research prototype exploring how an agentic AI co-pilot addresses
+all three, built the way a regulator would want it built: every factual claim
+carries a provenance pointer, every action lands in a tamper-evident audit
+trail, and a human — always — reviews, decides, and files.
+
+## What it does
+
+Given a flagged account on **fully synthetic data**, Okojo assembles a unified
+subject profile, expands the account into its network (shared devices, reused
+KYC documents, gas-funding linkage), scores on-chain sanctioned exposure,
+mines free-text remarks for attribution tells, tests the subject's own
+RFI answers against the evidence claim by claim, matches the case to the
+relevant FinCEN advisories, and drafts a grounded, self-critiquing Suspicious
+Activity Report — handing the human investigator a decision-ready package
+built on the audit trail itself.
 
 ---
 
@@ -52,6 +62,145 @@ over. Patterns are not people.
 
 ---
 
+## Architecture
+
+One case runs as a compiled **LangGraph state machine** — deterministic by
+design (legibility is a compliance feature), with agency confined to **five
+bounded decision points**, each a pure rule over the evidence state, stamped
+into the audit chain with its rationale, and routed on the recorded outcome so
+the path taken and the audit trace cannot disagree.
+
+```mermaid
+flowchart TD
+    EV[("Synthetic evidence stores<br/>(KYC · ledger · device/IP · RFI · registry)")]
+    CG[("Persistent case graph<br/>(cross-case recidivism)")]
+
+    EV --> PA["1 · Profile Aggregator"]
+    CG -. "history surfaced at case open" .-> PA
+    PA --> NE["2 · Network Expander"]
+    NE --> D1{"expand another hop?"}
+    D1 -- "continue (≤ 7)" --> NE
+    D1 -- "stop" --> RS["3 · On-chain Risk Scorer"]
+    RS --> TM["4 · Remark/Tell Miner + watchlist screening"]
+    TM --> AM["6 · Advisory Matcher"]
+    AM --> D2{"second advisory?"}
+    D2 -- "runner-up surfaced only" --> RFI["5 · RFI Contradiction-Checker"]
+    RFI --> D3{"re-RFI?"}
+    D3 -- "follow-up drafted, never sent" --> D4{"evidence sufficient to draft?"}
+    D4 -- "no — refer" --> HUM
+    D4 -- "yes" --> SAR["7 · SAR Drafter + Critic"]
+    SAR --> D5{"clears the rubric bar?"}
+    D5 -- "revise (bounded, never fabricates)" --> SAR
+    D5 -- "clears / flagged for review" --> PKG["8 · Case Packager"]
+    PKG -. "case recorded" .-> CG
+    PKG --> HUM["Human investigator — reviews, decides, files"]
+```
+
+Every stage, tool call, and decision writes to the **append-only, hash-chained
+audit trail** (omitted from the diagram for legibility; it is the spine, not a
+side-car — the case package is built *on* it).
+
+**The nine components** (numbering is the target design, not build order):
+
+1. **Profile Aggregator** — unified subject timeline across mock internal systems.
+2. **Network Expander** — 1–7-hop cluster mapping with device/`device_fingerprint`, reused-KYC, and **gas-funding** linkage.
+3. **On-chain Risk Scorer** — cluster exposure against a synthetic sanctions/illicit set.
+4. **Remark/Tell Miner** — fuzzy-matches user free-text to entities/aliases.
+5. **RFI Contradiction-Checker** — decomposes RFI answers into claims and tests each against the evidence.
+6. **Regulatory Advisory Matcher** — FinCEN-advisory RAG, event-triggered on RFI key terms.
+7. **SAR Drafter + Critic** — grounded, self-critiquing narrative generation.
+8. **Case Packager + persistent case graph** — decision-ready package, append-only audit log, cross-case recidivism.
+9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone, not yet built)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
+
+---
+
+## Responsible AI & the tamper-evident audit trail
+
+For a regulated workflow this section is the product, not the disclaimer.
+
+### Human-in-the-loop, mechanically
+
+The agent **proposes, surfaces, drafts, and flags — a person decides and
+files.** That boundary is structural, not aspirational: the five decision
+points are deterministic rules with published thresholds
+(`docs/agency-methodology.md`); their effects are boundary-guarded (the
+runner-up advisory is surfaced only, the follow-up RFI is drafted but never
+sent, insufficient evidence refers the case to a human rather than forcing a
+draft); and a SAR that cannot reach full rubric coverage is flagged for
+analyst review, never padded.
+
+### The grounding contract, fail-closed
+
+The drafter may assert **only** facts that trace to a retrieved evidence row.
+Every claim carries a provenance pointer; every pointer must **resolve to a
+real row** (not merely be non-empty), and an unresolvable citation aborts the
+draft rather than shipping it. Whatever the evidence cannot support is flagged
+— never fabricated. The demo UI holds itself to the same rule: every surfaced
+claim, score, verdict, and narrative sentence renders its pointer beside it.
+
+### The hash chain, explained
+
+Each audit record's `hash` is the SHA-256 of its own payload **including the
+previous record's hash** — so mutating, dropping, or reordering any record
+breaks every hash after it, and verification fails loudly. The chain is
+append-only and covers every access, tool call, decision (with rationale),
+and stamp. The case package is built *on* the chain — it references each
+record by `(seq, hash)`, and the chain's final stamp carries the package
+file's SHA-256: the log covers the package, and the package pins the log.
+
+### "Internal account" tags: flagged, never obeyed
+
+The decisive failure mode in publicly documented enforcement actions is
+**governance capture** — privileged accounts shielded from review, records
+made to vanish. Okojo plants exactly that red herring ("internal account,
+do-not-block") and treats it as **evidence to surface, not an instruction to
+follow**: the tag is flagged in the UI, preserved in the case package, and a
+test pins that no disposition ever cites it as a reason to stand down.
+
+### Anti-tipping-off, by construction
+
+Warning a subject that their activity is under review — "tipping off" — is a
+well-established prohibition across AML regimes, and a commonly understood
+obligation at any regulated institution (stated at the level of principle;
+this is not legal advice). Okojo's only subject-facing
+output (draft follow-up RFI requests) is built to be structurally incapable
+of it: requests use neutral administrative templates that cite only the
+subject's own records, never name the denied entity, and never reference
+device linkage, tracing focus, or review status — and every rendered request
+must pass a **fail-closed screen** (`assert_no_tipping_off`); anything that
+trips it is suppressed and flagged for human authoring instead.
+
+### Versioned, measured, and drift-guarded
+
+Every scoring formula, retrieval gate, rubric, and decision threshold is a
+**versioned, published policy parameter**: six methodology documents under
+`docs/` each carry their component's exact config, a test asserts the
+document matches the code, and the config is stamped into the audit chain of
+every run — so any historical result can be reproduced and defended.
+
+---
+
+## Evidence: every capability ships its eval
+
+The synthetic generator emits `ground_truth.json` — a committed answer key —
+and every capability is scored against it or against a hand-authored gold
+key: network recall, screening and exposure metrics, advisory false-positive
+rate and discrimination, SAR grounding coverage, a with/without-Critic
+ablation, RFI contradiction detection with verdict and source discrimination,
+the decision trace against a domain-authored expected-decision key, and
+recidivism surfacing. A reliability harness runs the full pipeline for
+**every** subject in the scenario — including the isolated, no-network
+degenerates — and asserts the grounding, rendering, and loop-termination
+properties mechanically.
+
+```bash
+pytest -q                 # the full suite
+pytest -s -k "phase1 or phase2 or advisory or sar_eval or rfi_eval"   # scorecards
+pytest -s -k "decision_trace or casegraph or reliability"             # agency + reliability
+```
+
+---
+
 ## Quickstart
 
 ```bash
@@ -71,19 +220,6 @@ streamlit run app/streamlit_app.py
 Output is written to `data/synthetic/` (git-ignored). Because generation is
 fully deterministic (seeded), the dataset regenerates identically — so only the
 generator is committed, never the data.
-
-### End-to-end case flow
-
-Given a flagged subject, the orchestrator runs the mock connectors → Profile
-Aggregator (anomaly-flagged timeline) → Network Expander (1–7-hop; gas-funding /
-device / reused-KYC linkage) → On-chain Risk Scorer → Remark/Tell Miner +
-sanctions/alias screening → FinCEN Advisory Matcher → a grounded SAR Drafter +
-Critic → Case Packager, logging every step to an append-only, hash-chained audit
-trail. Every asserted fact carries a provenance pointer that must resolve to a
-real evidence row, and the SAR draft is graded against a FinCEN rubric with a
-bounded, deterministic revision loop — failing closed on any uncitable or
-unresolvable claim, and flagging (never fabricating) whatever the evidence cannot
-support.
 
 ### What the generator plants
 
@@ -105,44 +241,24 @@ also recorded in `ground_truth.json` as an answer key for scoring:
 
 ---
 
-## Architecture (target)
+## Status & roadmap
 
-A supervisor/orchestrator over specialized tools, built as an explicit,
-inspectable state machine (legibility is a compliance feature):
+**Built (Phases 0–6):** components 1–8, end-to-end on one synthetic scenario —
+the LangGraph conversion with the five bounded decision points, the persistent
+case graph with recidivism surfacing at case open, and the case package built
+on the hash-chained audit trail, demoed across a 9-tab Streamlit app.
 
-1. **Profile Aggregator** — unified subject timeline across mock internal systems.
-2. **Network Expander** — 1–7-hop cluster mapping with device/`device_fingerprint`, reused-KYC, and **gas-funding** linkage.
-3. **On-chain Risk Scorer** — cluster exposure against a sanctions/illicit set.
-4. **Remark/Tell Miner** — fuzzy-matches user free-text to entities/aliases.
-5. **RFI Contradiction-Checker** — decomposes RFI answers into claims and tests each against the evidence.
-6. **Regulatory Advisory Matcher** — FinCEN-advisory RAG, event-triggered on RFI key terms.
-7. **SAR Drafter + Critic** — grounded, self-critiquing narrative generation.
-8. **Case Packager + persistent case graph** — decision-ready package, append-only audit log, cross-case recidivism.
-9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
+**In progress (Phase 7):** reliability hardening (the executable property
+harness over every subject), UI provenance completion, and portfolio polish.
 
-**Built so far (Phases 1–6):** components 1–8 — including the bounded agentic
-decision points that steer the state machine (expand another hop? pull a second
-advisory? re-RFI? is the evidence sufficient to draft? does the SAR clear the
-bar?), each a deterministic rule over the evidence, stamped into the audit chain
-with its rationale, and scored against a committed expected-decision key.
-**Next (Phase 7):** UI & portfolio polish and reliability hardening; component 9
-(the remediation sweep) is the v1.0 capstone. The numbering reflects the target
-design, not build order.
+**Next (Phase 8):** the Designation-Triggered Remediation Sweep — component 9,
+the v1.0 capstone.
 
-**Roadmap (post-v1.0):** ML alert auto-closure QA · vendor reconciliation ·
-tokenized-commodity issuance tracing · multilingual OSINT verifier · LE-request/MLAT routing.
-
----
-
-## Responsible AI & tamper-evident audit trail
-
-The design principle that matters most here: **the audit trail is a feature, not
-a footnote.** Every access, tool call, agent decision, and alert-closure is
-logged, append-only, with provenance — and the agent's factual claims are
-grounded, meaning it may only assert what traces to a retrieved record. A
-"privileged / internal account" tag is treated as something to **flag for
-review, not obey.** Human-in-the-loop throughout: the agent prepares; a person
-decides and files.
+**Roadmap (post-v1.0):** the Audit Narrator (a grounded summarizer over the
+system's own audit log — making the tamper-evident trail *reviewable*, not just
+provable) · ML alert auto-closure QA · vendor reconciliation ·
+tokenized-commodity issuance tracing · multilingual OSINT verifier ·
+LE-request/MLAT routing.
 
 ## Author
 

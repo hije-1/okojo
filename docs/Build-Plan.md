@@ -58,7 +58,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 - Adversarially test each claim against device data, on-chain flows, corporate-registry OSINT, and the subject's *own prior RFI answers*; emit a claim-by-claim contradiction table with evidence pointers and a confidence per claim.
 - Feed the contradiction table into the SAR Drafter so the narrative cites specific rebuttals.
 - Evaluation: precision/recall of flagged contradictions against the scenario's known ground-truth lies.
-- **Milestone:** the investigative headline capability — false RFI narratives caught automatically. Refresh the public demo + GIF.
+- **Milestone:** the investigative headline capability — false RFI narratives surfaced claim-by-claim, with the rebutting evidence cited. Refresh the public demo + GIF.
 - **Deferred, by design — "contradictions corroborate who/what/why" (post-Phase-5, its own slice).** In Phase 5 a confirmed contradiction is *additive*: it enters the SAR narrative citing both the assertion and its rebuttal, but satisfies no FinCEN-rubric element, so the Critic's version, gold key, and ablation are untouched. That is a scope decision, not an oversight — a rebutted false narrative is genuinely evidence of *what* happened and *why* it is suspicious, and mapping `contradiction` into those rubric elements should lift the Critic's recall on subjects whose other evidence is thin. It is deferred so the change is measurable: it needs its own `CRITIC_VERSION` bump, a re-authored rubric gold key, and a before/after ablation that reports the recall lift, rather than being folded into a phase that would mask it.
 
 ### Phase 6 — Genuine agency, case-graph memory & audit (Weeks 12–13: Oct 6–17, ~40 hrs)
@@ -69,7 +69,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 
 ### Phase 7 — UI, portfolio polish & the last 20% (Weeks 14–15: Oct 20–31, ~40 hrs)
 - Streamlit UX: case selector, timeline, interactive graph, tell hits, advisory panel with cited red flags, RFI contradiction table, SAR view with provenance highlights, audit-trail viewer.
-- Reliability hardening (the tail): no fabricated SAR facts, graph always renders, loops always converge.
+- Reliability hardening (the tail), as executable properties over every subject: every SAR claim resolves to a real evidence row, the graph render is content-verified (and a render failure degrades the case rather than aborting it), and every loop terminates within its declared bound — with non-convergence producing a flagged human fallback, never a fabricated claim.
 - README in your executive voice (board-brief framing), architecture diagram, a prominent **"Responsible AI & Tamper-Evident Audit Trail"** section (foregrounding the governance-capture lesson), a calibrated-language pass, and a polished demo GIF/screencast.
 - **Milestone:** portfolio-ready v1.0.
 
@@ -97,7 +97,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 | 2 | Aug 11–22 | Graph + gas-funding + tells | Network + Remark Miner, with a metric |
 | 3 | Aug 25–Sep 5 | Advisory RAG | Robust advisory matching |
 | 4 | Sep 8–19 | SAR + Critic | Grounded, self-critiquing SAR generation |
-| 5 | Sep 22–Oct 3 | RFI Contradiction-Checker | False RFI narratives caught automatically |
+| 5 | Sep 22–Oct 3 | RFI Contradiction-Checker | False RFI narratives surfaced claim-by-claim, evidence cited |
 | 6 | Oct 6–17 | Agency + case-graph + audit | Agentic, recidivism-aware, auditable |
 | 7 | Oct 20–31 | UI + polish | Polished core (pre-capstone) |
 | 8 | Nov 3–14 | Remediation sweep (capstone) | Designation → exposed-account sweep + worksheet |
