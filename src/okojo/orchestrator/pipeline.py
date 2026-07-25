@@ -64,6 +64,10 @@ class CaseResult:
     # Phase 6: the decision-ready package, built on the audit trail.
     package_path: Optional[Path] = None
     package_sha256: Optional[str] = None
+    # Phase 7: set when a requested graph render failed. The case still
+    # completed; the failure is recorded in the audit chain
+    # (``network_expander/graph_render_failed``) and surfaced in the UI.
+    render_error: Optional[str] = None
 
 
 def default_out_dir(subject_uid: int) -> Path:
@@ -138,6 +142,7 @@ def run_case(
             recidivism=final.get("recidivism"),
             package_path=final.get("package_path"),
             package_sha256=final.get("package_sha256"),
+            render_error=final.get("render_error"),
         )
     finally:
         if owns_conn:

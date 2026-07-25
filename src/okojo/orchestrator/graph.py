@@ -131,6 +131,9 @@ class CaseState(TypedDict, total=False):
     walk: ExpansionWalk
     expansion: NetworkExpansion
     graph_html_path: Optional[Path]
+    # set only when render_graph was requested and the render failed; the case
+    # completes and the failure is surfaced (never silently swallowed)
+    render_error: Optional[str]
     risk: RiskScoring
     backbone: EntityBackbone
     tells: list[RemarkTell]
@@ -242,11 +245,33 @@ def _network_finalize(state: CaseState) -> CaseState:
     expansion = finish_walk(conn, state["walk"], max_hops=state["hop_cap"])
     audit.append("network_expander", "expanded", detail=json.dumps(expansion.summary()))
     graph_html_path: Optional[Path] = None
+    render_error: Optional[str] = None
     if state["render_graph"]:
         graph_html_path = state["out_dir"] / "network.html"
-        render(expansion, graph_html_path)
-        audit.append("network_expander", "graph_rendered", target=_rel(graph_html_path))
-    return {"expansion": expansion, "graph_html_path": graph_html_path}
+        try:
+            render(expansion, graph_html_path)
+        except Exception as exc:  # noqa: BLE001 — any render failure degrades, never aborts
+            # Reliability property: a graph-render failure must not abort the
+            # case. The run continues without a rendered graph, the failure is
+            # stamped into the hash chain as its own record (only ever present
+            # on the failure path), and the result carries the error so the UI
+            # surfaces the degradation for review. On success this branch adds
+            # nothing: the ``graph_rendered`` record below is byte-identical to
+            # the unguarded original, in the same chain position.
+            graph_html_path = None
+            render_error = (
+                f"{type(exc).__name__}: {exc}"
+                .encode("ascii", "backslashreplace").decode("ascii")[:300]
+            )
+            audit.append(
+                "network_expander", "graph_render_failed",
+                detail=f"render failed ({render_error}); "
+                       "case continues without a rendered graph; flagged for review",
+            )
+        else:
+            audit.append("network_expander", "graph_rendered", target=_rel(graph_html_path))
+    return {"expansion": expansion, "graph_html_path": graph_html_path,
+            "render_error": render_error}
 
 
 def _risk(state: CaseState) -> CaseState:

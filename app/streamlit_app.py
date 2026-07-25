@@ -616,6 +616,13 @@ def main() -> None:
         )
         if res.graph_html_path and Path(res.graph_html_path).exists():
             components.html(Path(res.graph_html_path).read_text(encoding="utf-8"), height=760, scrolling=True)
+        elif res.render_error:
+            st.warning(
+                "Graph rendering failed for this run — the case completed without it, "
+                "and the failure is recorded in the audit trail "
+                "(`network_expander/graph_render_failed`). Error: "
+                f"`{res.render_error}`"
+            )
         else:
             st.info("Graph not rendered.")
 
