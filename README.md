@@ -4,8 +4,8 @@
 
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
-> **Status:** Phases 0–6 complete; Phase 7 (reliability hardening & polish) in
-> progress. Fully synthetic data, built in the open. Details in
+> **Status:** Phases 0–7 complete — the core is reliability-hardened and
+> portfolio-ready. Fully synthetic data, built in the open. Details in
 > [Status & roadmap](#status--roadmap).
 
 ## The problem
@@ -248,8 +248,19 @@ the LangGraph conversion with the five bounded decision points, the persistent
 case graph with recidivism surfacing at case open, and the case package built
 on the hash-chained audit trail, demoed across a 9-tab Streamlit app.
 
-**In progress (Phase 7):** reliability hardening (the executable property
-harness over every subject), UI provenance completion, and portfolio polish.
+**Phase 7 (complete):** the reliability tail turned into executable properties
+— a harness that runs the full pipeline for *every* subject (including the
+isolated, no-network degenerates) and mechanically asserts grounding, render
+integrity, loop termination, and that every SAR claim's evidence is genuinely
+the subject's own (a defect the harness itself found: the headline ablation
+metric was corrected *downward* once measurement showed it credited borrowed
+evidence). UI provenance completion — every surfaced claim renders its pointer
+— and the README you are reading. One lesson worth stating plainly: the
+generator had drawn **21 of 24 account histories with activity dated before
+the account existed**, and six phases of green, table-shaped tests never
+noticed — building the Timeline as an actual chronology surfaced the
+impossibility in seconds. Views that make data *legible* are themselves a
+verification tool, not cosmetics.
 
 **Next (Phase 8):** the Designation-Triggered Remediation Sweep — component 9,
 the v1.0 capstone.
