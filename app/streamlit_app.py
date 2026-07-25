@@ -1,4 +1,4 @@
-"""Okojo — Streamlit demo (Phase 6).
+"""Okojo — Streamlit demo.
 
 Pick a synthetic subject and watch one case flow end-to-end: an anomaly-flagged
 timeline, the network graph with gas-funding collapse, per-account on-chain
@@ -30,12 +30,18 @@ from okojo.orchestrator import run_case
 from okojo.orchestrator.pipeline import default_out_dir
 from okojo.provenance import Provenance
 from okojo.remarks import SCREEN_THRESHOLD
+from okojo.remarks.miner import _ALIAS_THRESHOLD, _PHRASE_THRESHOLD
 from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
 
 # Brand logo lives at the repo root; resolve off it so the path holds regardless
 # of the working directory the app is launched from.
 _LOGO_PATH = str(Path(__file__).resolve().parents[1] / "okojo-logo.png")
+
+# ONE of the three hand-maintained status surfaces (README status block,
+# CLAUDE.md status block, and this on-screen caption) — update all three at
+# every phase sign-off.
+_PHASE = "Phase 7"
 
 st.set_page_config(
     page_title="Okojo — Crypto-Investigations Co-Pilot",
@@ -66,6 +72,16 @@ _ANOMALY_SEVERITY = {
     "vpn_elevation": "medium",
     "reused_kyc_document": "high",
     "shared_device_fingerprint": "high",
+}
+
+# Timeline event kinds -> (display label, accent colour). Unknown kinds fall
+# back to the raw kind string in grey, so a new connector never renders blank.
+_EVENT_KIND_STYLE = {
+    "account_registration": ("Account opened", "#334155"),
+    "ip_login": ("Login", "#0ea5e9"),
+    "transaction_deposit": ("Deposit", "#16a34a"),
+    "transaction_withdrawal": ("Withdrawal", "#b45309"),
+    "transaction_onchain": ("On-chain transfer", "#7c3aed"),
 }
 
 _ROLE_LABEL = {
@@ -343,10 +359,12 @@ def _render_decisions(res) -> None:
         subject_account = get_connectors().get_account(res.subject_uid)
         st.markdown("#### Case-graph memory at open")
         if view.is_recidivist:
-            st.error(
-                f"Recidivism surfaced: **{view.prior_review_count} prior review(s)**, "
-                f"status `{view.account_status}` — prior cleared reviews do not "
-                "exempt a subject. Surfaced for human review, not a determination."
+            # The alert itself lives in the page header (shown once at case
+            # open); this section carries the factual detail behind it.
+            st.markdown(
+                f"Recidivism surfaced at open: **{view.prior_review_count} prior "
+                f"review(s)**, status `{view.account_status}` — prior cleared "
+                "reviews do not exempt a subject (alert shown in the page header)."
             )
         else:
             st.caption(
@@ -430,7 +448,7 @@ def main() -> None:
         "Okojo — Agentic Crypto-Investigations Co-Pilot</h1>",
         unsafe_allow_html=True,
     )
-    st.caption("Phase 6 · **fully synthetic data** · a human reviews, decides, and files.")
+    st.caption(f"{_PHASE} · **fully synthetic data** · a human reviews, decides, and files.")
 
     try:
         conn = get_connectors()
@@ -440,8 +458,13 @@ def main() -> None:
         return
 
     accounts = conn.all_accounts()
+    # One role vocabulary everywhere: the selector shows the same human-readable
+    # role labels as the roster cards (never the raw machine codes).
     label_for = {
-        a["uid"]: f"{a['entity_name']}  —  uid {a['uid']}  ({a['role_in_ring']})"
+        a["uid"]: (
+            f"{a['entity_name']}  —  uid {a['uid']}  "
+            f"({_ROLE_LABEL.get(a['role_in_ring'], a['role_in_ring'])})"
+        )
         for a in accounts
     }
 
@@ -490,9 +513,10 @@ def main() -> None:
 
     # -- header metrics ---------------------------------------------------- #
     c1, c2, c3, c4, c5, c6 = st.columns(6)
+    expansion_summary = res.expansion.summary()
     c1.metric("Anomalies", len(res.profile.anomalies))
-    c2.metric("Network reached", res.expansion.summary()["accounts_reached"])
-    c3.metric("Sanctioned reached", res.expansion.summary()["sanctioned_addresses_reached"])
+    c2.metric("Network reached", expansion_summary["accounts_reached"])
+    c3.metric("Sanctioned reached", expansion_summary["sanctioned_addresses_reached"])
     c4.metric("Tells", len(res.tells))
     c5.metric("Watchlist hits", len(res.alias_hits))
     c6.metric("Advisory", res.advisory.advisory_id if res.advisory else "—")
@@ -651,10 +675,51 @@ def main() -> None:
         else:
             st.info("No anomalies surfaced for this subject.")
         st.markdown("---")
-        ev = pd.DataFrame(
-            [{"timestamp": e.timestamp, "kind": e.kind, "event": e.description} for e in res.profile.events]
+        st.markdown("#### Chronology")
+        st.caption(
+            "Every event in the unified subject timeline, in order, each citing its "
+            "source row. Events that triggered an anomaly above carry that anomaly "
+            "pinned inline, so the flag and the moment it fired stay together."
         )
-        st.dataframe(ev, use_container_width=True, hide_index=True)
+        # Pin anomalies onto the events that triggered them: an anomaly and its
+        # triggering event cite the same evidence rows, so pointer intersection
+        # is the join (no heuristics, no new model fields).
+        anomaly_pins: dict[str, list] = {}
+        for a in res.profile.anomalies:
+            for p in a.provenance:
+                anomaly_pins.setdefault(p.cite(), []).append(a)
+        month = None
+        for e in res.profile.events:
+            m = str(e.timestamp)[:7]
+            if m != month:
+                month = m
+                st.markdown(f"**{month}**")
+            label, color = _EVENT_KIND_STYLE.get(e.kind, (e.kind, _RISK_GREY))
+            pinned = {
+                a.code: a for p in e.provenance for a in anomaly_pins.get(p.cite(), [])
+            }
+            pins = "".join(
+                _chip(
+                    f"⚑ {_ANOMALY_LABEL.get(code, code)}",
+                    _SEVERITY_COLOR.get(a.severity, _RISK_GREY),
+                )
+                for code, a in pinned.items()
+            )
+            st.markdown(
+                f"{_chip(label, color)} "
+                f"<span style='color:{_RISK_GREY};font-size:0.8rem;'>"
+                f"{str(e.timestamp)[11:16]} · {str(e.timestamp)[:10]}</span> "
+                f"— {e.description} {pins}",
+                unsafe_allow_html=True,
+            )
+            st.caption("source: " + "; ".join(p.cite() for p in e.provenance))
+        with st.expander("Raw event table"):
+            ev = pd.DataFrame([
+                {"timestamp": e.timestamp, "kind": e.kind, "event": e.description,
+                 "source": _cites(e.provenance)}
+                for e in res.profile.events
+            ])
+            st.dataframe(ev, use_container_width=True, hide_index=True)
 
     # -- Network ----------------------------------------------------------- #
     with tab_network:
@@ -663,6 +728,13 @@ def main() -> None:
             "Gold ★ = subject · red ▲ = synthetic-sanctioned endpoint · orange = ring account · "
             "blue = address. Edges: purple = shared device, green = reused KYC, red dashed = gas-funding."
         )
+        if expansion_summary["edges"] == 0:
+            st.info(
+                "This subject is isolated at the configured hop depth: no shared "
+                "devices, no reused KYC documents, no gas-funding links, and no "
+                "transaction counterparties reached. The graph shows the subject "
+                "node alone — an honest empty result, not a rendering failure."
+            )
         if res.graph_html_path and Path(res.graph_html_path).exists():
             components.html(Path(res.graph_html_path).read_text(encoding="utf-8"), height=760, scrolling=True)
         elif res.render_error:
@@ -697,6 +769,8 @@ def main() -> None:
                 for l in gas_links
             ])
             st.dataframe(gdf, use_container_width=True, hide_index=True)
+        else:
+            st.caption("No gas-funding links surfaced in this cluster.")
 
         st.markdown("---")
         st.markdown("#### Connected accounts — triage roster")
@@ -715,15 +789,38 @@ def main() -> None:
     # -- Tells ------------------------------------------------------------- #
     with tab_tells:
         st.subheader("Remark tells")
+        st.caption(
+            "Free-text transaction remarks fuzzy-matched (RapidFuzz) against "
+            "curated control/illicit phrases (*illicit_phrase*) and the case's own "
+            "entity-name tokens (*control_alias* — a remark naming a controller is "
+            "an attribution tell). **This screen runs over every remark in the "
+            "dataset, not just this subject's transactions** — attribution often "
+            "breaks open on someone else's remark. Each hit is a flag for human "
+            "review, never a determination."
+        )
         if res.tells:
             bc = pd.DataFrame([
                 {"tx_id": h.tx_id, "category": h.category, "remark": h.remark,
-                 "matched": ", ".join(h.matched_terms), "note": h.note}
+                 "matched": ", ".join(h.matched_terms), "score": h.score,
+                 "note": h.note, "source": _cites(h.provenance)}
                 for h in res.tells
             ])
             st.dataframe(bc, use_container_width=True, hide_index=True)
+            with st.expander("How the match works — show the math"):
+                st.markdown(
+                    f"**Algorithm:** RapidFuzz — `partial_ratio` for phrases (a short "
+                    f"phrase inside a longer remark, threshold **≥ {_PHRASE_THRESHOLD}**) "
+                    f"and whole-word `ratio` for entity aliases (threshold "
+                    f"**≥ {_ALIAS_THRESHOLD}**), so nicknames and transliterations are "
+                    "caught without short tokens matching unrelated substrings."
+                )
+                st.markdown(
+                    "The score is the **best fuzzy-match similarity (0–100) for human "
+                    "review — not a risk score.** Each row's `source` cites the exact "
+                    "transaction whose remark matched."
+                )
         else:
-            st.info("No remark tells.")
+            st.info("No remark tells surfaced across the dataset.")
 
     # -- RFI --------------------------------------------------------------- #
     with tab_rfi:
@@ -872,13 +969,28 @@ def main() -> None:
     # -- Audit trail ------------------------------------------------------- #
     with tab_audit:
         st.subheader("Tamper-evident audit trail")
+        st.caption(
+            "Every access, tool call, decision, and stamp — hash-chained: each "
+            "record's `hash` is the SHA-256 of its own payload **including the "
+            "previous record's `hash`** (`prev_hash`; the first record chains from "
+            "the all-zero genesis hash). Mutate, drop, or reorder any record and "
+            "every hash from that point on stops matching. The chain below shows "
+            "the hashes themselves — verify any link by eye: row *n*'s `prev_hash` "
+            "equals row *n−1*'s `hash`."
+        )
         if res.audit_verified:
-            st.success("Hash chain verified — the log is intact and append-only.")
+            st.success(
+                "Hash chain verified — the log is intact and append-only "
+                f"(chain tip `{res.audit_records[-1]['hash'][:16]}…`, "
+                f"{len(res.audit_records)} records)."
+            )
         else:
             st.error("Hash chain FAILED verification — the log was tampered with.")
         audit_df = pd.DataFrame([
             {"seq": r["seq"], "timestamp": r["timestamp"], "actor": r["actor"],
-             "action": r["action"], "target": r.get("target"), "detail": r.get("detail")}
+             "action": r["action"], "target": r.get("target"), "detail": r.get("detail"),
+             "provenance": "; ".join(r["provenance"]) if r.get("provenance") else None,
+             "prev_hash": r["prev_hash"], "hash": r["hash"]}
             for r in res.audit_records
         ])
         st.dataframe(audit_df, use_container_width=True, hide_index=True)
