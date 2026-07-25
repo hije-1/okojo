@@ -62,15 +62,24 @@ FINCEN_RUBRIC: tuple[RubricElement, ...] = (
 CRITIC_THRESHOLD = 1.0
 
 # Version of this critic methodology. Bump on any change to the rubric, a weight,
-# or the threshold; the config is stamped into the audit trail and mirrored (+
-# regression-tested) by ``docs/sar-critic-methodology.md``.
-CRITIC_VERSION = "1.0.0"
+# the threshold, or the drafting policy below; the config is stamped into the
+# audit trail and mirrored (+ regression-tested) by
+# ``docs/sar-critic-methodology.md``.
+# 1.1.0 — tell claims gated to the subject's evidence closure (drafting policy).
+CRITIC_VERSION = "1.1.0"
 
 
 def critic_config() -> dict:
-    """The full, versioned Critic configuration — the tunable *policy parameters*
-    behind every grade. Single source of truth: stamped into the audit trail and
+    """The full, versioned configuration behind the draft->critique loop.
+
+    Two distinct kinds of policy, deliberately NOT flattened together:
+    ``threshold``/``elements`` are SCORING knobs (what the Critic grades);
+    ``drafting`` is the claim-SELECTION policy owned by the drafter (what may
+    enter a draft at all) — the Critic never selects claims, it grades what it
+    is handed. Single source of truth: stamped into the audit trail and
     regression-tested against the published methodology doc."""
+    from .drafter import TELL_SCOPE  # local import: drafter imports schema, not critic
+
     return {
         "version": CRITIC_VERSION,
         "threshold": CRITIC_THRESHOLD,
@@ -78,6 +87,7 @@ def critic_config() -> dict:
             {"key": e.key, "weight": e.weight, "required": e.required}
             for e in FINCEN_RUBRIC
         ],
+        "drafting": {"tell_scope": TELL_SCOPE},
     }
 
 

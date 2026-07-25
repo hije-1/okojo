@@ -31,6 +31,40 @@ _DISCLAIMER = (
     "review, decide, and file. This is not a filed SAR and carries no regulatory effect."
 )
 
+# Drafting policy: which mined tells may enter a SAR. The miner is a
+# DATASET-WIDE screen by design; the SAR is a SUBJECT-SCOPED artifact. A tell
+# enters the draft only when its transaction touches the subject or the case's
+# expanded network — a resolvable pointer to an unrelated party's transaction
+# is real evidence, but not this subject's (Phase 7 grounding-completeness;
+# carried in critic_config()["drafting"] and published in
+# docs/sar-critic-methodology.md).
+TELL_SCOPE = "subject_network_closure"
+
+
+def _tells_in_closure(
+    conn: Connectors, expansion: NetworkExpansion, tells: list[RemarkTell],
+) -> list[RemarkTell]:
+    """Filter the dataset-wide tell screen down to the subject's evidence
+    closure: the subject itself plus every account and address the expansion
+    actually reached in this run. Order-preserving; empty for an isolated
+    subject — the honest result, which the Critic then surfaces as an
+    uncovered element for human review rather than papering over."""
+    acct_refs = {
+        f"uid:{str(n).split(':', 1)[1]}"
+        for n in expansion.graph.nodes if str(n).startswith("acct:")
+    }
+    addrs = {
+        str(n).split(":", 1)[1]
+        for n in expansion.graph.nodes if str(n).startswith("addr:")
+    }
+    tx_refs = {t["tx_id"]: (t["from_ref"], t["to_ref"]) for t in conn.all_transactions()}
+    kept: list[RemarkTell] = []
+    for hit in tells:
+        refs = tx_refs.get(hit.tx_id, ())
+        if any(r in acct_refs or r in addrs for r in refs):
+            kept.append(hit)
+    return kept
+
 
 def build_sar(
     conn: Connectors,
@@ -82,8 +116,10 @@ def build_sar(
             provenance=[subject.provenance] + sanctioned_prov,
         ))
 
-    # TELL — attribution tells from free-text remarks.
-    for hit in tells[:max_tells]:
+    # TELL — attribution tells from free-text remarks, gated to the subject's
+    # evidence closure (see TELL_SCOPE): the screen is dataset-wide, the SAR
+    # is not.
+    for hit in _tells_in_closure(conn, expansion, tells)[:max_tells]:
         claims.append(SarClaim(
             element="tell",
             statement=(

@@ -312,3 +312,35 @@ _Added Day 6 (Phase 7, during UI polish). Companion to §15._
   (scoring, retrieval, critic, contradiction, agency, casegraph). Deliberately
   not fixed under polish; it rides with the grounding-completeness slice, where
   the version-bump and doc-regeneration machinery is already open.
+  *(Closed later in Phase 7: `packager_config()` + `docs/packager-methodology.md`
+  + the seventh anti-drift test — pinned through the artifact rather than a
+  seventh audit stamp, as that doc explains.)*
+
+## 18. Grounding completeness: we measured our own headline metric and cut it
+_Added Day 6 (Phase 7, Slice E)._
+
+- **What the reliability harness found.** The grounding contract proved "every
+  pointer names a real row" — not "the claim is about this subject."
+  `mine_remarks` is a dataset-wide screen (correctly — attribution often breaks
+  open on someone else's remark), but the drafter injected the top tells into
+  every SAR unconditionally. Measured across all 14 subjects: **13 claims cited
+  rows outside the subject's own network entirely** (an isolated account's SAR
+  carried four tells citing ring members' transactions), and 39 more cited
+  network rows without attributing them in the claim text.
+- **The fix (CRITIC v1.1.0).** A drafting-policy gate,
+  `tell_scope = "subject_network_closure"`: a tell enters a draft only when its
+  transaction touches the subject or an account/address the expansion actually
+  reached in that run. Deliberately carried in `critic_config()` under a
+  nested `drafting` key — claim-*selection* policy owned by the drafter, kept
+  structurally distinct from the Critic's *scoring* knobs (threshold, rubric),
+  because the Critic never selects claims; it grades what it is handed.
+- **The ablation went down on purpose, and that is the point.** Under v1.0.0
+  the WITHOUT-Critic recall read 0.560 against a 25-element gold. The gate
+  exposed one gold element — the noise role's `subject_and_network` — as
+  credited entirely on borrowed evidence, so the gold was re-authored to 24
+  honest elements (WITH stays P=R=F1=1.0 by construction against the honest
+  key; WITHOUT moved to 0.542). **A headline metric was corrected downward
+  because our own measurement found it inflated.** For the affected subjects
+  the honest outcome is fewer claims and, for the isolated ones, an uncovered
+  `subject_and_network` element flagged for human review — which is what a
+  fail-closed system is supposed to do with evidence it does not have.

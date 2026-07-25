@@ -19,8 +19,8 @@
     },
     {
       "role": "noise",
-      "note": "Peripheral account: no anomalies (no 'what'), no exposure, no advisory. Only identity, timeframe, geography, and network-context are coverable.",
-      "expect_covered": ["who", "when", "where", "subject_and_network"]
+      "note": "Peripheral account: no anomalies (no 'what'), no exposure, no advisory, and no network of its own. Only identity, timeframe, and geography are coverable. Re-authored under CRITIC v1.1.0 (tell claims gated to the subject's evidence closure): the prior key credited subject_and_network via dataset-wide tells citing OTHER accounts' transactions -- evidence that was never this subject's. Honest coverage is lower, on purpose.",
+      "expect_covered": ["who", "when", "where"]
     }
   ]
 }

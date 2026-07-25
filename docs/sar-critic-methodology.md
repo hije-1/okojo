@@ -1,4 +1,4 @@
-# SAR Drafter + Critic Methodology (v1.0.0)
+# SAR Drafter + Critic Methodology (v1.1.0)
 
 **Status:** synthetic-data research prototype. Not production screening, not legal
 or compliance advice, not a SAR-filing tool. Okojo *drafts* a narrative and
@@ -44,6 +44,30 @@ construction — so a claim built from a real record always resolves, and a
 fabricated pointer never does. The grounding report (total / grounded / resolved /
 unresolved) is stamped into the tamper-evident audit trail
 (`sar_drafter / grounding_validated`).
+
+### Drafting policy — the tell-scope gate (added in v1.1.0)
+
+This is **claim-selection policy owned by the drafter**, not a scoring knob:
+the Critic never selects claims, it grades what it is handed. It is carried in
+the config under its own `drafting` key for exactly that reason.
+
+The Remark/Tell Miner is a **dataset-wide screen by design** — attribution
+often breaks open on someone else's remark, so the screen must see every
+remark. A SAR, however, is a **subject-scoped artifact**. Before v1.1.0 the
+drafter injected the top mined tells into every draft unconditionally, so a
+subject with no network could carry `tell` claims citing *other accounts'*
+transactions — every pointer resolved to a real row (the grounding contract
+held), but the evidence was never that subject's, and it silently satisfied
+the `subject_and_network` rubric element for subjects with no such evidence.
+
+Under `tell_scope = "subject_network_closure"`, a tell enters a draft only
+when its transaction touches the subject or an account/address the network
+expansion actually reached in that run. For an isolated subject the honest
+result is **zero tell claims** — and the Critic then flags
+`subject_and_network` for human review instead of papering over it. The
+measured effect is documented in the ablation below: the gold key was
+re-authored downward for the noise role, because the prior key credited
+coverage on borrowed evidence.
 
 ---
 
@@ -102,9 +126,16 @@ grade, one record per revision pass (which elements it addressed), and a termina
 
 ### Measured value (ablation)
 On the synthetic scenario, the loop raises covered-rubric-element recall against
-the gold key from **0.56 (template-first draft) to 1.00 (with the Critic loop)**,
+the gold key from **0.54 (template-first draft) to 1.00 (with the Critic loop)**,
 while never over-claiming (precision stays 1.0 in both). See
 `tests/test_sar_eval.py`.
+
+Under v1.0.0 the WITHOUT-loop recall read 0.56 against a 25-element gold. The
+v1.1.0 tell-scope gate exposed that one of those gold elements — the noise
+role's `subject_and_network` — was credited on tells citing other accounts'
+transactions. The gold was re-authored to 24 honest elements and the baseline
+recall moved to 0.54: **the metric went down because the measurement found the
+inflation, and the correction was deliberate.**
 
 ---
 
@@ -126,12 +157,12 @@ from the record. The canonical parameter set for this version is below; it is th
 single source of truth (`okojo.sar.critic_config`) and is regression-tested against
 this document, so the doc and the code can never silently drift.
 
-**Version 1.0.0 — canonical parameters:**
+**Version 1.1.0 — canonical parameters:**
 
 <!-- sar-critic-config:begin -->
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "threshold": 1.0,
   "elements": [
     {"key": "who", "weight": 1.0, "required": true},
@@ -142,12 +173,14 @@ this document, so the doc and the code can never silently drift.
     {"key": "how", "weight": 1.0, "required": true},
     {"key": "subject_and_network", "weight": 1.0, "required": true},
     {"key": "on_chain_evidence", "weight": 1.0, "required": true}
-  ]
+  ],
+  "drafting": {"tell_scope": "subject_network_closure"}
 }
 ```
 <!-- sar-critic-config:end -->
 
-Bump `version` whenever the rubric, a weight, or the threshold changes;
+Bump `version` whenever the rubric, a weight, the threshold, or the drafting
+policy changes;
 already-audited grades remain reproducible under the version they were computed
 with.
 
