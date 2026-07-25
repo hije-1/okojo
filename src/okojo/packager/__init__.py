@@ -2,6 +2,6 @@
 
 from __future__ import annotations
 
-from .packager import INTERNAL_TAG_POLICY, PACKAGE_VERSION, build_package
+from .packager import INTERNAL_TAG_POLICY, PACKAGE_VERSION, build_package, packager_config
 
-__all__ = ["INTERNAL_TAG_POLICY", "PACKAGE_VERSION", "build_package"]
+__all__ = ["INTERNAL_TAG_POLICY", "PACKAGE_VERSION", "build_package", "packager_config"]

@@ -40,6 +40,35 @@ INTERNAL_TAG_POLICY = (
 )
 
 
+def packager_config() -> dict:
+    """The versioned packaging policy (doc<->code anti-drift guarded).
+
+    Unlike the six configs that stamp their own record into the audit chain,
+    this one is pinned through the artifact itself: every package embeds
+    ``package_version`` (and the red-herring policy line verbatim when it
+    applies), and the chain's ``packaged`` stamp carries the package file's
+    SHA-256 — so each audited run already fixes the exact packaging policy it
+    ran under, without a second stamp.
+    """
+    return {
+        "version": PACKAGE_VERSION,
+        "internal_tag_policy": INTERNAL_TAG_POLICY,
+        "audit_reference": (
+            "each chain record referenced as (seq, actor, action, hash) plus "
+            "tip hash and verification result, captured BEFORE the packaged "
+            "stamp; the stamp then carries the package file's SHA-256"
+        ),
+        "determinism": (
+            "sorted keys; ASCII-only; no wall-clock values of its own; bytes "
+            "reproducible exactly under an injected audit clock"
+        ),
+        "disposition": (
+            "the recorded sar_bar decision outcome, or insufficient_evidence "
+            "on the human-referral path; never derived from an internal tag"
+        ),
+    }
+
+
 def _advisory_ref(match: Any) -> Optional[dict]:
     if match is None:
         return None
