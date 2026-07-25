@@ -6,13 +6,16 @@ kingpin happy path), plus the degenerate cases and pinned past failure modes:
 P1  — grounding holds: every SAR claim is grounded AND resolves to a real
       evidence row, via full ``run_case`` (so the advisory / RFI / contradiction
       claim families are exercised, unlike the drafter-only loop tests).
-P1b — subject-closure DIAGNOSTIC (reported, not asserted): two numbers, because
-      they need different fixes — (1) claims citing rows OUTSIDE the subject's
-      network closure (genuine misattribution) vs (2) claims citing another
-      network member's rows WITHOUT attributing them (a wording gap; citing a
-      network member's transaction is legitimate investigative practice).
-      Asserting closure IS the fix, and the fix moves scorecards — it belongs
-      to its own slice, scoped by these numbers.
+P1b — subject-closure PROPERTY (asserted since the grounding-completeness
+      slice): (1) no claim cites a row outside the subject's network closure —
+      with one documented, policy-backed exception: an advisory-element claim
+      may cite dataset-level corroboration context (e.g. the watchlist hit
+      that corroborated the match, per versioned retrieval policy) IFF the
+      claim text itself attributes it; and (2) every claim citing a network
+      member's rows names that member in its text. Both started as reported
+      diagnostics (13 and 39); the fixes were their own slice (CRITIC v1.1.0
+      tell-scope gate + drafter-owned attribution), and the harness now
+      asserts both at zero.
 P2  — the graph always renders: ``render()`` asserted DIRECTLY (unguarded), so
       a real render regression still fails the suite; the orchestrator's guard
       is exercised separately by fault injection (case completes, degradation
@@ -229,6 +232,7 @@ def closure_diagnostic(rconn, all_results) -> dict:
         misattributed, unattributed = [], []
         for claim in res.sar.claims:
             outside = network_ptrs = False
+            outside_owners: set[int] = set()
             net_owners: set[int] = set()
             for p in claim.provenance:
                 owners, is_ref = _pointer_owners(p, maps)
@@ -245,12 +249,18 @@ def closure_diagnostic(rconn, all_results) -> dict:
                 if in_net:
                     network_ptrs = True
                     net_owners |= owners - {uid}
-                elif not owners and not net_addrs and not net_uids:
-                    outside = True  # isolated subject citing an unowned row
-                elif owners:
-                    outside = True  # owned by someone outside the closure
                 else:
-                    outside = True  # unowned row with no network linkage
+                    outside = True
+                    outside_owners |= owners
+            # Policy-backed exception (published in the sar-critic methodology,
+            # drafting section): an ADVISORY claim may cite dataset-level
+            # corroboration context outside the subject's network — the match's
+            # real basis under versioned retrieval policy — IFF the claim text
+            # itself attributes it. Unattributed, or on any other element, it
+            # counts as misattribution.
+            if outside and claim.element == "advisory" and outside_owners and \
+                    _statement_attributes(claim.statement, outside_owners, maps["names"]):
+                outside = False
             if outside:
                 misattributed.append(claim)
             elif network_ptrs and net_owners and not _statement_attributes(
@@ -265,15 +275,16 @@ def closure_diagnostic(rconn, all_results) -> dict:
     return per_subject
 
 
-def test_p1b_subject_closure_diagnostic_reported(closure_diagnostic, capsys):
-    """DIAGNOSTIC ONLY — prints the two closure numbers per subject and in
-    aggregate. Deliberately no assertion on the counts: asserting closure IS
-    the fix (Slice E), and the fix moves scorecards. This test only pins that
-    the diagnostic runs for every subject."""
+def test_p1b_subject_closure_holds_for_every_subject(closure_diagnostic, capsys):
+    """ASSERTED since the grounding-completeness slice: no claim cites a row
+    outside the subject's closure (advisory corroboration context excepted
+    only when the claim text attributes it), and every claim citing a network
+    member's rows names that member. Both counts were real defects when this
+    harness first measured them (13 and 39); they are pinned at zero now."""
     total_mis = sum(len(d["misattributed"]) for d in closure_diagnostic.values())
     total_unattr = sum(len(d["unattributed"]) for d in closure_diagnostic.values())
     with capsys.disabled():
-        print("\nSubject-closure diagnostic (P1b - reported, not asserted):")
+        print("\nSubject-closure property (P1b - asserted):")
         for uid, d in sorted(closure_diagnostic.items()):
             flags = []
             if d["misattributed"]:
@@ -281,10 +292,18 @@ def test_p1b_subject_closure_diagnostic_reported(closure_diagnostic, capsys):
             if d["unattributed"]:
                 flags.append(f"network-unattributed={len(d['unattributed'])}")
             print(f"  uid {uid}: claims={d['claims']:2d}  {'  '.join(flags) or 'clean'}")
-        print(f"  TOTAL claims citing rows OUTSIDE subject+network (misattribution): {total_mis}")
-        print(f"  TOTAL claims citing network rows WITHOUT attribution (wording gap): {total_unattr}")
-        print("  (fix belongs to the grounding-completeness slice, not this harness)")
+        print(f"  claims citing rows OUTSIDE subject+network (misattribution): {total_mis}")
+        print(f"  claims citing network rows WITHOUT attribution (wording):    {total_unattr}")
     assert len(closure_diagnostic) >= 14
+    for uid, d in sorted(closure_diagnostic.items()):
+        assert not d["misattributed"], (
+            f"uid {uid}: claim(s) cite rows outside the subject's closure: "
+            + "; ".join(c.statement[:80] for c in d["misattributed"])
+        )
+        assert not d["unattributed"], (
+            f"uid {uid}: claim(s) cite network rows without attribution: "
+            + "; ".join(c.statement[:80] for c in d["unattributed"])
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -512,7 +531,7 @@ def test_reliability_scorecard(rconn, all_results, roster_uids, isolated_uids,
         print(f"  subjects: {len(all_results)} = {len(roster_uids)} roster "
               f"+ {len(isolated_uids)} isolated (derived, not hardcoded)")
         print(f"  P1  grounding+resolution hold everywhere:      {p1_ok}")
-        print(f"  P1b closure diagnostic (reported, Slice E):    "
+        print(f"  P1b subject-closure holds (asserted):          "
               f"outside-closure={total_mis} network-unattributed={total_unattr}")
         print(f"  P2  render content-verified per subject:       True (see test_p2_*)")
         print(f"  P3  loops bounded (critic<= {MAX_REVISION_ITERATIONS}, hops<=cap, "
