@@ -66,6 +66,125 @@ def _tells_in_closure(
     return kept
 
 
+def _tx_attribution(conn: Connectors, tx_id: str, subject_uid: int) -> str:
+    """A short attribution clause for a transaction that is not the subject's
+    own: ' — a transaction of linked account uid N (Name)'. Empty when the
+    transaction touches the subject directly (no clause needed) or when no
+    account owner is resolvable (address-only legs)."""
+    owners: dict[int, str] = {}
+    for t in conn.transactions_touching(f"uid:{subject_uid}"):
+        if t["tx_id"] == tx_id:
+            return ""  # the subject's own transaction — nothing to attribute
+    for t in conn.all_transactions():
+        if t["tx_id"] != tx_id:
+            continue
+        for ref in (t["from_ref"], t["to_ref"]):
+            if str(ref).startswith("uid:"):
+                uid = int(str(ref)[4:])
+            else:
+                rec = conn.get_address(str(ref))
+                if rec is None or rec["controller_uid"] is None:
+                    continue
+                uid = int(rec["controller_uid"])
+            if uid != subject_uid:
+                acct = conn.get_account(uid)
+                owners[uid] = str(acct["entity_name"]) if acct else ""
+        break
+    if not owners:
+        return ""
+    named = ", ".join(f"uid {u} ({n})" for u, n in sorted(owners.items()))
+    return f" — a transaction of linked account(s) {named} —"
+
+
+def _owners_of(conn: Connectors, prov: list[Provenance]) -> set[int]:
+    """Account uids owning the cited evidence rows (best-effort, read-only).
+
+    Reference material (sdn_list) and the subject's own narrative surfaces
+    (rfi/rfi_prior) resolve to no third-party owner here — they are either
+    not account evidence or definitionally the subject's."""
+    owners: set[int] = set()
+    addr_owner: dict[str, Optional[int]] = {}
+
+    def _addr(ref: str) -> Optional[int]:
+        if ref not in addr_owner:
+            rec = conn.get_address(ref)
+            addr_owner[ref] = (
+                int(rec["controller_uid"])
+                if rec is not None and rec["controller_uid"] is not None else None
+            )
+        return addr_owner[ref]
+
+    def _ref(ref: str) -> None:
+        if str(ref).startswith("uid:"):
+            owners.add(int(str(ref)[4:]))
+        else:
+            u = _addr(str(ref))
+            if u is not None:
+                owners.add(u)
+
+    tx_refs = None
+    for p in prov:
+        if p.source == "accounts" and p.row_key.startswith("uid:"):
+            owners.add(int(p.row_key.split(":")[1]))
+        elif p.source == "transactions":
+            if tx_refs is None:
+                tx_refs = {t["tx_id"]: (t["from_ref"], t["to_ref"])
+                           for t in conn.all_transactions()}
+            for ref in tx_refs.get(p.row_key, ()):
+                _ref(ref)
+        elif p.source == "gas_funding":
+            for part in p.row_key.split("->"):
+                _ref(part)
+        elif p.source == "addresses":
+            _ref(p.row_key)
+        elif p.source == "devices":
+            owners.add(int(p.row_key.rsplit(":", 1)[1]))
+        elif p.source == "kyc_docs":
+            owners.update(int(a["uid"]) for a in conn.accounts_with_kyc(p.row_key))
+        elif p.source == "registry":
+            for rec in conn.all_registry():
+                if rec["registry_id"] == p.row_key:
+                    owners.update({int(rec["company_uid"]), int(rec["officer_uid"])})
+    return owners
+
+
+def _attribution_note(
+    conn: Connectors, expansion: NetworkExpansion, subject_uid: int,
+    prov: list[Provenance],
+) -> str:
+    """One appended sentence naming every non-subject account whose records a
+    claim cites — linked network accounts and (separately labelled) any
+    dataset-level context outside the subject's own network. Empty when the
+    cited rows are all the subject's own. The reader of a subject-scoped
+    claim must be able to tell whose evidence it rests on from the text."""
+    others = _owners_of(conn, prov) - {subject_uid}
+    if not others:
+        return ""
+    net_uids = {
+        int(str(n).split(":")[1])
+        for n in expansion.graph.nodes if str(n).startswith("acct:")
+    }
+
+    def _named(uids: list[int]) -> str:
+        parts = []
+        for u in uids:
+            acct = conn.get_account(u)
+            parts.append(f"uid {u} ({acct['entity_name']})" if acct else f"uid {u}")
+        return ", ".join(parts)
+
+    linked = sorted(u for u in others if u in net_uids)
+    outside = sorted(u for u in others if u not in net_uids)
+    bits = []
+    if linked:
+        bits.append(f"records of linked network account(s) {_named(linked)}")
+    if outside:
+        bits.append(
+            f"dataset-level screening context from account(s) {_named(outside)} "
+            f"outside the subject's own network"
+        )
+    return " Cited records include " + " and ".join(bits) + "."
+
+
 def build_sar(
     conn: Connectors,
     profile: ProfileTimeline,
@@ -118,25 +237,38 @@ def build_sar(
 
     # TELL — attribution tells from free-text remarks, gated to the subject's
     # evidence closure (see TELL_SCOPE): the screen is dataset-wide, the SAR
-    # is not.
+    # is not. When the transaction belongs to a linked network account rather
+    # than the subject, the claim SAYS so — citing a network member's evidence
+    # is legitimate investigative practice, but the reader must be able to
+    # tell whose evidence it is from the claim text alone.
     for hit in _tells_in_closure(conn, expansion, tells)[:max_tells]:
+        attribution = _tx_attribution(conn, hit.tx_id, profile.subject_uid)
         claims.append(SarClaim(
             element="tell",
             statement=(
-                f'A remark on {hit.tx_id} surfaces a possible attribution tell '
-                f'("{hit.remark}"): {hit.note}.'
+                f'A remark on {hit.tx_id}{attribution} surfaces a possible '
+                f'attribution tell ("{hit.remark}"): {hit.note}.'
             ),
             provenance=[hit.provenance],
         ))
 
-    # ADVISORY — regulatory grounding + the SAR key term to cite.
+    # ADVISORY — regulatory grounding + the SAR key term to cite. The match's
+    # corroboration is case- and dataset-level by versioned retrieval policy,
+    # so its provenance may include records of accounts outside the subject's
+    # own network (e.g. a watchlist name-hit elsewhere in the data). Those are
+    # carried — hiding the match's real basis would weaken defensibility —
+    # and ATTRIBUTED in the claim text so the reader can tell they are
+    # corroboration context, not the subject's own records.
     if advisory is not None:
+        corroboration_note = _attribution_note(
+            conn, expansion, profile.subject_uid, list(advisory.provenance),
+        )
         claims.append(SarClaim(
             element="advisory",
             statement=(
                 f"The subject's case text matches FinCEN Advisory {advisory.advisory_id} "
                 f"on term(s): {', '.join(advisory.matched_terms)}. FinCEN instructs filers to "
-                f"reference key term {advisory.sar_key_term}."
+                f"reference key term {advisory.sar_key_term}.{corroboration_note}"
             ),
             provenance=list(advisory.provenance),
         ))
@@ -162,6 +294,7 @@ def build_sar(
     if contradictions is not None:
         for adj in contradictions.contradictions:
             rebuttal_prov = [p for r in adj.rebuttals for p in r.provenance]
+            all_prov = _dedup([adj.provenance] + rebuttal_prov)
             claims.append(SarClaim(
                 element="contradiction",
                 statement=(
@@ -171,8 +304,10 @@ def build_sar(
                     f"({', '.join(adj.sources)}; evidence weight {adj.confidence:.2f}): "
                     + " ".join(r.statement for r in adj.rebuttals)
                     + " This contradiction is surfaced for analyst review."
+                    # drafter-owned attribution: whose records the rebuttals cite
+                    + _attribution_note(conn, expansion, profile.subject_uid, all_prov)
                 ),
-                provenance=_dedup([adj.provenance] + rebuttal_prov),
+                provenance=all_prov,
             ))
 
     filing_note = "Human review required before any filing decision."
@@ -314,13 +449,16 @@ def _how_claim(
 
     if not prov:
         return None
+    prov = _dedup(prov)
     return SarClaim(
         element="how",
         statement=(
             f"The activity exhibits {', '.join(mechs)} (mechanism surfaced for "
             f"analyst review)."
+            # whose records evidence the mechanism, when not the subject's own
+            + _attribution_note(conn, expansion, profile.subject_uid, prov)
         ),
-        provenance=_dedup(prov),
+        provenance=prov,
     )
 
 
