@@ -356,7 +356,6 @@ def _render_decisions(res) -> None:
 
     if res.recidivism is not None:
         view = res.recidivism
-        subject_account = get_connectors().get_account(res.subject_uid)
         st.markdown("#### Case-graph memory at open")
         if view.is_recidivist:
             # The alert itself lives in the page header (shown once at case
@@ -371,10 +370,9 @@ def _render_decisions(res) -> None:
                 f"History clear at open: {view.prior_review_count} prior review(s), "
                 f"status {view.account_status}."
             )
-        _source_caption(
-            subject_account.provenance if subject_account else None,
-            prefix="source (prior_review_count, account_status)",
-        )
+        if view.provenance:
+            st.caption("source (prior_review_count, account_status): "
+                       + "; ".join(view.provenance))
         if view.entity_overlaps:
             with st.expander(
                 f"{len(view.entity_overlaps)} cross-case entity overlap(s) on record"
@@ -396,6 +394,8 @@ def _render_decisions(res) -> None:
             f"stamped in the audit chain: `agency/decision` · target `{d.decision_id}` "
             "(Audit trail tab)"
         )
+        if d.provenance:
+            st.caption("evidence rows: " + "; ".join(d.provenance))
         with st.expander("Driving evidence"):
             st.json(d.evidence)
         st.markdown("")
@@ -542,10 +542,9 @@ def main() -> None:
             "reviews do not exempt a subject. Surfaced for human review "
             "(details in the Decisions tab)."
         )
-        _source_caption(
-            subject_account.provenance if subject_account else None,
-            prefix="source (prior_review_count, account_status)",
-        )
+        if res.recidivism.provenance:
+            st.caption("source (prior_review_count, account_status): "
+                       + "; ".join(res.recidivism.provenance))
 
     names = {a["uid"]: a["entity_name"] for a in accounts}
 

@@ -50,7 +50,9 @@ from ..sar import CritiqueHistory
 # Bump on any change to a threshold, outcome set, decision rule, or the
 # follow-up disclosure policy. Stamped into the audit trail and mirrored by
 # the published methodology doc.
-AGENCY_VERSION = "1.1.0"
+# 1.2.0 — DecisionRecord carries row-level provenance (audit-stamped with
+# each decision; per-decision semantics in the methodology doc).
+AGENCY_VERSION = "1.2.0"
 
 # --- Tunable policy thresholds (see docs/agency-methodology.md) --------------
 
@@ -97,6 +99,13 @@ class DecisionRecord(BaseModel):
     rationale: str
     plain_language: str
     evidence: dict
+    # Row-level pointers behind the rule's inputs, as audit-style citation
+    # strings — populated where the input IS a row property (discovered
+    # accounts, advisory match rows, contradicted-claim rows, the subject
+    # row). Aggregate-input decisions (a rubric coverage, a hop cap) carry []
+    # and their derivation is cited via the aggregates' own audit stamps —
+    # per-decision semantics published in docs/agency-methodology.md.
+    provenance: list[str] = []
 
     def summary(self) -> dict:
         return self.model_dump()
@@ -157,6 +166,15 @@ def agency_config() -> dict:
             "delegates to the Critic: clears_bar iff the bounded revision loop "
             "converged (Critique.meets_bar at the critic_config threshold)"
         ),
+        "decision_provenance": (
+            "each stamped decision carries row-level citations where its "
+            "inputs are row properties (expand_hop: accounts discovered last "
+            "hop; second_advisory: the matches' evidence rows; re_rfi: the "
+            "contradicted claims' assertion+rebuttal rows; sufficiency: the "
+            "subject account row); aggregate-input decisions (sar_bar, and "
+            "cap/frontier stops) carry none and are covered by the "
+            "aggregates' own audit stamps"
+        ),
         "boundaries": {
             "second_advisory": (
                 "surfaced to the analyst only; the SAR drafter consumes the "
@@ -196,7 +214,8 @@ def agency_config() -> dict:
 # --- The five decision rules -------------------------------------------------
 
 
-def decide_expand(hops_done: int, cap: int, new_accounts_last_hop: int) -> DecisionRecord:
+def decide_expand(hops_done: int, cap: int, new_accounts_last_hop: int, *,
+                  provenance: Optional[list[str]] = None) -> DecisionRecord:
     """Expand another hop? Continue while the frontier stays productive.
 
     A hop whose previous hop discovered no new accounts would start from an
@@ -229,10 +248,11 @@ def decide_expand(hops_done: int, cap: int, new_accounts_last_hop: int) -> Decis
                  "is fully mapped within the review scope.")
     return DecisionRecord(decision_id="expand_hop", outcome=outcome,
                           rationale=rationale, plain_language=plain,
-                          evidence=evidence)
+                          evidence=evidence, provenance=list(provenance or []))
 
 
-def decide_second_advisory(matches: Sequence[AdvisoryMatch]) -> DecisionRecord:
+def decide_second_advisory(matches: Sequence[AdvisoryMatch], *,
+                           provenance: Optional[list[str]] = None) -> DecisionRecord:
     """Pull a second advisory? Only when more than one corroborated match
     survived the corroboration gate; the runner-up is surfaced, never drafted.
     """
@@ -262,10 +282,11 @@ def decide_second_advisory(matches: Sequence[AdvisoryMatch]) -> DecisionRecord:
                  "corroborating case evidence.")
     return DecisionRecord(decision_id="second_advisory", outcome=outcome,
                           rationale=rationale, plain_language=plain,
-                          evidence=evidence)
+                          evidence=evidence, provenance=list(provenance or []))
 
 
-def decide_re_rfi(table: Optional[ContradictionTable]) -> DecisionRecord:
+def decide_re_rfi(table: Optional[ContradictionTable], *,
+                  provenance: Optional[list[str]] = None) -> DecisionRecord:
     """Re-RFI? Recommended only when the adjudicated table holds at least one
     ``contradicted`` claim — the sole flag verdict. Prepared, never sent.
 
@@ -278,6 +299,7 @@ def decide_re_rfi(table: Optional[ContradictionTable]) -> DecisionRecord:
             decision_id="re_rfi", outcome="not_applicable",
             rationale=rationale, plain_language=rationale,
             evidence={"rfi_id": None, "contradicted_claims": 0},
+            provenance=list(provenance or []),
         )
     contradicted = table.contradictions
     evidence = {"rfi_id": table.rfi_id,
@@ -294,10 +316,11 @@ def decide_re_rfi(table: Optional[ContradictionTable]) -> DecisionRecord:
                      "no follow-up is proposed")
     return DecisionRecord(decision_id="re_rfi", outcome=outcome,
                           rationale=rationale, plain_language=rationale,
-                          evidence=evidence)
+                          evidence=evidence, provenance=list(provenance or []))
 
 
-def decide_sufficiency(subject_resolved: bool, event_count: int) -> DecisionRecord:
+def decide_sufficiency(subject_resolved: bool, event_count: int, *,
+                       provenance: Optional[list[str]] = None) -> DecisionRecord:
     """Evidence sufficient to draft? The minimum for a fail-closed draft
     attempt is a resolved subject and one grounded timeline event ("who" and
     "when" are citable). Below that, the case is referred to a human — the
@@ -323,10 +346,11 @@ def decide_sufficiency(subject_resolved: bool, event_count: int) -> DecisionReco
                  "narrative.")
     return DecisionRecord(decision_id="sufficiency", outcome=outcome,
                           rationale=rationale, plain_language=plain,
-                          evidence=evidence)
+                          evidence=evidence, provenance=list(provenance or []))
 
 
-def decide_sar_bar(history: CritiqueHistory) -> DecisionRecord:
+def decide_sar_bar(history: CritiqueHistory, *,
+                   provenance: Optional[list[str]] = None) -> DecisionRecord:
     """Does the SAR clear the bar? Delegates to the Critic's rubric verdict:
     the draft clears only if the bounded revision loop converged. Either way a
     human reviews and decides — this records the disposition, it does not file.
@@ -352,7 +376,7 @@ def decide_sar_bar(history: CritiqueHistory) -> DecisionRecord:
                  "never invented.")
     return DecisionRecord(decision_id="sar_bar", outcome=outcome,
                           rationale=rationale, plain_language=plain,
-                          evidence=evidence)
+                          evidence=evidence, provenance=list(provenance or []))
 
 
 # --- Anti-tipping-off validator (subject-facing text only) -------------------

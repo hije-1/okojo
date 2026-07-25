@@ -38,7 +38,9 @@ from ..connectors import Connectors
 
 # Bump on any change to the schema, the recidivism rule, or the entity kinds.
 # Stamped into the audit trail and mirrored by the published methodology doc.
-CASEGRAPH_VERSION = "1.0.0"
+# 1.1.0 — RecidivismView carries the citation for the accounts row its flag
+# derives from (view-level provenance; the audit summary is unchanged).
+CASEGRAPH_VERSION = "1.1.0"
 
 # An account is surfaced as a recidivism risk when its planted review history
 # says it has been looked at repeatedly (>= this many prior reviews), or when
@@ -82,6 +84,11 @@ def casegraph_config() -> dict:
         "recidivism_statuses": list(RECIDIVISM_STATUSES),
         "entity_kinds": list(ENTITY_KINDS),
         "store": "sqlite3 file; idempotent per-case upsert; no timestamps",
+        "view_provenance": (
+            "RecidivismView cites the subject accounts row its flag derives "
+            "from (prior_review_count, account_status); cross-case overlaps "
+            "are pointed at by case_ids resolving into the case graph"
+        ),
     }
 
 
@@ -108,6 +115,10 @@ class RecidivismView(BaseModel):
     is_recidivist: bool
     prior_case_ids: list[str]
     entity_overlaps: list[EntityOverlap]
+    # Citation for the rows the flag derives from (the subject's accounts row
+    # carrying prior_review_count / account_status). Cross-case overlaps are
+    # pointed at by their case_ids, which resolve into the case graph itself.
+    provenance: list[str] = []
 
     def summary(self) -> dict:
         """Compact, ASCII, audit-loggable summary."""
@@ -248,6 +259,7 @@ class CaseGraphStore:
                            or status in RECIDIVISM_STATUSES),
             prior_case_ids=prior_case_ids,
             entity_overlaps=overlaps,
+            provenance=[account.provenance.cite()] if account is not None else [],
         )
 
     def dump(self) -> dict:

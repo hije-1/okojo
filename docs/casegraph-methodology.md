@@ -1,4 +1,4 @@
-# Case-Graph Methodology (v1.0.0)
+# Case-Graph Methodology (v1.1.0)
 
 **Status:** synthetic-data research prototype. This document explains Okojo's
 persistent case graph — what it records across cases, how recidivism is
@@ -105,12 +105,12 @@ version is below; it is the single source of truth
 (`okojo.casegraph.casegraph_config`) and is regression-tested against this
 document, so the doc and the code can never silently drift.
 
-**Version 1.0.0 — canonical policy:**
+**Version 1.1.0 — canonical policy:**
 
 <!-- casegraph-config:begin -->
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "recidivism_prior_reviews": 3,
   "recidivism_statuses": [
     "retain_monitor"
@@ -121,7 +121,8 @@ document, so the doc and the code can never silently drift.
     "device",
     "kyc_doc"
   ],
-  "store": "sqlite3 file; idempotent per-case upsert; no timestamps"
+  "store": "sqlite3 file; idempotent per-case upsert; no timestamps",
+  "view_provenance": "RecidivismView cites the subject accounts row its flag derives from (prior_review_count, account_status); cross-case overlaps are pointed at by case_ids resolving into the case graph"
 }
 ```
 <!-- casegraph-config:end -->

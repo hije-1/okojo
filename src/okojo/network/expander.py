@@ -340,7 +340,11 @@ def step_walk(conn: Connectors, walk: ExpansionWalk) -> int:
 
     walk.frontier = next_frontier
     walk.hop_stats.append(
-        {"hop": len(walk.hop_stats) + 1, "new_accounts": len(next_frontier)}
+        # new_account_uids: the row-level drivers behind the expand-hop
+        # decision's provenance. hop_stats stays OUT of summary(), so this
+        # never touches the audited expansion detail (byte-identity pinned).
+        {"hop": len(walk.hop_stats) + 1, "new_accounts": len(next_frontier),
+         "new_account_uids": sorted(next_frontier)}
     )
     return len(next_frontier)
 

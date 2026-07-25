@@ -78,6 +78,7 @@ from ..network import (
     step_walk,
 )
 from ..packager import build_package
+from ..provenance import Provenance
 from ..remarks import AliasMatch, RemarkTell, mine_remarks, screen_aliases
 from ..rfi import (
     ContradictionTable,
@@ -233,6 +234,11 @@ def _decide_expand(state: CaseState) -> CaseState:
     rec = decide_expand(
         hops_done=len(walk.hop_stats), cap=cap,
         new_accounts_last_hop=walk.hop_stats[-1]["new_accounts"],
+        # the accounts the last hop discovered ARE the rule's row-level input
+        provenance=[
+            Provenance(source="accounts", row_key=f"uid:{u}").cite()
+            for u in walk.hop_stats[-1].get("new_account_uids", [])
+        ],
     )
     return _record_decision(state, rec)
 
@@ -344,7 +350,11 @@ def _advisory(state: CaseState) -> CaseState:
 
 
 def _decide_second_advisory(state: CaseState) -> CaseState:
-    return _record_decision(state, decide_second_advisory(state["advisory_matches"]))
+    matches = state["advisory_matches"]
+    cites = list(dict.fromkeys(
+        p.cite() for m in matches for p in m.provenance
+    ))
+    return _record_decision(state, decide_second_advisory(matches, provenance=cites))
 
 
 def _attach_secondary(state: CaseState) -> CaseState:
@@ -401,7 +411,15 @@ def _contradictions(state: CaseState) -> CaseState:
 
 
 def _decide_re_rfi(state: CaseState) -> CaseState:
-    return _record_decision(state, decide_re_rfi(state["contradictions"]))
+    table = state["contradictions"]
+    cites: list[str] = []
+    if table is not None:
+        cites = list(dict.fromkeys(
+            [adj.provenance.cite() for adj in table.contradictions]
+            + [p.cite() for adj in table.contradictions
+               for r in adj.rebuttals for p in r.provenance]
+        ))
+    return _record_decision(state, decide_re_rfi(table, provenance=cites))
 
 
 def _draft_rfi_followup(state: CaseState) -> CaseState:
@@ -425,9 +443,13 @@ def _draft_rfi_followup(state: CaseState) -> CaseState:
 
 def _decide_sufficiency(state: CaseState) -> CaseState:
     profile = state["profile"]
+    subject = state["conn"].get_account(state["subject_uid"])
     rec = decide_sufficiency(
         subject_resolved="subject_name" in state,
         event_count=len(profile.events),
+        # the subject row IS the subject_resolved input; the event count's
+        # row-level basis is each event's own cited provenance
+        provenance=[subject.provenance.cite()] if subject is not None else [],
     )
     return _record_decision(state, rec)
 

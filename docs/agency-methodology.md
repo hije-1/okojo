@@ -1,4 +1,4 @@
-# Agency Methodology (v1.1.0)
+# Agency Methodology (v1.2.0)
 
 **Status:** synthetic-data research prototype. This document explains what
 "agency" means in Okojo, why every agentic decision is deterministic, and what
@@ -184,12 +184,12 @@ it is the single source of truth (`okojo.agency.agency_config`) and is
 regression-tested against this document, so the doc and the code can never
 silently drift.
 
-**Version 1.1.0 — canonical policy:**
+**Version 1.2.0 — canonical policy:**
 
 <!-- agency-config:begin -->
 ```json
 {
-  "version": "1.1.0",
+  "version": "1.2.0",
   "decision_points": {
     "expand_hop": [
       "continue",
@@ -222,6 +222,7 @@ silently drift.
     "sufficiency_min_events": 1
   },
   "sar_bar_rule": "delegates to the Critic: clears_bar iff the bounded revision loop converged (Critique.meets_bar at the critic_config threshold)",
+  "decision_provenance": "each stamped decision carries row-level citations where its inputs are row properties (expand_hop: accounts discovered last hop; second_advisory: the matches' evidence rows; re_rfi: the contradicted claims' assertion+rebuttal rows; sufficiency: the subject account row); aggregate-input decisions (sar_bar, and cap/frontier stops) carry none and are covered by the aggregates' own audit stamps",
   "boundaries": {
     "second_advisory": "surfaced to the analyst only; the SAR drafter consumes the primary match alone",
     "re_rfi": "discrete routine requests are prepared for the human investigator, who owns assembly and sending; the agent never sends anything",

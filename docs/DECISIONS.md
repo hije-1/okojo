@@ -344,3 +344,17 @@ _Added Day 6 (Phase 7, Slice E)._
   the honest outcome is fewer claims and, for the isolated ones, an uncovered
   `subject_and_network` element flagged for human review — which is what a
   fail-closed system is supposed to do with evidence it does not have.
+- **Decision-level provenance, and the announced audit-hash move.** Slice E
+  also gave `DecisionRecord` a row-level provenance field (AGENCY v1.2.0) —
+  the accounts a hop discovered, the advisory matches' evidence rows, the
+  contradicted claims' assertion+rebuttal rows, the subject row behind the
+  sufficiency gate; aggregate-input decisions (sar_bar) carry none, covered
+  by their own audit stamps — and `RecidivismView` the citation for the
+  accounts row its flag derives from (CASEGRAPH v1.1.0; the audited summary
+  is unchanged). Because every decision is stamped into the hash chain via
+  `summary()`, **this moves the audit-chain content — and therefore the tip
+  hash and package SHA-256 — for every case, by intention and announced in
+  advance**, not discovered mid-commit. The chain remains internally
+  consistent and verified; determinism is re-proven by the standing two-run
+  byte-identity and packager byte tests; the decision-trace eval (triples vs
+  the domain-authored gold) is unchanged at P/R/F1=1.0.
