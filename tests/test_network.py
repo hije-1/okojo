@@ -33,6 +33,12 @@ def test_gas_funding_controller_collapse(conn, trust_uid, ground_truth):
     # every collapsed hop is attributed to the true controller (the KINGPIN)
     controller = ground_truth["ultimate_controller_uid"]
     assert all(l["controller_uid"] == controller for l in exp.gas_funding_links)
+    # ...and every link carries the gas_funding evidence row it derives from
+    # (the same pointer the graph edges cite — no consumer reconstructs it)
+    for l in exp.gas_funding_links:
+        p = l["provenance"]
+        assert p.source == "gas_funding"
+        assert p.row_key == f"{l['funder_address']}->{l['funded_address']}"
 
 
 def test_sanctioned_exposure_recall(conn, trust_uid, ground_truth):

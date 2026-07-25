@@ -757,15 +757,10 @@ def main() -> None:
                 f"attributed to their gas funder ({who}). A wallet is not independent of "
                 "whoever pays its gas."
             )
-            # The gas_funding row key IS funder->funded (the connectors' own
-            # format), so each link cites the exact evidence row behind it.
             gdf = pd.DataFrame([
                 {"funder_address": l["funder_address"], "funded_address": l["funded_address"],
                  "controller_uid": str(l["controller_uid"]),  # uid is an identifier, not a quantity
-                 "source": Provenance(
-                     source="gas_funding",
-                     row_key=f"{l['funder_address']}->{l['funded_address']}",
-                 ).cite()}
+                 "source": l["provenance"].cite()}  # the expander's own evidence row
                 for l in gas_links
             ])
             st.dataframe(gdf, use_container_width=True, hide_index=True)

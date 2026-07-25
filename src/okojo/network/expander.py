@@ -378,7 +378,11 @@ def finish_walk(conn: Connectors, walk: ExpansionWalk, max_hops: int) -> Network
             if controller not in discovered:
                 discovered.add(controller)
             gas_links.append(
-                {"funder_address": funder, "funded_address": funded, "controller_uid": controller}
+                {"funder_address": funder, "funded_address": funded,
+                 "controller_uid": controller,
+                 # the same evidence row the graph edges cite — previously
+                 # computed here and dropped, leaving the UI to reconstruct it
+                 "provenance": gf.provenance}
             )
 
     exposed_nodes = _sanctioned_flow_ancestors(b.g)
