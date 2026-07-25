@@ -28,7 +28,9 @@ from okojo.connectors import Connectors
 from okojo.network import build_roster
 from okojo.orchestrator import run_case
 from okojo.orchestrator.pipeline import default_out_dir
+from okojo.provenance import Provenance
 from okojo.remarks import SCREEN_THRESHOLD
+from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
 
 # Brand logo lives at the repo root; resolve off it so the path holds regardless
@@ -102,6 +104,26 @@ def _chip(text: str, color: str) -> str:
     )
 
 
+def _cites(provs) -> str:
+    """Render one Provenance, or any iterable of them, as 'src[key]; src[key]'.
+
+    THE shared provenance formatter — every claim the UI surfaces cites through
+    this one function, so pointers read identically on every tab (the grounding
+    contract's UI half: a claim without its pointer is a rendering bug)."""
+    if provs is None:
+        return ""
+    if isinstance(provs, Provenance):
+        provs = [provs]
+    return "; ".join(p.cite() for p in provs)
+
+
+def _source_caption(provs, prefix: str = "source") -> None:
+    """The standard one-line citation caption under a surfaced claim."""
+    text = _cites(provs)
+    if text:
+        st.caption(f"{prefix}: {text}")
+
+
 def _diff_html(a: str, b: str) -> tuple[str, str]:
     """Return (a_html, b_html) with the characters that differ highlighted, so a
     reviewer can see *exactly* where a name and a watchlist alias diverge
@@ -160,6 +182,8 @@ def _roster_card_html(row, risk=None) -> str:
         f"<div style='font-size:0.95rem;'>{star}<b>{row.name}</b>"
         f"<span style='color:{_RISK_GREY};font-size:0.8rem;'> · {role} · uid {row.uid}</span></div>"
         f"<div style='margin-top:4px;'>{''.join(parts)}</div>"
+        f"<div style='color:{_RISK_GREY};font-size:0.7rem;margin-top:2px;'>"
+        f"source: accounts[uid:{row.uid}] · exposure decomposes in the Sanctions tab</div>"
     )
 
 
@@ -240,6 +264,7 @@ def _render_rfi(rfi, table=None, decomposition=None) -> None:
         return
 
     st.markdown(f"**{rfi.rfi_id}** · subject uid {rfi.uid}")
+    _source_caption(rfi.provenance)
     st.markdown("**Investigator question**")
     st.markdown(f"> {rfi.question}")
     st.markdown("**Account-holder response**")
@@ -263,12 +288,13 @@ def _render_rfi(rfi, table=None, decomposition=None) -> None:
         if adj.rebuttals:
             chips += "  " + _chip(f"evidence weight {adj.confidence:.2f}", "#334155")
         st.markdown(f"{chips}<br>{adj.claim_text}", unsafe_allow_html=True)
+        _source_caption(adj.provenance, prefix="verdict source")
 
         src = aligned.get(adj.claim_id)
         if src is not None:
             st.caption(
                 f"Decomposed from the response (alignment {src.alignment_score:.0f}): "
-                f"“{src.source_sentence}”"
+                f"“{src.source_sentence}” · source: {_cites(src.provenance)}"
             )
 
         if adj.rebuttals:
@@ -314,6 +340,7 @@ def _render_decisions(res) -> None:
 
     if res.recidivism is not None:
         view = res.recidivism
+        subject_account = get_connectors().get_account(res.subject_uid)
         st.markdown("#### Case-graph memory at open")
         if view.is_recidivist:
             st.error(
@@ -326,6 +353,10 @@ def _render_decisions(res) -> None:
                 f"History clear at open: {view.prior_review_count} prior review(s), "
                 f"status {view.account_status}."
             )
+        _source_caption(
+            subject_account.provenance if subject_account else None,
+            prefix="source (prior_review_count, account_status)",
+        )
         if view.entity_overlaps:
             with st.expander(
                 f"{len(view.entity_overlaps)} cross-case entity overlap(s) on record"
@@ -343,6 +374,10 @@ def _render_decisions(res) -> None:
         st.markdown(d.plain_language)
         if d.rationale != d.plain_language:
             st.caption(f"Audit-exact rationale: {d.rationale}")
+        st.caption(
+            f"stamped in the audit chain: `agency/decision` · target `{d.decision_id}` "
+            "(Audit trail tab)"
+        )
         with st.expander("Driving evidence"):
             st.json(d.evidence)
         st.markdown("")
@@ -354,6 +389,7 @@ def _render_decisions(res) -> None:
             "gate and is surfaced for analyst context. The SAR draft consumes the "
             "primary match alone."
         )
+        _source_caption(res.secondary_advisory.provenance, prefix="match evidence")
 
     if res.rfi_followup is not None:
         st.markdown("#### Follow-up RFI worklist (prepared, never sent)")
@@ -379,6 +415,7 @@ def _render_decisions(res) -> None:
                 )
             for r in q.requests:
                 st.markdown(f"- **{_REQUEST_KIND.get(r.kind, r.kind)}:** {r.text}")
+                st.caption(f"cites (analyst-facing): {'; '.join(r.citations)}")
             if q.suppressed:
                 st.warning(
                     f"{len(q.suppressed)} request(s) suppressed by the "
@@ -459,12 +496,20 @@ def main() -> None:
     c4.metric("Tells", len(res.tells))
     c5.metric("Watchlist hits", len(res.alias_hits))
     c6.metric("Advisory", res.advisory.advisory_id if res.advisory else "—")
+    st.caption(
+        "Anomalies / Network / Sanctioned / Advisory are subject-scoped; **Tells and "
+        "Watchlist hits are dataset-wide screens** (they run over every remark and "
+        "account name, not just this subject's). Each count decomposes in its tab "
+        "with row-level citations."
+    )
 
+    subject_account = conn.get_account(subject_uid)
     if res.profile.internal_tag:
         st.warning(
             f"Internal 'do-not-block' tag present: {res.profile.internal_tag!r} — "
             "**flagged for review, not obeyed.**"
         )
+        _source_caption(subject_account.provenance if subject_account else None)
 
     if res.recidivism is not None and res.recidivism.is_recidivist:
         st.error(
@@ -472,6 +517,10 @@ def main() -> None:
             f"prior review(s), status `{res.recidivism.account_status}` — prior cleared "
             "reviews do not exempt a subject. Surfaced for human review "
             "(details in the Decisions tab)."
+        )
+        _source_caption(
+            subject_account.provenance if subject_account else None,
+            prefix="source (prior_review_count, account_status)",
         )
 
     names = {a["uid"]: a["entity_name"] for a in accounts}
@@ -502,13 +551,11 @@ def main() -> None:
         if res.alias_hits:
             adf = pd.DataFrame([
                 {"uid": str(h.uid), "entity_name": h.entity_name, "matched_alias": h.matched_alias,
-                 "sdn_id": h.sdn_id, "score": h.score, "program": h.program}
+                 "sdn_id": h.sdn_id, "score": h.score, "program": h.program,
+                 "source": _cites(h.provenance)}
                 for h in res.alias_hits
             ])
             st.dataframe(adf, use_container_width=True, hide_index=True)
-            st.caption("source: " + "; ".join(
-                p.cite() for h in res.alias_hits for p in h.provenance
-            ))
             with st.expander("How the name match works — show the math"):
                 st.markdown(
                     f"**Algorithm:** RapidFuzz `WRatio` (a weighted character/token "
@@ -529,7 +576,9 @@ def main() -> None:
                         f"uid {h.uid} · similarity <b>{h.score:.0f}</b> / 100 "
                         f"(threshold {SCREEN_THRESHOLD}) · program {h.program}<br>"
                         f"account name:&nbsp;&nbsp;{name_html}<br>"
-                        f"watchlist alias: {alias_html}</div>",
+                        f"watchlist alias: {alias_html}<br>"
+                        f"<span style='color:{_RISK_GREY};font-size:0.78rem;'>"
+                        f"source: {_cites(h.provenance)}</span></div>",
                         unsafe_allow_html=True,
                     )
         else:
@@ -547,7 +596,7 @@ def main() -> None:
                 {"uid": str(s.uid), "name": names.get(s.uid, s.uid), "score": s.score,
                  "band": s.band, "hops_to_sanctioned": s.hop_distance,
                  "tainted_usdt": s.tainted_amount_usdt, "reasons": ", ".join(s.reasons),
-                 "money_flow": s.exposure_path}
+                 "money_flow": s.exposure_path, "source": _cites(s.provenance)}
                 for s in res.risk.scores
             ])
             st.dataframe(rdf, use_container_width=True, hide_index=True)
@@ -636,9 +685,15 @@ def main() -> None:
                 f"attributed to their gas funder ({who}). A wallet is not independent of "
                 "whoever pays its gas."
             )
+            # The gas_funding row key IS funder->funded (the connectors' own
+            # format), so each link cites the exact evidence row behind it.
             gdf = pd.DataFrame([
                 {"funder_address": l["funder_address"], "funded_address": l["funded_address"],
-                 "controller_uid": str(l["controller_uid"])}  # uid is an identifier, not a quantity
+                 "controller_uid": str(l["controller_uid"]),  # uid is an identifier, not a quantity
+                 "source": Provenance(
+                     source="gas_funding",
+                     row_key=f"{l['funder_address']}->{l['funded_address']}",
+                 ).cite()}
                 for l in gas_links
             ])
             st.dataframe(gdf, use_container_width=True, hide_index=True)
@@ -684,6 +739,7 @@ def main() -> None:
         if res.advisory:
             a = res.advisory
             st.markdown(f"**{a.advisory_id}** — {a.title}")
+            _source_caption(a.provenance, prefix="match evidence")
             if a.signals:
                 badge = "  ·  ".join(f"`{s}`" for s in a.signals)
                 corr = "  ·  **corroborated**" if a.corroborated else ""
@@ -708,6 +764,12 @@ def main() -> None:
                     st.caption(f"[{c.kind}] {c.detail}  ·  {c.provenance.cite()}")
 
             with st.expander(f"Red-flag indicators ({len(a.red_flags)})"):
+                st.caption(
+                    f"Verbatim indicator list from advisory **{a.advisory_id}** — the "
+                    "cited source for every flag below. Which indicators this case "
+                    "actually evidences is shown above (Semantic / Structured, each "
+                    "with its row-level citation)."
+                )
                 for rf in a.red_flags:
                     st.markdown(f"- {rf}")
 
@@ -775,9 +837,17 @@ def main() -> None:
                         "Below the Critic bar — uncovered element(s) flagged for analyst review."
                     )
 
+                # Which numbered claim(s) satisfy each rubric element — the claim
+                # numbers match the [n] list above, so every "yes" is traceable
+                # to the cited claims behind it (rubric mapping: FINCEN_RUBRIC).
+                elements_for = {e.key: e.claim_elements for e in FINCEN_RUBRIC}
                 grade_df = pd.DataFrame([
                     {"element": g.label, "covered": "yes" if g.passed else "no",
-                     "required": "yes" if g.required else "no"}
+                     "required": "yes" if g.required else "no",
+                     "satisfied_by_claim": ", ".join(
+                         f"[{i}]" for i, c in enumerate(res.sar.claims, start=1)
+                         if c.element in elements_for.get(g.key, ())
+                     ) or "—"}
                     for g in crit.grades
                 ])
                 st.dataframe(grade_df, use_container_width=True, hide_index=True)
