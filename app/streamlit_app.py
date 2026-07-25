@@ -396,6 +396,28 @@ def _render_decisions(res) -> None:
         )
         if d.provenance:
             st.caption("evidence rows: " + "; ".join(d.provenance))
+        else:
+            # Aggregate-input decisions cite no rows of their own — say why,
+            # rather than showing a silent absence on a consequential decision.
+            _NO_ROWS_WHY = {
+                "sar_bar": (
+                    "its input is the Critique, an aggregate whose row-level "
+                    "basis is the draft's own cited claims (SAR draft tab)"
+                ),
+                "expand_hop": (
+                    "the stop was driven by the cap/exhausted frontier, not "
+                    "by new rows; prior hops' discoveries are cited above"
+                ),
+            }
+            st.caption(
+                "evidence rows: none of its own — "
+                + _NO_ROWS_WHY.get(
+                    d.decision_id,
+                    "an aggregate-input decision; its basis is covered by the "
+                    "cited aggregates' own audit stamps",
+                )
+                + "."
+            )
         with st.expander("Driving evidence"):
             st.json(d.evidence)
         st.markdown("")

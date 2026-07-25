@@ -69,6 +69,22 @@ measured effect is documented in the ablation below: the gold key was
 re-authored downward for the noise role, because the prior key credited
 coverage on borrowed evidence.
 
+**The advisory-corroboration exception.** One claim family may cite rows
+outside the subject's network: the *advisory* claim. An advisory match is
+corroborated at case- and dataset-level by versioned retrieval policy (see
+`docs/advisory-methodology.md`) — for example, a watchlist name-hit
+elsewhere in the data can be part of what corroborated the match. Those
+rows are **carried, not suppressed**: dropping them would hide the match's
+real basis and weaken the draft's defensibility. The condition is
+**attribution**: the claim's own text must name the outside account(s) and
+label them as dataset-level context ("Cited records include … dataset-level
+screening context from account(s) … outside the subject's own network"), so
+the reader can tell corroboration context from subject evidence at a
+glance. The reliability harness enforces exactly this rule mechanically: an
+out-of-closure pointer on an advisory claim passes only when the owning
+account is named in the statement; unattributed — or on any other claim
+element — it fails the suite as misattribution.
+
 ---
 
 ## 2. The FinCEN narrative rubric

@@ -203,13 +203,19 @@ def _pointer_owners(p: Provenance, maps: dict) -> tuple[set[int], bool]:
 def _statement_attributes(statement: str, owners: set[int], names: dict) -> bool:
     """Does the claim's own text attribute the row to its owner (uid or a
     distinctive name token)? Mechanical proxy for 'the reader can tell whose
-    evidence this is'."""
-    low = statement.lower()
+    evidence this is'.
+
+    Matching is word-boundary and punctuation-stripped on both sides:
+    'martin' must never match inside 'Martinez' (both are live names in the
+    scenario), and a name token like 'Henderson,' must still match once its
+    trailing comma is stripped."""
+    stmt_words = {w.strip(".,()\"'—:;") .lower() for w in statement.split()}
     for uid in owners:
         if str(uid) in statement:
             return True
-        for tok in names.get(uid, "").lower().split():
-            if len(tok) >= 4 and tok in low:
+        for tok in names.get(uid, "").split():
+            tok = tok.strip(".,()\"'").lower()
+            if len(tok) >= 4 and tok in stmt_words:
                 return True
     return False
 
