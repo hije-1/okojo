@@ -506,6 +506,37 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     for _ in range(30):
         _tx(f"uid:{rng.choice(noise_uids)}", _tron_addr(rng), rng.uniform(50, 5000), rng.choice(["", "savings", "payment", "trade"]), rng.choice(["deposit", "withdrawal"]))
 
+    # ---- registration-date coherence pass (RNG-free) ---------------------- #
+    # registration_date was drawn independently of the activity above, which
+    # could place logins and transactions BEFORE the account existed — an
+    # impossibility a chronological view surfaces immediately. Clamp each
+    # incoherent account's registration to 30 days before its first observed
+    # activity (logins, exchange-leg transactions, and transactions touching
+    # its controlled addresses). Derived entirely from values already drawn —
+    # no new rng draw, so ordering stays deterministic — and already-coherent
+    # draws are left untouched. Runs BEFORE the registry and prior-RFI
+    # sections below, which derive their dates from these corrected values.
+    first_activity: dict[int, str] = {}
+
+    def _earlier_activity(uid: int, ts: str) -> None:
+        cur = first_activity.get(uid)
+        if cur is None or ts < cur:
+            first_activity[uid] = ts
+
+    for log in ip_logs:
+        _earlier_activity(log.uid, log.timestamp)
+    for t in txs:
+        for ref in (t.from_ref, t.to_ref):
+            if ref.startswith("uid:"):
+                _earlier_activity(int(ref[4:]), t.timestamp)
+            elif ref in address_controllers:
+                _earlier_activity(address_controllers[ref], t.timestamp)
+    for a in accounts:
+        first = first_activity.get(a.uid)
+        if first is not None and a.registration_date > first[:10]:
+            opened = datetime.fromisoformat(first[:10]) - timedelta(days=30)
+            a.registration_date = opened.date().isoformat()
+
     # ---- RFI with ground-truth contradictions ---------------------------- #
     # Everything from here on is RNG-FREE: it derives from data already drawn
     # above, so the pre-existing tables regenerate byte-identically.

@@ -136,10 +136,17 @@ def test_prior_rfi_self_contradicts_the_current_denial(scenario):
     assert nz_name in text
     assert "management services agreement" in text
 
-    # ...and it postdates both incorporations, so it cannot name an entity that
-    # did not yet exist.
+    # ...and it postdates the incorporations of BOTH entities it references
+    # (the trust and the denied counterparty), so it cannot name an entity that
+    # did not yet exist. Scoped to the referenced entities — the designed
+    # property — not to unrelated registry rows (the pre-Phase-7 `.max()` form
+    # only held by accident of the incoherent registration draws; see
+    # DECISIONS.md §17).
     reg = pd.read_csv(out / "registry.csv")
-    assert prior.asked_date[0] > reg.incorporation_date.max()
+    trust_uid, nz_uid = gt["registry_shared_officer_uids"][:2]
+    referenced = reg[reg.company_uid.isin([trust_uid, nz_uid])]
+    assert len(referenced) == 2
+    assert (prior.asked_date[0] > referenced.incorporation_date).all()
 
 
 def test_c4_legs_resolve_to_planted_evidence(scenario):
@@ -174,6 +181,53 @@ def test_privileged_redherring_has_internal_tag(scenario):
     accts = pd.read_csv(out / "accounts.csv")
     row = accts[accts["uid"] == gt["privileged_redherring_uid"]].iloc[0]
     assert isinstance(row["internal_tag"], str) and "internal" in row["internal_tag"].lower()
+
+
+def test_registration_dates_precede_all_account_activity(scenario):
+    """Date-coherence guard: no login or transaction may predate the account's
+    registration — across all three attribution classes (ip_logs, exchange-leg
+    transactions, and transactions touching the account's controlled
+    addresses). Before the Phase 7 coherence pass, 21 of 24 accounts violated
+    this; a chronological timeline view surfaces the impossibility instantly,
+    so this pins it closed for good. Also pins the derivations: registry dates
+    equal the (corrected) registration dates, and the prior RFI postdates both
+    incorporations it references."""
+    out, _, _ = scenario
+    accounts = pd.read_csv(out / "accounts.csv")
+    reg_date = dict(zip(accounts["uid"].astype(str), accounts["registration_date"]))
+
+    ip = pd.read_csv(out / "ip_logs.csv")
+    for _, r in ip.iterrows():
+        assert str(r["timestamp"])[:10] >= reg_date[str(r["uid"])], (
+            f"login before registration for uid {r['uid']}"
+        )
+
+    addr = pd.read_csv(out / "addresses.csv")
+    addr_owner = {
+        str(r["address"]): str(int(r["controller_uid"]))
+        for _, r in addr.iterrows() if pd.notna(r["controller_uid"])
+    }
+    txs = pd.read_csv(out / "transactions.csv")
+    for _, r in txs.iterrows():
+        day = str(r["timestamp"])[:10]
+        for ref in (str(r["from_ref"]), str(r["to_ref"])):
+            uid = ref[4:] if ref.startswith("uid:") else addr_owner.get(ref)
+            if uid in reg_date:
+                assert day >= reg_date[uid], (
+                    f"transaction {r['tx_id']} predates registration of uid {uid}"
+                )
+
+    registry = pd.read_csv(out / "registry.csv")
+    for _, r in registry.iterrows():
+        assert r["incorporation_date"] == reg_date[str(r["company_uid"])]
+        assert r["appointed_date"] == reg_date[str(r["company_uid"])]
+
+    prior = pd.read_csv(out / "rfi_prior.csv").iloc[0]
+    for reg_id in ("REG-0001", "REG-0002"):
+        inc = registry.loc[registry["registry_id"] == reg_id, "incorporation_date"].iloc[0]
+        assert str(prior["asked_date"]) > str(inc), (
+            "prior RFI must postdate both incorporations it references"
+        )
 
 
 def test_deterministic(tmp_path):

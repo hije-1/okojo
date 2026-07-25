@@ -270,3 +270,39 @@ _Added Day 4 (Phase 6, Slice A)._
   MIT/BSD/Apache except orjson (weak-copyleft MPL-2.0 component; transitive,
   unmodified, unvendored — the same pre-classified class as certifi, per the
   provenance-gate rule).
+
+## 17. Second one-time re-baseline: registration-date coherence
+_Added Day 6 (Phase 7, during UI polish). Companion to §15._
+
+- **The problem.** `registration_date` was drawn as an independent random
+  timestamp with no ordering constraint against the account's separately drawn
+  activity. Result: 21 of 24 accounts had logins and/or transactions dated
+  **before the account existed** (19 with pre-registration logins; 24
+  exchange-leg and 9 controlled-address transaction legs pre-dating
+  registration). Six phases of table-shaped views never read the two columns
+  together; the Phase 7 Timeline rebuild rendered events chronologically and
+  the impossibility was visible within seconds — spotted by the PM on the demo.
+- **The fix, and why it is minimal.** An RNG-free post-pass in the generator
+  (placed at the existing "everything from here on is RNG-FREE" boundary):
+  each account's first observed activity is computed from values already drawn
+  (logins, exchange-leg transactions, controlled-address transactions), and an
+  incoherent registration is clamped to 30 days before it. Coherent draws are
+  untouched (3 of 24); no draw order changes, so every activity timestamp,
+  identity, and amount is byte-identical. Blast radius, verified by field-level
+  diff: **one column in `accounts.csv` (21 cells), the 14 derived
+  `registry.csv` date cells, and the derived `rfi_prior.csv` `asked_date` — all
+  other tables, including `ground_truth.json`, byte-identical.** Rows and
+  ordering unchanged everywhere.
+- **Phase-5 evidence survives by construction.** The registry and prior-RFI
+  dates were already *derived* from registration dates (§15's zero-RNG
+  discipline), so they re-derived correctly through the existing code: the
+  shared-director appointment windows still overlap, and the prior RFI still
+  postdates both incorporations it references (now also pinned by test).
+- **Guarded going forward.** `test_registration_dates_precede_all_account_activity`
+  pins all three coherence classes plus the registry/prior-RFI derivations, so
+  the defect class cannot silently re-enter. The determinism guards
+  (`test_deterministic`, `test_deterministic_across_hash_seeds`) continue to
+  cover the changed generator.
+- **A re-baseline, not an exemption.** As with §15: the determinism contract is
+  restored in full immediately, and the eval answer key was untouched — no
+  metric moved (all capability scorecards re-verified after the change).
