@@ -26,8 +26,8 @@ numpy==2.5.1
 # Phase 6 orchestration — the bounded-agency state machine (deterministic:
 # no checkpointer is ever instantiated, tracing env vars stay unset, and the
 # run path makes zero network calls; posture documented in docs/DECISIONS.md).
-langgraph==0.2.45
+langgraph==1.0.10
 # Phase 1+ UI (minimal Streamlit demo — the walking-skeleton money-shot)
-streamlit==1.40.1
+streamlit==1.54.0
 # Tests
-pytest==8.3.3
+pytest==9.0.3
