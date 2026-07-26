@@ -30,4 +30,4 @@ langgraph==0.2.45
 # Phase 1+ UI (minimal Streamlit demo — the walking-skeleton money-shot)
 streamlit==1.40.1
 # Tests
-pytest==8.3.3
+pytest==9.0.3
