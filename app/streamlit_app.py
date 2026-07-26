@@ -523,7 +523,7 @@ def main() -> None:
             format_func=lambda uid: label_for.get(uid, f"uid {uid}"),
             key="subject_uid",
         )
-        max_hops = st.slider("Network expansion hops", 1, 2, 2)
+        max_hops = st.slider("Network expansion hops", 1, 7, 2)
         st.markdown("---")
         st.markdown(
             "**Reminder:** the agent *proposes, surfaces, drafts, and flags*. "
@@ -534,7 +534,9 @@ def main() -> None:
     res = run_case(subject_uid, conn=conn, max_hops=max_hops)
 
     # -- header metrics ---------------------------------------------------- #
-    c1, c2, c3, c4, c5, c6 = st.columns(6)
+    # The Advisory tile carries the one long value in the row (an advisory id
+    # like "FIN-2025-A002"), so it gets double weight to render untruncated.
+    c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 2])
     expansion_summary = res.expansion.summary()
     c1.metric("Anomalies", len(res.profile.anomalies))
     c2.metric("Network reached", expansion_summary["accounts_reached"])
@@ -749,12 +751,24 @@ def main() -> None:
             "Gold ★ = subject · red ▲ = synthetic-sanctioned endpoint · orange = ring account · "
             "blue = address. Edges: purple = shared device, green = reused KYC, red dashed = gas-funding."
         )
+        expand_stop = next(
+            (d for d in reversed(res.decisions) if d.decision_id == "expand_hop"),
+            None,
+        )
         if expansion_summary["edges"] == 0:
             st.info(
                 "This subject is isolated at the configured hop depth: no shared "
                 "devices, no reused KYC documents, no gas-funding links, and no "
                 "transaction counterparties reached. The graph shows the subject "
                 "node alone — an honest empty result, not a rendering failure."
+            )
+        elif expand_stop is not None and expand_stop.outcome == "stop_frontier_exhausted":
+            hops_done = expand_stop.evidence.get("hops_done")
+            st.info(
+                f"Expansion stopped at hop {hops_done} of the requested "
+                f"{max_hops} — no further connections found beyond that point. "
+                "The graph is complete at this depth, not truncated "
+                "(recorded in the Decisions tab as `stop_frontier_exhausted`)."
             )
         if res.graph_html_path and Path(res.graph_html_path).exists():
             components.html(Path(res.graph_html_path).read_text(encoding="utf-8"), height=760, scrolling=True)

@@ -13,6 +13,44 @@ from typing import Union
 
 from .expander import NetworkExpansion
 
+# Appended to every generated HTML file: vis.js opens the viewport at an
+# arbitrary zoom/center, so fit the view to the full node set once
+# stabilization finishes. In the Streamlit embed the file loads inside a
+# hidden tab whose canvas has zero width — a fit there is meaningless, and
+# neither vis's "resize" event nor a ResizeObserver reliably reports the
+# reveal — so a light timer polls the canvas size and re-fits whenever it
+# changes (tab reveal, late iframe resize, window resize). The first real
+# pointer interaction (drag or wheel zoom) ends the auto-fit for good: after
+# that the human owns the viewport and it is never moved under them. Lives in
+# the shared render path so the app embed and any standalone open of the HTML
+# get the same fitted initial view.
+_FIT_SNIPPET = (
+    '<script type="text/javascript">\n'
+    '(function () {\n'
+    '  if (typeof network === "undefined" || network === null) return;\n'
+    '  var userTouched = false;\n'
+    '  function markTouched(params) {\n'
+    '    if (params && (params.event || params.pointer)) { userTouched = true; }\n'
+    '  }\n'
+    '  network.on("dragStart", markTouched);\n'
+    '  network.on("zoom", markTouched);\n'
+    '  var lastSize = null;\n'
+    '  function tick() {\n'
+    '    if (userTouched) return;\n'
+    '    var c = network.canvas.frame.canvas;\n'
+    '    var size = c.clientWidth + "x" + c.clientHeight;\n'
+    '    if (size !== lastSize && c.clientWidth > 0 && c.clientHeight > 0) {\n'
+    '      network.fit();\n'
+    '    }\n'
+    '    lastSize = size;\n'
+    '    setTimeout(tick, 400);\n'
+    '  }\n'
+    '  network.once("stabilizationIterationsDone", function () { lastSize = null; });\n'
+    '  tick();\n'
+    '})();\n'
+    "</script>"
+)
+
 _EDGE_STYLE = {
     "transaction": ("#8a8a8a", False),
     "controls": ("#cbd5e1", False),
@@ -90,5 +128,6 @@ def render(expansion: NetworkExpansion, out_path: Union[str, Path], height: str 
     # (cp1252 on Windows), which crashes on accented Faker names. Generate the
     # HTML and write it ourselves as UTF-8.
     html = net.generate_html(notebook=False)
+    html = html.replace("</body>", _FIT_SNIPPET + "\n</body>", 1)
     out_path.write_text(html, encoding="utf-8")
     return out_path
