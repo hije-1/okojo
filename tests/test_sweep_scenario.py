@@ -43,36 +43,8 @@ def designations(ground_truth) -> tuple[dict, dict]:
     return live[0], decoy[0]
 
 
-def _uid(accounts: pd.DataFrame, role: str, country: str | None = None) -> int:
-    """The uid for a persona role (optionally narrowed by jurisdiction).
-
-    For ``employee_cutout`` — the one role held by two accounts — this returns
-    the FIRST-created (lowest-uid) account, the ring-spec EMPLOYEE; the reused-
-    KYC second employee is a distinct persona.
-    """
-    rows = accounts[accounts.role_in_ring == role]
-    if country is not None:
-        rows = rows[rows.residence_country == country]
-    assert len(rows) >= 1, f"no account with role {role}/{country}"
-    return int(rows.uid.min())
-
-
-@pytest.fixture(scope="module")
-def ring(accounts) -> dict[str, int]:
-    """Persona-key -> uid, re-derived from roles (never hardcoded)."""
-    return {
-        "KINGPIN": _uid(accounts, "ultimate_controller"),
-        "SIBLING": _uid(accounts, "family_cutout_director"),
-        "EMPLOYEE": _uid(accounts, "employee_cutout"),
-        "TRUST": _uid(accounts, "licensed_trust_intermediary"),
-        "SHELL_AE": _uid(accounts, "shell_trading", "AE"),
-        "SHELL_TR": _uid(accounts, "shell_trading", "TR"),
-        "SHELL_HK": _uid(accounts, "shell_trading", "HK"),
-        "SHELL_NZ": _uid(accounts, "shell_trading", "NZ"),
-        "SHELL_CN": _uid(accounts, "shell_trading", "CN"),
-        "PRIVILEGED": _uid(accounts, "privileged_internal_redherring"),
-        "RECIDIVIST": _uid(accounts, "recidivist_mule"),
-    }
+# The persona-key -> uid mapping (``ring``) is the shared session fixture in
+# conftest.py — one derivation from roles, used by scenario and eval tests.
 
 
 # --------------------------------------------------------------------------- #
