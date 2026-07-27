@@ -104,6 +104,18 @@ from .exposure import (  # noqa: E402
     sweep_exposure,
 )
 from .verify import StatusGap, verify_block_status  # noqa: E402
+from .worksheet import (  # noqa: E402
+    WorksheetRow,
+    assert_worksheet_resolvable,
+    build_worksheet,
+    worksheet_grounding_report,
+)
+from .escalations import (  # noqa: E402
+    DRAFT_STATUS,
+    EscalationDraft,
+    SuppressedEscalation,
+    draft_escalations,
+)
 from .pipeline import SweepResult, default_sweep_dir, run_sweep  # noqa: E402
 
 __all__ = [
@@ -127,6 +139,14 @@ __all__ = [
     "sweep_exposure",
     "StatusGap",
     "verify_block_status",
+    "WorksheetRow",
+    "assert_worksheet_resolvable",
+    "build_worksheet",
+    "worksheet_grounding_report",
+    "DRAFT_STATUS",
+    "EscalationDraft",
+    "SuppressedEscalation",
+    "draft_escalations",
     "SweepResult",
     "default_sweep_dir",
     "run_sweep",

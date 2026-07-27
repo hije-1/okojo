@@ -108,7 +108,48 @@ the two gaps are pre-existing synchronization failures that the sweep
 inspection, not the holds — the dates in the synthetic tables are consistent
 with exactly that reading.
 
-## 5. Evaluation — what the numbers do and do not claim
+## 5. Triage worksheet & drafted escalations
+
+The worksheet is the sweep's per-account deliverable: one row per surfaced
+account (exposed or adjacent-review-only), carrying the exposure evidence,
+BOTH hold statuses, any gap, the internal-tag flag, a recommended action, and
+provenance for every fact its statement asserts.
+
+**Action assignment is a fixed rule over the row's own fields** — one action
+per row, from the published vocabulary:
+
+| row | condition | recommended_action |
+|---|---|---|
+| exposed | has a reconciliation gap | `flags_reconciliation_gap` (the hold state must be trued up before any new action is meaningful) |
+| exposed | blocked in both systems | `proposes_confirm_existing_hold` |
+| exposed | otherwise | `proposes_designation_hold_review` |
+| adjacent | carries an internal tag | `flags_internal_tag_for_review` (the tag is itself a finding — flagged, never obeyed) |
+| adjacent | otherwise | `flags_for_review_non_flow_linkage` |
+
+**Triage order** is the published `(action_severity, -exposure_usdt, hops,
+uid)` — severity is the action's position in the vocabulary; adjacency rows
+(no hop distance) sort after any real hop count within their band.
+
+**Grounding is fail-closed at build time.** Every row must carry at least one
+provenance pointer and every pointer must resolve to a real evidence row —
+through the SAME `GroundingResolver` the SAR drafter uses (one membership
+definition serves both pipelines). A worksheet that cannot fully cite itself
+is not emitted at all.
+
+**Escalations are drafted, never sent.** For each worksheet account with a
+gap, and each exposed account with no hold in either system, an
+internal-to-compliance draft is prepared for the human remediation owner —
+who owns assembly, judgment, and any sending; no send path exists in this
+codebase, and every draft carries `drafted_pending_human_review` as its only
+possible status. Before a draft is emitted it must be grounded, resolve, and
+pass the SAR calibration term check (`BANNED_TERMS`); a draft that fails is
+**suppressed and surfaced with its reason** — flagged for human authoring,
+never silently dropped. (`assert_no_tipping_off` deliberately does not apply:
+it guards subject-facing text, and Phase 8 produces none.) Escalations are
+worksheet-scoped; the full-ledger gap list rides separately on the sweep
+result.
+
+## 6. Evaluation — what the numbers do and do not claim
 
 The sweep's exposure classification is scored against
 `ground_truth.json`'s designation keys. Read that scorecard for what it is:
@@ -133,9 +174,11 @@ wrong implementation to fail loudly:
   the review-only adjacency list, with its tag flagged, never obeyed.
 
 The gap-detection eval likewise asserts the exact planted gap set, including
-each gap's direction fields.
+each gap's direction fields, and the worksheet eval asserts full grounding
+coverage — every row and every escalation cites only evidence that resolves —
+alongside a fabricated-pointer negative control.
 
-## 6. Reproducibility & versioning
+## 7. Reproducibility & versioning
 
 Every run stamps the versioned sweep policy into its audit chain
 (`remediation_sweep / sweep_config`), mirroring the scoring, retrieval,

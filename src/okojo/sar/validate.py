@@ -61,6 +61,13 @@ class GroundingResolver:
         add(conn.all_prior_rfis())
         add(conn.all_registry())
         add(conn.sdn_list())
+        # Phase 8: the sweep's worksheet/escalations cite these three tables.
+        # ONE grounding membership definition serves both pipelines — inert for
+        # existing claims (resolves() tests membership of cited pairs, and no
+        # pre-Phase-8 claim cites these sources), a superset for the sweep.
+        add(conn.all_designations())
+        add(conn.warehouse_holds())
+        add(conn.admin_holds())
         self._valid = valid
 
     def resolves(self, prov: Provenance) -> bool:

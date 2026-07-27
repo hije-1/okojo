@@ -12,7 +12,7 @@ recidivist dead-end, and the internally-tagged account staying review-only.
 from __future__ import annotations
 
 from okojo.eval import score
-from okojo.sweep import run_sweep, verify_block_status
+from okojo.sweep import run_sweep, verify_block_status, worksheet_grounding_report
 
 
 def test_sweep_eval_exposure_scorecard(
@@ -43,7 +43,7 @@ def test_sweep_eval_exposure_scorecard(
         "audit_verified": res.audit_verified and res_decoy.audit_verified,
     }
     with capsys.disabled():
-        print("\nPhase 8 sweep scorecard (designation exposure — dual-implementation consistency):")
+        print("\nPhase 8 sweep scorecard (designation exposure -- dual-implementation consistency):")
         for k, v in scorecard.items():
             print(f"  {k}: {v}")
 
@@ -83,3 +83,36 @@ def test_sweep_eval_gap_detection_scorecard(conn, ground_truth, capsys):
         assert got.warehouse_status == want["warehouse_status"]
         assert got.admin_status == want["admin_status"]
         assert len(got.provenance) == 2
+
+
+def test_sweep_eval_worksheet_grounding_scorecard(
+    conn, sweep_designations, tmp_path, capsys
+):
+    """Grounding coverage over the remediation deliverables: every worksheet
+    row and every escalation draft cites only evidence that resolves. The
+    fail-closed negative control (a fabricated pointer raising) lives in
+    test_sweep_worksheet.py."""
+    live, _ = sweep_designations
+    res = run_sweep(live, out_dir=tmp_path / "live", conn=conn)
+
+    report = worksheet_grounding_report(conn, res.worksheet)
+    esc_grounded = sum(1 for e in res.escalations if e.provenance)
+
+    scorecard = {
+        "worksheet_rows": report.total_claims,
+        "rows_grounded": report.grounded_claims,
+        "rows_resolved": report.resolved_claims,
+        "rows_unresolved": len(report.unresolved),
+        "escalations_drafted": len(res.escalations),
+        "escalations_grounded": esc_grounded,
+        "escalations_suppressed": len(res.suppressed_escalations),
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (worksheet grounding):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    assert report.total_claims > 0
+    assert report.fully_grounded and report.fully_resolved
+    assert esc_grounded == len(res.escalations) > 0
+    assert res.suppressed_escalations == []

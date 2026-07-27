@@ -30,8 +30,10 @@ from .designation import (
     match_designated_name,
     parse_designation,
 )
+from .escalations import EscalationDraft, SuppressedEscalation, draft_escalations
 from .exposure import ExposureResult, sweep_exposure
 from .verify import StatusGap, verify_block_status
+from .worksheet import WorksheetRow, build_worksheet, worksheet_grounding_report
 
 
 @dataclass
@@ -40,6 +42,9 @@ class SweepResult:
     name_matches: list[DesignationNameMatch]
     exposure: ExposureResult
     gaps: list[StatusGap]              # full-ledger reconciliation, uid order
+    worksheet: list[WorksheetRow]      # triaged; grounded fail-closed
+    escalations: list[EscalationDraft]         # drafted, never sent
+    suppressed_escalations: list[SuppressedEscalation]
     out_dir: Path
     audit_log_path: Path
     audit_records: list[dict] = field(default_factory=list)
@@ -138,6 +143,37 @@ def run_sweep(
             provenance=[p for g in gaps for p in g.provenance],
         )
 
+        # 4. Triage worksheet — grounded fail-closed (build raises rather than
+        # emit a row that cannot cite real evidence).
+        worksheet = build_worksheet(conn, designation, exposure, gaps)
+        actions: dict[str, int] = {}
+        for row in worksheet:
+            actions[row.recommended_action] = actions.get(row.recommended_action, 0) + 1
+        audit.append(
+            "remediation_sweep", "worksheet_build",
+            target=designation.designation_id,
+            detail=json.dumps({
+                "rows": len(worksheet),
+                "actions": dict(sorted(actions.items())),
+                "grounding": worksheet_grounding_report(conn, worksheet).summary(),
+            }),
+        )
+
+        # 5. Internal escalation drafts — drafted, validated, never sent;
+        # anything the validator refuses is surfaced as suppressed.
+        escalations, suppressed = draft_escalations(conn, designation, worksheet)
+        audit.append(
+            "remediation_sweep", "escalations_draft",
+            target=designation.designation_id,
+            detail=json.dumps({
+                "drafted": [{"id": e.escalation_id, "kind": e.kind, "uid": e.uid}
+                            for e in escalations],
+                "suppressed": [{"kind": s.kind, "uid": s.uid, "reason": s.reason}
+                               for s in suppressed],
+                "note": "drafts prepared for the human remediation owner; nothing is sent",
+            }),
+        )
+
         audit.append(
             "remediation_sweep", "sweep_complete",
             target=designation.designation_id,
@@ -146,6 +182,9 @@ def run_sweep(
                 "adjacent_review_only": len(exposure.adjacent),
                 "name_matches": len(name_matches),
                 "block_status_gaps": len(gaps),
+                "worksheet_rows": len(worksheet),
+                "escalations_drafted": len(escalations),
+                "escalations_suppressed": len(suppressed),
                 "note": "results surfaced for human remediation; no status was changed",
             }),
         )
@@ -155,6 +194,9 @@ def run_sweep(
             name_matches=name_matches,
             exposure=exposure,
             gaps=gaps,
+            worksheet=worksheet,
+            escalations=escalations,
+            suppressed_escalations=suppressed,
             out_dir=out_dir,
             audit_log_path=audit_path,
             audit_records=audit.read_all(),
