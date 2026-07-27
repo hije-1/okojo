@@ -127,6 +127,48 @@ class RegistryRecord:
 
 
 @dataclass
+class Designation:
+    """A synthetic OFAC-style designation (the remediation sweep's trigger input).
+
+    Fully fabricated: the designated name is a transliteration-style variant of
+    a generated persona, the addresses are generated or fixed non-ledger
+    literals, and the program label is the synthetic one used throughout.
+    ``designated_addresses`` is ';'-joined for the CSV, mirroring
+    ``SdnEntry.aliases``."""
+
+    designation_id: str
+    designated_name: str
+    program: str              # synthetic sanctions program label
+    entity_type: str          # "individual" | "company"
+    designated_addresses: str  # ';'-separated on-chain addresses
+    designation_date: str
+
+
+@dataclass
+class WarehouseHold:
+    """Sanctions hold status in the analytics warehouse (the feed-fed copy).
+
+    One of two mock systems the sweep reconciles; drift between this table and
+    the admin system of record is the planted data-integrity gap."""
+
+    uid: int
+    hold_status: str          # "blocked" | "no_hold"
+    as_of_date: str           # date the feed last updated this row
+    feed_batch_id: str
+
+
+@dataclass
+class AdminHold:
+    """Sanctions hold status in the operational admin system (system of record)."""
+
+    uid: int
+    hold_status: str          # "blocked" | "no_hold"
+    status_date: str          # date of the last status action
+    actioned_by: str
+    case_ref: str             # "" == no associated ops case
+
+
+@dataclass
 class PriorRfi:
     """An earlier RFI answer from the same subject.
 

@@ -56,6 +56,8 @@ from ..config import (
 from .models import (
     Account,
     Address,
+    AdminHold,
+    Designation,
     DeviceLink,
     GasFund,
     IpLog,
@@ -65,6 +67,7 @@ from .models import (
     Rfi,
     SdnEntry,
     Transaction,
+    WarehouseHold,
 )
 
 _BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
@@ -169,6 +172,62 @@ def _uids_with_sanctioned_exposure(
     return sorted(u for u in candidate_uids if _reaches(f"uid:{u}"))
 
 
+def _designation_exposure(
+    txs: list, address_controllers: dict[str, int], designated_addrs: list[str], candidate_uids: list[int]
+) -> tuple[list[int], dict[int, int], list[int]]:
+    """Per-uid exposure to a set of designated addresses, with hop distance.
+
+    The distance-recording sibling of :func:`_uids_with_sanctioned_exposure`,
+    over the same ``{transaction, controls}`` edge semantics — gas-funding links
+    are deliberately NOT flow edges, so they can never fabricate exposure. Like
+    its sibling this is a definitional answer key computed from already-generated
+    data (zero RNG draws), independent of any sweep-engine heuristics so the
+    Phase-8 eval is not tautological.
+
+    ``hops`` = the minimum number of *transaction* edges on a directed path from
+    the subject (its uid node or any wallet it controls, all at distance 0) to a
+    designated address; 0 therefore means the subject controls a designated
+    address outright. ``direct`` <=> hops <= 1: the subject controls a designated
+    address, or a single transaction of its lands on one.
+
+    Returns ``(exposed_uids sorted, {uid: hops}, direct_uids sorted)``.
+    """
+    from collections import deque
+
+    adj: dict[str, list[str]] = {}
+    for t in txs:
+        adj.setdefault(t.from_ref, []).append(t.to_ref)
+    controlled: dict[int, list[str]] = {}
+    for addr, uid in address_controllers.items():
+        controlled.setdefault(uid, []).append(addr)
+    designated = set(designated_addrs)
+
+    hops: dict[int, int] = {}
+    for uid in candidate_uids:
+        start = [f"uid:{uid}"] + controlled.get(uid, [])
+        if any(node in designated for node in start):
+            hops[uid] = 0
+            continue
+        dist = {node: 0 for node in start}
+        dq = deque(start)
+        found: Optional[int] = None
+        while dq and found is None:
+            node = dq.popleft()
+            for nb in adj.get(node, ()):
+                if nb in designated:
+                    found = dist[node] + 1  # BFS pops in distance order -> minimal
+                    break
+                if nb not in dist:
+                    dist[nb] = dist[node] + 1
+                    dq.append(nb)
+        if found is not None:
+            hops[uid] = found
+
+    exposed = sorted(hops)
+    direct = sorted(u for u, h in hops.items() if h <= 1)
+    return exposed, hops, direct
+
+
 # --------------------------------------------------------------------------- #
 # the ring specification (structure is fixed; names/ids are generated)
 # --------------------------------------------------------------------------- #
@@ -263,6 +322,17 @@ _REGISTRY_SPEC = [
     ("SHELL_HK", "SIBLING", "director", ""),
     ("SHELL_CN", "EMPLOYEE", "director", ""),
     ("PRIVILEGED", "SIBLING", "director", ""),
+]
+
+
+# Fixed literal TRX-shaped addresses for the decoy designation (Phase 8's
+# false-positive probe). Deliberately NOT drawn from the address generator and
+# never written to addresses.csv: they touch nothing in the ledger, so the
+# expected exposure for the decoy is exactly the empty set. Base58 (no 0/O/I/l),
+# "T" + 33 chars, matching the real generated TRX-style addresses in shape only.
+_DECOY_DESIGNATION_ADDRS = [
+    "TDecoyDesignationAddrAAAAAAAAAAAAA",
+    "TDecoyDesignationAddrBBBBBBBBBBBBB",
 ]
 
 
@@ -669,6 +739,105 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     sdn_entries.append(SdnEntry("SDN-0004", "Reza Oil Logistics",
                                 "Reza Oil Logistics;ROL Shipping", "SYNTHETIC-IRGC-STYLE", "company"))
 
+    # ---- designations (Phase 8: the remediation sweep's trigger input) ---- #
+    # RNG-free: names and addresses derive from personas and wallets already
+    # generated above. The live designation targets SHELL_NZ's controller
+    # wallet plus one KINGPIN-controlled "non-custodial" hop, so the exposed
+    # set is deliberately DIFFERENT from the legacy sanctioned_exposure_uids
+    # key — a sweep that replays the Phase-2 answer key fails the eval.
+    designation_date = (SIM_END + timedelta(days=30)).isoformat()
+    designations = [
+        Designation(
+            designation_id="DES-2026-0001",
+            designated_name=_alias_variant(shell_nz_name),
+            program="SYNTHETIC-IRGC-STYLE",
+            entity_type="company",
+            designated_addresses=";".join([controller_addr["SHELL_NZ"], hop_addrs[2]]),
+            designation_date=designation_date,
+        ),
+        # The decoy: same name as the SDN-0003 precision decoy (pinned equal by
+        # test, not by reference, to keep this section purely additive) plus two
+        # fixed non-ledger addresses. Expected exposure: the empty set.
+        Designation(
+            designation_id="DES-2026-0002",
+            designated_name="Bandar Petrochemical Front",
+            program="SYNTHETIC-IRGC-STYLE",
+            entity_type="company",
+            designated_addresses=";".join(_DECOY_DESIGNATION_ADDRS),
+            designation_date=designation_date,
+        ),
+    ]
+
+    # ---- sanctions-hold mock systems (warehouse feed vs. admin record) ---- #
+    # Full per-account coverage in BOTH systems, so reconciliation is a real
+    # comparison rather than a presence check. Two gaps are planted, one in
+    # each drift direction, both on accounts the live designation exposes.
+    # Every hold action predates the designation: these are legacy screening
+    # actions, and the gaps are pre-existing sync failures that the sweep
+    # SURFACES — the designation triggers the look, not the holds.
+    baseline_date = (SIM_END + timedelta(days=1)).isoformat()
+    warehouse_holds: list[WarehouseHold] = []
+    admin_holds: list[AdminHold] = []
+    for a in accounts:
+        if a.uid == key_to_uid["TRUST"]:
+            # missed_sync_block: ops blocked it; the warehouse feed never synced.
+            warehouse_holds.append(WarehouseHold(a.uid, "no_hold", baseline_date, "WH-FEED-0001"))
+            admin_holds.append(AdminHold(
+                a.uid, "blocked", (SIM_END + timedelta(days=14)).isoformat(),
+                "sanctions_ops", "OPS-HOLD-0001",
+            ))
+        elif a.uid == key_to_uid["SHELL_TR"]:
+            # unrecorded_unblock: the hold synced to the warehouse, then was
+            # quietly released in admin; the release never synced back.
+            warehouse_holds.append(WarehouseHold(
+                a.uid, "blocked", (SIM_END + timedelta(days=7)).isoformat(), "WH-FEED-0002",
+            ))
+            admin_holds.append(AdminHold(
+                a.uid, "no_hold", (SIM_END + timedelta(days=21)).isoformat(),
+                "sanctions_ops", "OPS-REL-0002",
+            ))
+        else:
+            warehouse_holds.append(WarehouseHold(a.uid, "no_hold", baseline_date, "WH-FEED-0001"))
+            admin_holds.append(AdminHold(a.uid, "no_hold", baseline_date, "baseline_load", ""))
+
+    block_status_gaps = [
+        {"uid": key_to_uid["TRUST"], "warehouse_status": "no_hold",
+         "admin_status": "blocked", "gap_type": "missed_sync_block"},
+        {"uid": key_to_uid["SHELL_TR"], "warehouse_status": "blocked",
+         "admin_status": "no_hold", "gap_type": "unrecorded_unblock"},
+    ]
+
+    # ---- derived Phase-8 designation labels (no RNG; in sync by construction) #
+    all_uids = [a.uid for a in accounts]
+    des_exposed: dict[str, list[int]] = {}
+    des_hops: dict[str, dict[str, int]] = {}
+    des_direct: dict[str, list[int]] = {}
+    des_adjacent: dict[str, list[int]] = {}
+    for d in designations:
+        exposed, hops, direct = _designation_exposure(
+            txs, address_controllers, d.designated_addresses.split(";"), all_uids
+        )
+        des_exposed[d.designation_id] = exposed
+        des_hops[d.designation_id] = {str(u): hops[u] for u in sorted(hops)}
+        des_direct[d.designation_id] = direct
+        # Adjacency: non-flow linkage (shared device / reused KYC) to an exposed
+        # uid. A review-only list, disjoint from exposure by construction — the
+        # same discipline as the scorer's gas_only_link (linkage is never flow).
+        exposed_set = set(exposed)
+        adjacent: set[int] = set()
+        for group in list(shared_devices.values()) + list(reused_kyc.values()):
+            if any(u in exposed_set for u in group):
+                adjacent.update(u for u in group if u not in exposed_set)
+        des_adjacent[d.designation_id] = sorted(adjacent)
+
+    # Name matches are definitional: the live designated name IS the
+    # transliteration variant of SHELL_NZ's registered name; the decoy name was
+    # built to match no account (the SDN-0003 precision probe).
+    designation_name_match_uids = {
+        "DES-2026-0001": [key_to_uid["SHELL_NZ"]],
+        "DES-2026-0002": [],
+    }
+
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
         "readme": "Fabricated data. Labels below are the answer key for scoring Okojo's capabilities.",
@@ -714,6 +883,20 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "registry_shared_officer_uids": sorted({
             key_to_uid["TRUST"], key_to_uid["SHELL_NZ"],
         }),
+        # Phase-8 designation answer keys. Exposure/hops/direct come from
+        # _designation_exposure (the distance-recording sibling of the legacy
+        # exposure key, same flow-edge semantics); adjacency is review-only and
+        # disjoint from exposure; the gap list is the reconciliation answer key.
+        "designations": [
+            {**asdict(d), "designated_addresses": d.designated_addresses.split(";")}
+            for d in designations
+        ],
+        "designation_exposed_uids": des_exposed,
+        "designation_direct_uids": des_direct,
+        "designation_exposure_hops": des_hops,
+        "designation_adjacent_uids": des_adjacent,
+        "designation_name_match_uids": designation_name_match_uids,
+        "block_status_gaps": block_status_gaps,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -729,6 +912,9 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("transactions.csv", txs)
     _write("sdn_list.csv", sdn_entries)
     _write("registry.csv", registry)
+    _write("designations.csv", designations)
+    _write("sanctions_hold_warehouse.csv", warehouse_holds)
+    _write("sanctions_hold_admin.csv", admin_holds)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -768,5 +954,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "rfi_lies": len(ground_truth["rfi_lies"]),
         "registry_records": len(registry),
         "prior_rfis": 1,
+        "designations": len(designations),
+        "hold_status_rows": len(warehouse_holds) + len(admin_holds),
+        "block_status_gaps": len(block_status_gaps),
     }
     return summary

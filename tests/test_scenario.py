@@ -26,7 +26,9 @@ def scenario(tmp_path):
 ALL_TABLES = [
     "accounts.csv", "kyc_docs.csv", "devices.csv", "ip_logs.csv",
     "addresses.csv", "gas_funding.csv", "transactions.csv", "rfi.csv",
-    "rfi_prior.csv", "registry.csv", "sdn_list.csv", "ground_truth.json",
+    "rfi_prior.csv", "registry.csv", "sdn_list.csv", "designations.csv",
+    "sanctions_hold_warehouse.csv", "sanctions_hold_admin.csv",
+    "ground_truth.json",
 ]
 
 

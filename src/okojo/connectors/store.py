@@ -33,6 +33,9 @@ TABLES: dict[str, str] = {
     "rfi_prior": "rfi_prior.csv",
     "registry": "registry.csv",
     "sdn_list": "sdn_list.csv",
+    "designations": "designations.csv",
+    "sanctions_hold_warehouse": "sanctions_hold_warehouse.csv",
+    "sanctions_hold_admin": "sanctions_hold_admin.csv",
 }
 
 

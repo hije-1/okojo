@@ -211,6 +211,54 @@ class Connectors:
             lambda r: r["rfi_id"],
         )
 
+    # -- designations / sanctions holds (Phase 8) ---------------------------- #
+    def all_designations(self) -> list[Record]:
+        """Synthetic OFAC-style designations (the remediation sweep's trigger)."""
+        return self._records(
+            "designations", "SELECT * FROM designations ORDER BY designation_id", [],
+            lambda r: r["designation_id"],
+        )
+
+    def get_designation(self, designation_id: str) -> Optional[Record]:
+        recs = self._records(
+            "designations", "SELECT * FROM designations WHERE designation_id = ?",
+            [designation_id],
+            lambda r: r["designation_id"],
+        )
+        return recs[0] if recs else None
+
+    def warehouse_holds(self) -> list[Record]:
+        """Sanctions hold status per account in the analytics warehouse copy."""
+        return self._records(
+            "sanctions_hold_warehouse",
+            "SELECT * FROM sanctions_hold_warehouse ORDER BY uid", [],
+            lambda r: f"uid:{r['uid']}",
+        )
+
+    def warehouse_hold_for(self, uid: int) -> Optional[Record]:
+        recs = self._records(
+            "sanctions_hold_warehouse",
+            "SELECT * FROM sanctions_hold_warehouse WHERE uid = ?", [uid],
+            lambda r: f"uid:{r['uid']}",
+        )
+        return recs[0] if recs else None
+
+    def admin_holds(self) -> list[Record]:
+        """Sanctions hold status per account in the operational system of record."""
+        return self._records(
+            "sanctions_hold_admin",
+            "SELECT * FROM sanctions_hold_admin ORDER BY uid", [],
+            lambda r: f"uid:{r['uid']}",
+        )
+
+    def admin_hold_for(self, uid: int) -> Optional[Record]:
+        recs = self._records(
+            "sanctions_hold_admin",
+            "SELECT * FROM sanctions_hold_admin WHERE uid = ?", [uid],
+            lambda r: f"uid:{r['uid']}",
+        )
+        return recs[0] if recs else None
+
     # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""
