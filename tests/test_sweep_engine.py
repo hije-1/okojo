@@ -190,9 +190,11 @@ def test_rerun_replaces_chain_never_appends(conn, sweep_designations, tmp_path):
 
 def test_sweep_writes_only_inside_its_out_dir(conn, sweep_designations, tmp_path):
     """The sweep owns data/sweeps/<id>/ semantics; scoped here, it creates
-    exactly its own audit file and nothing else."""
+    exactly its audit chain and its package, and nothing outside out_dir."""
     live, _ = sweep_designations
     res = run_sweep(live, out_dir=tmp_path / "scoped", conn=conn)
     assert res.out_dir == tmp_path / "scoped"
-    assert [p.name for p in res.out_dir.iterdir()] == ["audit_log.jsonl"]
+    assert sorted(p.name for p in res.out_dir.iterdir()) == [
+        "audit_log.jsonl", "sweep_package.json",
+    ]
     assert [p.name for p in tmp_path.iterdir()] == ["scoped"]

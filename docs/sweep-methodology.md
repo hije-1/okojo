@@ -178,7 +178,34 @@ each gap's direction fields, and the worksheet eval asserts full grounding
 coverage — every row and every escalation cites only evidence that resolves —
 alongside a fabricated-pointer negative control.
 
-## 7. Reproducibility & versioning
+## 7. The remediation package — built ON the chain
+
+The sweep emits one decision-ready JSON package per designation
+(`sweep_package.json`), the sweep's analogue of the Case Packager, reusing
+that component's two structural rules verbatim and — deliberately — with **no
+second version constant**: the packaging policy already published in
+`packager_config()` (`docs/packager-methodology.md`) governs both packagers,
+so the package embeds `package_version` from that shared source and this
+document fixes the sweep package's *shape* rather than minting a new versioned
+config.
+
+- **References, never re-derivations.** The package's audit block lists each
+  chain record as `(seq, actor, action, hash)` plus the tip hash and the
+  verification result, captured *before* the `packaged` stamp — a record
+  cannot contain its own hash — so the block covers every record through
+  `sweep_complete`, and the chain is then one longer once the `packaged`
+  stamp carries the package file's SHA-256. The log covers the package; the
+  package pins the log.
+- **Deterministic bytes.** Serialized sorted-keys / ASCII-only with
+  `newline="\n"`, no wall-clock values of its own; byte-identical across two
+  runs under an injected audit clock (regression-tested).
+
+The package carries the designation, the exposed and adjacency-review accounts
+with their citations, the reconciliation gaps, the full triaged worksheet, and
+the drafted (never sent) plus suppressed escalations — everything the human
+remediation owner needs, each fact resolving into the tamper-evident chain.
+
+## 8. Reproducibility & versioning
 
 Every run stamps the versioned sweep policy into its audit chain
 (`remediation_sweep / sweep_config`), mirroring the scoring, retrieval,

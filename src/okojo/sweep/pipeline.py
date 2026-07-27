@@ -49,6 +49,9 @@ class SweepResult:
     audit_log_path: Path
     audit_records: list[dict] = field(default_factory=list)
     audit_verified: bool = False
+    # The decision-ready remediation package, built ON the sweep's chain.
+    package_path: Optional[Path] = None
+    package_sha256: Optional[str] = None
 
     def exposed_uids(self) -> list[int]:
         return self.exposure.exposed_uids()
@@ -189,7 +192,17 @@ def run_sweep(
             }),
         )
 
-        return SweepResult(
+        # 6. Decision-ready package, built ON the chain: the records captured
+        # here precede the packaged stamp (a record cannot contain its own
+        # hash), then the stamp carries the package file's SHA-256 — the log
+        # covers the package and the package pins the log. Mirrors the Case
+        # Packager exactly, with NO second version constant (packager_config
+        # governs both; the sweep doc documents this package's shape).
+        # Imported function-locally: packager.py references SweepResult, so a
+        # module-level import here would be circular.
+        from .packager import _rel, write_sweep_package
+
+        result = SweepResult(
             designation=designation,
             name_matches=name_matches,
             exposure=exposure,
@@ -202,6 +215,25 @@ def run_sweep(
             audit_records=audit.read_all(),
             audit_verified=audit.verify(),
         )
+        package_path, sha = write_sweep_package(result)
+        audit.append(
+            "sweep_packager", "packaged", target=_rel(package_path),
+            detail=json.dumps({
+                "package": "sweep_package.json",
+                "sha256": sha,
+                "designation_id": designation.designation_id,
+                "exposed_accounts": len(exposure.exposed),
+                "note": "decision-ready remediation package assembled (human review required)",
+            }),
+        )
+        # Re-read so the returned records include the packaged stamp; the
+        # package's own embedded audit block deliberately stops one record
+        # short (it was built before this stamp existed).
+        result.audit_records = audit.read_all()
+        result.audit_verified = audit.verify()
+        result.package_path = package_path
+        result.package_sha256 = sha
+        return result
     finally:
         if owns_conn:
             conn.close()

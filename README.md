@@ -110,7 +110,30 @@ side-car — the case package is built *on* it).
 6. **Regulatory Advisory Matcher** — FinCEN-advisory RAG, event-triggered on RFI key terms.
 7. **SAR Drafter + Critic** — grounded, self-critiquing narrative generation.
 8. **Case Packager + persistent case graph** — decision-ready package, append-only audit log, cross-case recidivism.
-9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone, not yet built)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
+9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone, in progress)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
+
+### The capstone in action: a designation → a remediation worksheet
+
+Component 9 adds a **second entry point** over the finished core. Paste a
+synthetic OFAC-style designation — a name and/or on-chain addresses — and Okojo
+sweeps the **whole ledger** (not one subject) for directly and indirectly
+exposed accounts, reconciles hold status across two mock systems (the
+data-integrity gap documented in public enforcement actions), triages by
+exposure size and hop distance, and produces a **grounded remediation
+worksheet** plus internal escalation drafts — *drafted, never sent*.
+
+The sweep **reuses the core and never moves it**: it walks the same read-only
+evidence, grounds every surfaced row in a provenance pointer, fails closed on a
+row it cannot cite, and writes its **own** fresh tamper-evident chain (the case
+chains are untouched). Designed traps keep the eval honest — a decoy
+designation that touches nothing returns the empty set; an account with legacy
+sanctioned exposure but no flow to the *newly designated* addresses is excluded
+(no replay of an old answer key); a privileged/internal tag is flagged for
+review, never obeyed. Try it from the sidebar **"Designation sweep"** mode.
+
+> **Status:** the flow sweep (Phase 8, Part I) is built and demoed;
+> identity-resolution, geographic-triangulation, and counterparty-lifecycle
+> extensions are the remaining Phase-8 parts before the capstone signs off.
 
 ---
 
@@ -173,7 +196,7 @@ trips it is suppressed and flagged for human authoring instead.
 ### Versioned, measured, and drift-guarded
 
 Every scoring formula, retrieval gate, rubric, and decision threshold is a
-**versioned, published policy parameter**: six methodology documents under
+**versioned, published policy parameter**: eight methodology documents under
 `docs/` each carry their component's exact config, a test asserts the
 document matches the code, and the config is stamped into the audit chain of
 every run — so any historical result can be reproduced and defended.
@@ -195,7 +218,7 @@ properties mechanically.
 
 ```bash
 pytest -q                 # the full suite
-pytest -s -k "phase1 or phase2 or advisory or sar_eval or rfi_eval"   # scorecards
+pytest -s -k "phase1 or phase2 or advisory or sar_eval or rfi_eval or sweep_eval"   # scorecards
 pytest -s -k "decision_trace or casegraph or reliability"             # agency + reliability
 ```
 
@@ -238,6 +261,8 @@ also recorded in `ground_truth.json` as an answer key for scoring:
 | A licensed-trust RFI narrative contradicted by the evidence | `rfi.csv` + `ground_truth.json` |
 | A recidivist account that cleared prior "retain & monitor" reviews | `accounts.csv` |
 | An "internal account, do-not-block" red-herring tag | `accounts.csv` |
+| A synthetic OFAC-style designation + its exposed sub-network | `designations.csv`, `addresses.csv` |
+| Hold-status drift between two sanctions systems (the reconciliation gap) | `sanctions_hold_warehouse.csv`, `sanctions_hold_admin.csv` |
 
 ---
 

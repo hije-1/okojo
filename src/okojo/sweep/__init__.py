@@ -117,6 +117,7 @@ from .escalations import (  # noqa: E402
     draft_escalations,
 )
 from .pipeline import SweepResult, default_sweep_dir, run_sweep  # noqa: E402
+from .packager import build_sweep_package, write_sweep_package  # noqa: E402
 
 __all__ = [
     "SWEEP_VERSION",
@@ -150,4 +151,6 @@ __all__ = [
     "SweepResult",
     "default_sweep_dir",
     "run_sweep",
+    "build_sweep_package",
+    "write_sweep_package",
 ]

@@ -16,6 +16,8 @@ data/synthetic/*
 !data/synthetic/.gitkeep
 # Runtime case output (graph HTML, audit logs)
 data/cases/
+# Runtime sweep output (audit logs, remediation packages)
+data/sweeps/
 
 # Notebooks / scratch
 .ipynb_checkpoints/

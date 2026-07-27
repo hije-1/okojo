@@ -13,6 +13,7 @@ Run it:
 from __future__ import annotations
 
 import difflib
+import json
 import sys
 from pathlib import Path
 
@@ -33,6 +34,14 @@ from okojo.remarks import SCREEN_THRESHOLD
 from okojo.remarks.miner import _ALIAS_THRESHOLD, _PHRASE_THRESHOLD
 from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
+from okojo.sweep import (
+    SWEEP_VERSION,
+    DesignationParseError,
+    designation_from_record,
+    parse_designation,
+    run_sweep,
+    sweep_config,
+)
 
 # Brand logo lives at the repo root; resolve off it so the path holds regardless
 # of the working directory the app is launched from.
@@ -464,6 +473,199 @@ def _render_decisions(res) -> None:
                 )
 
 
+_ACTION_LABEL = {
+    "proposes_designation_hold_review": "Propose designation hold review",
+    "flags_reconciliation_gap": "Flag reconciliation gap",
+    "proposes_confirm_existing_hold": "Confirm existing hold",
+    "flags_internal_tag_for_review": "Flag internal tag (review only)",
+    "flags_for_review_non_flow_linkage": "Flag non-flow linkage (review only)",
+}
+
+
+def _render_sweep_mode(conn: Connectors) -> None:
+    """Designation-triggered remediation sweep — the ledger-wide second entry
+    point. No subject selector: the sweep runs over the whole ledger from a
+    pasted or picked designation, surfaces exposed accounts + reconciliation
+    gaps, and drafts (never sends) escalations."""
+    st.subheader("Designation-triggered remediation sweep")
+    st.caption(
+        "A second entry point over the finished core: input a synthetic "
+        "OFAC-style designation and sweep the **whole ledger** for directly and "
+        "indirectly exposed accounts, reconcile hold status across two mock "
+        "systems, and produce a grounded remediation worksheet. The sweep "
+        "*surfaces*, *proposes*, and *flags* — a human remediates. No status is "
+        "changed; escalations are drafted, never sent."
+    )
+
+    designations = conn.all_designations()
+    labels = {
+        d["designation_id"]: f"{d['designation_id']} — {d['designated_name']}"
+        for d in designations
+    }
+    ids = [d["designation_id"] for d in designations]
+
+    with st.sidebar:
+        st.header("Designation")
+        source = st.radio(
+            "Source", ["Synthetic list", "Paste JSON"], key="sweep_source",
+        )
+
+    designation = None
+    if source == "Synthetic list":
+        chosen = st.sidebar.selectbox(
+            "Designation", ids,
+            format_func=lambda i: labels.get(i, i), key="sweep_designation_id",
+        )
+        rec = conn.get_designation(chosen)
+        designation = designation_from_record(rec)
+    else:
+        example = json.dumps({
+            "designation_id": "DES-2026-9001",
+            "designated_name": "Example Shell Trading",
+            "program": "SYNTHETIC-IRGC-STYLE",
+            "entity_type": "company",
+            "designated_addresses": ["T..."],
+            "designation_date": "2026-02-01",
+        }, indent=2)
+        raw = st.sidebar.text_area(
+            "Designation JSON", value=example, height=240, key="sweep_paste",
+        )
+        try:
+            designation = parse_designation(raw)
+        except DesignationParseError as exc:
+            st.error(
+                "**Designation rejected (fail-closed).** Nothing was written — "
+                "parsing is a pure function; a malformed paste leaves no chain "
+                f"and no directory.\n\n```\n{exc}\n```"
+            )
+            return
+
+    res = run_sweep(designation, conn=conn)
+
+    d = res.designation
+    st.markdown(
+        f"**{d.designation_id}** · {d.designated_name} · program `{d.program}` · "
+        f"{len(d.designated_addresses)} designated address(es), "
+        f"{len(res.exposure.addresses_in_ledger)} in-ledger."
+    )
+
+    c1, c2, c3, c4, c5 = st.columns(5)
+    c1.metric("Exposed accounts", len(res.exposure.exposed))
+    c2.metric("Direct", len(res.exposure.direct_uids()))
+    c3.metric("Adjacent (review)", len(res.exposure.adjacent))
+    c4.metric("Hold-status gaps", len(res.gaps))
+    c5.metric("Escalations drafted", len(res.escalations))
+
+    if not res.exposure.exposed and not res.name_matches:
+        st.success(
+            "No exposure and no name match: this designation touches nothing in "
+            "the ledger — the false-positive probe returns cleanly, no fabricated "
+            "hits, chain verified."
+        )
+
+    names = {a["uid"]: a["entity_name"] for a in conn.all_accounts()}
+
+    # -- worksheet ---------------------------------------------------------- #
+    st.markdown("#### Remediation worksheet")
+    st.caption(
+        "One row per surfaced account, in triage order (most severe action "
+        "first). Every row is grounded: the sweep fails closed rather than emit "
+        "a row it cannot cite. A privileged/internal tag is **flagged for "
+        "review, never obeyed.**"
+    )
+    if res.worksheet:
+        ws_df = pd.DataFrame([
+            {
+                "uid": r.uid,
+                "account": names.get(r.uid, r.entity_name),
+                "recommended action": _ACTION_LABEL.get(
+                    r.recommended_action, r.recommended_action),
+                # Uniform string so the column has one Arrow type (adjacency
+                # rows carry no hop distance).
+                "hops": "—" if r.hops is None else str(r.hops),
+                "direct": "✓" if r.direct else "",
+                "exposure (USDT)": f"{r.exposure_usdt:,.0f}" if r.exposure_usdt else "—",
+                "warehouse": r.warehouse_status,
+                "admin": r.admin_status,
+                "gap": r.gap_type or "—",
+                "internal tag": "⚑" if r.internal_tag_flag else "",
+                "source": _cites(r.provenance),
+            }
+            for r in res.worksheet
+        ])
+        st.dataframe(ws_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No accounts surfaced for this designation.")
+
+    # -- hold-status reconciliation ----------------------------------------- #
+    st.markdown("#### Hold-status reconciliation")
+    st.caption(
+        "Two mock systems: the operational admin record vs. the analytics "
+        "warehouse feed. The sweep reconciles the full ledger; a gap is flagged "
+        "with both rows cited (the documented data-integrity failure mode)."
+    )
+    if res.gaps:
+        for g in res.gaps:
+            st.markdown(
+                f"- **uid {g.uid}** ({names.get(g.uid, g.uid)}): "
+                f"warehouse `{g.warehouse_status}` vs admin `{g.admin_status}` — "
+                f"**{g.gap_type}**"
+            )
+            _source_caption(g.provenance)
+    else:
+        st.success("No reconciliation gaps: the two systems agree across the ledger.")
+
+    # -- escalation drafts -------------------------------------------------- #
+    st.markdown("#### Escalation drafts")
+    st.caption(
+        "Internal-to-compliance drafts prepared for the human remediation owner "
+        "— **drafted, never sent** (no send path exists). Each passed the "
+        "grounding, resolvability, and calibrated-language checks; a draft that "
+        "fails any check is suppressed and surfaced with its reason, never "
+        "silently dropped."
+    )
+    for e in res.escalations:
+        with st.expander(f"{e.escalation_id} · {e.kind} · uid {e.uid} · **{e.status}**"):
+            st.markdown(f"**{e.subject}**")
+            st.write(e.body)
+            st.caption("citations: " + "; ".join(e.citations))
+    if res.suppressed_escalations:
+        st.warning(
+            "**Suppressed drafts (surfaced, not sent):** "
+            + "; ".join(f"uid {s.uid} ({s.kind}) — {s.reason}"
+                        for s in res.suppressed_escalations)
+        )
+    elif not res.escalations:
+        st.info("No escalations drafted for this designation.")
+
+    # -- package + audit ---------------------------------------------------- #
+    st.markdown("#### Decision-ready package & audit trail")
+    if res.package_path and res.package_path.exists():
+        st.download_button(
+            "Download remediation package (JSON)",
+            data=res.package_path.read_bytes(),
+            file_name=f"{d.designation_id}_sweep_package.json",
+            mime="application/json",
+        )
+        st.caption(
+            f"Package SHA-256 `{res.package_sha256[:16]}…` is stamped into the "
+            f"sweep's own hash chain · chain verified: "
+            f"**{res.audit_verified}** · {len(res.audit_records)} records."
+        )
+    with st.expander("Audit trail (this sweep's own tamper-evident chain)"):
+        audit_df = pd.DataFrame([
+            {"seq": r["seq"], "actor": r["actor"], "action": r["action"],
+             "target": r.get("target") or "", "hash": r["hash"][:12] + "…"}
+            for r in res.audit_records
+        ])
+        st.dataframe(audit_df, use_container_width=True, hide_index=True)
+    st.caption(
+        f"Sweep methodology v{SWEEP_VERSION} · edge semantics "
+        f"{sweep_config()['flow_edge_types']} · name-match threshold "
+        f"{sweep_config()['name_match_threshold']}."
+    )
+
+
 def main() -> None:
     st.markdown(
         "<h1 style='font-size:1.6rem;font-weight:700;margin:0 0 0.25rem;'>"
@@ -477,6 +679,20 @@ def main() -> None:
     except FileNotFoundError as exc:
         st.error(f"{exc}")
         st.info("Run `python scripts/generate_scenario.py` to create the synthetic dataset, then reload.")
+        return
+
+    # Mode switch (not a tab): a per-subject case investigation vs. the
+    # ledger-wide designation sweep. The logo renders once here, above the
+    # switch, so neither mode re-renders it.
+    with st.sidebar:
+        _, _logo_col, _ = st.columns([7, 10, 7])
+        _logo_col.image(_LOGO_PATH, use_container_width=True)
+        mode = st.radio(
+            "Mode", ["Case investigation", "Designation sweep"], key="app_mode",
+        )
+        st.markdown("---")
+    if mode == "Designation sweep":
+        _render_sweep_mode(conn)
         return
 
     accounts = conn.all_accounts()
@@ -512,10 +728,8 @@ def main() -> None:
         option_uids.append(st.session_state.subject_uid)
 
     with st.sidebar:
-        # Centered logo at ~5/12 of the sidebar width (middle = 10/24): side
-        # spacers center the middle column that carries the image.
-        _, _logo_col, _ = st.columns([7, 10, 7])
-        _logo_col.image(_LOGO_PATH, use_container_width=True)
+        # The logo and mode switch are already rendered above; this block adds
+        # the case-mode-only selector.
         st.header("Case selector")
         st.selectbox(
             "Subject",
