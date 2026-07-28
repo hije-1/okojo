@@ -35,6 +35,7 @@ from okojo.remarks.miner import _ALIAS_THRESHOLD, _PHRASE_THRESHOLD
 from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
 from okojo.sweep import (
+    GAP_TAXONOMY,
     SWEEP_VERSION,
     DesignationParseError,
     designation_from_record,
@@ -473,13 +474,70 @@ def _render_decisions(res) -> None:
                 )
 
 
+# Plain-language UI layer (Part I-B S4). Mirrors the DecisionRecord
+# rationale/plain_language split (agency/decisions.py): the machine identifiers
+# stay byte-unchanged in config, audit, tests, and provenance; the sweep view
+# renders these compliance-officer forms keyed off them. The ONE deliberate
+# exception is the provenance `source` column / `_source_caption`, which keep
+# the real table names — they cite records, and a citation must name its store.
 _ACTION_LABEL = {
     "proposes_designation_hold_review": "Propose designation hold review",
     "flags_reconciliation_gap": "Flag reconciliation gap",
+    "flags_insider_staff_device_overlap": "Flag insider staff/device overlap (severe)",
     "proposes_confirm_existing_hold": "Confirm existing hold",
+    "flags_foreign_signal_exposure_for_review": "Flag foreign-list signal exposure (review)",
+    "flags_name_match_for_identity_review": "Flag name match — identity review",
     "flags_internal_tag_for_review": "Flag internal tag (review only)",
     "flags_for_review_non_flow_linkage": "Flag non-flow linkage (review only)",
 }
+
+# Hold-system machine names -> what the system IS, in plain terms.
+_SYSTEM_LABEL = {
+    "warehouse": "Compliance data feed (analytics copy)",
+    "admin": "Account admin record (operational system)",
+}
+
+# Hold-status machine values -> plain language.
+_HOLD_STATUS_LABEL = {
+    "blocked": "Blocked",
+    "no_hold": "No hold",
+    "absent": "Absent (not in this system)",
+}
+
+# Escalation kind -> plain-language title.
+_ESCALATION_KIND_LABEL = {
+    "reconciliation_gap": "Hold-status reconciliation gap",
+    "exposed_unblocked": "Exposed account with no hold on file",
+    "foreign_signal_exposure": "Foreign-list signal exposure (review)",
+}
+
+# Draft status -> plain language (the only representable status is the draft one).
+_ESCALATION_STATUS_LABEL = {
+    "drafted_pending_human_review": "Drafted — pending human review (not sent)",
+}
+
+# Exposure-timing machine values -> plain language (Part I-B S3 fields).
+_TIMING_LABEL = {
+    "timeless_control": "Control (timeless)",
+    "pre_designation": "Pre-designation",
+    "post_designation": "Post-designation",
+}
+
+
+def _system_label(name: str) -> str:
+    return _SYSTEM_LABEL.get(name, name)
+
+
+def _hold_label(status: str) -> str:
+    return _HOLD_STATUS_LABEL.get(status, status)
+
+
+def _gap_sentence(gap_type) -> str:
+    """A reconciliation gap in a compliance officer's words (the published
+    GAP_TAXONOMY), not the machine slug."""
+    if not gap_type:
+        return "—"
+    return GAP_TAXONOMY.get(gap_type, gap_type)
 
 
 def _render_sweep_mode(conn: Connectors) -> None:
@@ -585,9 +643,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
                 "hops": "—" if r.hops is None else str(r.hops),
                 "direct": "✓" if r.direct else "",
                 "exposure (USDT)": f"{r.exposure_usdt:,.0f}" if r.exposure_usdt else "—",
-                "warehouse": r.warehouse_status,
-                "admin": r.admin_status,
-                "gap": r.gap_type or "—",
+                _SYSTEM_LABEL["warehouse"]: _hold_label(r.warehouse_status),
+                _SYSTEM_LABEL["admin"]: _hold_label(r.admin_status),
+                "reconciliation gap": _gap_sentence(r.gap_type),
                 "internal tag": "⚑" if r.internal_tag_flag else "",
                 "source": _cites(r.provenance),
             }
@@ -600,16 +658,18 @@ def _render_sweep_mode(conn: Connectors) -> None:
     # -- hold-status reconciliation ----------------------------------------- #
     st.markdown("#### Hold-status reconciliation")
     st.caption(
-        "Two mock systems: the operational admin record vs. the analytics "
-        "warehouse feed. The sweep reconciles the full ledger; a gap is flagged "
-        "with both rows cited (the documented data-integrity failure mode)."
+        f"Two mock systems: the **{_SYSTEM_LABEL['admin']}** vs. the "
+        f"**{_SYSTEM_LABEL['warehouse']}**. The sweep reconciles the full ledger; "
+        "a gap is flagged with both rows cited (the documented data-integrity "
+        "failure mode)."
     )
     if res.gaps:
         for g in res.gaps:
             st.markdown(
                 f"- **uid {g.uid}** ({names.get(g.uid, g.uid)}): "
-                f"warehouse `{g.warehouse_status}` vs admin `{g.admin_status}` — "
-                f"**{g.gap_type}**"
+                f"{_SYSTEM_LABEL['warehouse']} — **{_hold_label(g.warehouse_status)}** "
+                f"vs {_SYSTEM_LABEL['admin']} — **{_hold_label(g.admin_status)}**: "
+                f"{_gap_sentence(g.gap_type)}"
             )
             _source_caption(g.provenance)
     else:
@@ -625,15 +685,18 @@ def _render_sweep_mode(conn: Connectors) -> None:
         "silently dropped."
     )
     for e in res.escalations:
-        with st.expander(f"{e.escalation_id} · {e.kind} · uid {e.uid} · **{e.status}**"):
+        kind = _ESCALATION_KIND_LABEL.get(e.kind, e.kind)
+        status = _ESCALATION_STATUS_LABEL.get(e.status, e.status)
+        with st.expander(f"{e.escalation_id} · {kind} · uid {e.uid} · **{status}**"):
             st.markdown(f"**{e.subject}**")
             st.write(e.body)
             st.caption("citations: " + "; ".join(e.citations))
     if res.suppressed_escalations:
         st.warning(
             "**Suppressed drafts (surfaced, not sent):** "
-            + "; ".join(f"uid {s.uid} ({s.kind}) — {s.reason}"
-                        for s in res.suppressed_escalations)
+            + "; ".join(
+                f"uid {s.uid} ({_ESCALATION_KIND_LABEL.get(s.kind, s.kind)}) — {s.reason}"
+                for s in res.suppressed_escalations)
         )
     elif not res.escalations:
         st.info("No escalations drafted for this designation.")
@@ -660,8 +723,8 @@ def _render_sweep_mode(conn: Connectors) -> None:
         ])
         st.dataframe(audit_df, use_container_width=True, hide_index=True)
     st.caption(
-        f"Sweep methodology v{SWEEP_VERSION} · edge semantics "
-        f"{sweep_config()['flow_edge_types']} · name-match threshold "
+        f"Sweep methodology v{SWEEP_VERSION} · money-flow edges: control links "
+        "and value transfers · name-match threshold "
         f"{sweep_config()['name_match_threshold']}."
     )
 
