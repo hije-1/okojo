@@ -60,8 +60,9 @@ def test_designation_tables_written_with_expected_columns(data_dir):
         # Part I-B: which list, and when.
         "source_regime", "list_type", "obligation_vs_signal", "listed_since",
     ]
-    # Two domestic (Part I) + two foreign national-CT plants (Part I-B S2).
-    assert len(des) == 4
+    # Two domestic (Part I) + two foreign national-CT plants (Part I-B S2) +
+    # two Part-II foreign name-only plants for variant screening (T1).
+    assert len(des) == 6
     for did in des.designation_id:
         assert _DESIGNATION_ID_RE.fullmatch(did), did
 
@@ -104,7 +105,12 @@ def test_foreign_plants_are_national_ct_signal_with_lead_time(data_dir, ground_t
     listed ~2 years before the domestic date; 3b (granularity) is a variant of
     SIBLING's name with NO addresses. Both are risk signals, never obligations."""
     des = pd.read_csv(data_dir / "designations.csv", keep_default_na=False)
-    foreign = des[des.list_type == "national_ct"]
+    # Scope to the S2 cross-list plants: the Part-II identity variant-screen
+    # plants are also national_ct/signal, distinguished only by membership in the
+    # identity_variant_matches answer key (excluded here so this stays the S2 pair).
+    identity_ids = set(ground_truth["identity_variant_matches"])
+    foreign = des[(des.list_type == "national_ct")
+                  & (~des.designation_id.isin(identity_ids))]
     assert len(foreign) == 2
     assert (foreign.obligation_vs_signal == "signal").all()
     assert (foreign.source_regime == "SYN-FOREIGN-NCT").all()
@@ -229,10 +235,15 @@ def test_designation_name_match_key(ground_truth, designations, ring, accounts):
 # hold tables + reconciliation answer key
 # --------------------------------------------------------------------------- #
 def test_hold_tables_cover_every_account_exactly_once(data_dir, accounts):
+    # Full per-account coverage over the accounts the sanctions-hold systems
+    # track. The Part-II identity-review subjects are name-screen-only personas
+    # with no on-chain/hold footprint (they carry no holds by design, per the
+    # additive-only rule), so they are outside the reconciliation set.
+    tracked = sorted(accounts[accounts.role_in_ring != "identity_review_subject"].uid)
     wh = pd.read_csv(data_dir / "sanctions_hold_warehouse.csv")
     adm = pd.read_csv(data_dir / "sanctions_hold_admin.csv")
     for table in (wh, adm):
-        assert sorted(table.uid) == sorted(accounts.uid)
+        assert sorted(table.uid) == tracked
         assert table.uid.is_unique
 
 
@@ -300,10 +311,13 @@ def test_kyc_artifacts_full_coverage_with_single_planted_gap(data_dir, accounts,
     kyc = pd.read_csv(data_dir / "kyc_artifacts.csv")
     assert list(kyc.columns) == ["uid", "artifact_type", "present"]
     # Full per-account coverage: two artifacts per account (individual + company
-    # each carry two), so every account appears exactly twice.
+    # each carry two), so every account appears exactly twice. The Part-II
+    # identity-review subjects are name-screen-only personas with no KYC-artifact
+    # footprint (additive-only rule), so they are outside this coverage set.
+    tracked = sorted(accounts[accounts.role_in_ring != "identity_review_subject"].uid)
     counts = kyc.groupby("uid").size()
     assert set(counts.unique()) == {2}
-    assert sorted(counts.index) == sorted(accounts.uid)
+    assert sorted(counts.index) == tracked
     # Exactly one absent artifact — KINGPIN's proof_of_address.
     absent = kyc[~kyc.present]
     assert len(absent) == 1

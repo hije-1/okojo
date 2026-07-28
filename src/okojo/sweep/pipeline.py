@@ -22,6 +22,12 @@ from typing import Callable, Optional, Union
 from ..audit import AuditLog
 from ..config import REPO_ROOT
 from ..connectors import Connectors
+from ..identity import (
+    VARIANT_MATCH_THRESHOLD,
+    VariantNameMatch,
+    identity_config,
+    screen_name_variants,
+)
 from . import NAME_MATCH_THRESHOLD, sweep_config
 from .designation import (
     DESIGNATION_ID_PATTERN,
@@ -40,6 +46,7 @@ from .worksheet import WorksheetRow, build_worksheet, worksheet_grounding_report
 class SweepResult:
     designation: Designation
     name_matches: list[DesignationNameMatch]
+    variant_name_matches: list[VariantNameMatch]  # Part II: transliteration-variant hits
     exposure: ExposureResult
     gaps: list[StatusGap]              # full-ledger reconciliation, uid order
     worksheet: list[WorksheetRow]      # triaged; grounded fail-closed
@@ -125,17 +132,37 @@ def run_sweep(
         # The versioned sweep policy, once per run — mirroring the scoring /
         # retrieval / critic / contradiction / agency / casegraph stamps.
         audit.append("remediation_sweep", "sweep_config", detail=json.dumps(sweep_config()))
+        # Part II: the versioned identity-resolution policy (the ninth anti-drift
+        # pair) — stamped once per run too, so every sweep's provenance records
+        # the exact transliteration tables and variant threshold in force.
+        audit.append("remediation_sweep", "identity_config", detail=json.dumps(identity_config()))
 
-        # 1. Designated-name screen over registered account names.
+        # 1. Designated-name screen over registered account names. The DIRECT
+        # screen (unchanged) plus a Part-II variant layer that expands the
+        # designated name into its published-romanization variant space and
+        # recovers customers a direct/single-script screen misses — each hit
+        # citing which rule path fired. Variant hits are surfaced here (and in
+        # SweepResult) for identity review; they do not feed the exposure/hold
+        # worksheet, so they add no exposure and change no legacy scorecard.
         name_matches = match_designated_name(conn, designation)
+        direct_uids = {m.uid for m in name_matches}
+        variant_matches = screen_name_variants(
+            conn, designation.designated_name, exclude_uids=direct_uids,
+        )
         audit.append(
             "remediation_sweep", "name_screen",
             target=designation.designation_id,
             detail=json.dumps({
                 "threshold": NAME_MATCH_THRESHOLD,
                 "matches": [{"uid": m.uid, "score": m.score} for m in name_matches],
+                "variant_threshold": VARIANT_MATCH_THRESHOLD,
+                "variant_matches": [
+                    {"uid": m.uid, "score": m.score, "rule_path": m.rule_path}
+                    for m in variant_matches
+                ],
             }),
-            provenance=[p for m in name_matches for p in m.provenance],
+            provenance=([p for m in name_matches for p in m.provenance]
+                        + [p for m in variant_matches for p in m.provenance]),
         )
 
         # 2. Full-ledger exposure walk from the designated address set.
@@ -202,6 +229,7 @@ def run_sweep(
                 "exposed_accounts": len(exposure.exposed),
                 "adjacent_review_only": len(exposure.adjacent),
                 "name_matches": len(name_matches),
+                "variant_name_matches": len(variant_matches),
                 "block_status_gaps": len(gaps),
                 "worksheet_rows": len(worksheet),
                 "escalations_drafted": len(escalations),
@@ -223,6 +251,7 @@ def run_sweep(
         result = SweepResult(
             designation=designation,
             name_matches=name_matches,
+            variant_name_matches=variant_matches,
             exposure=exposure,
             gaps=gaps,
             worksheet=worksheet,

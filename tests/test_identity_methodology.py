@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from okojo.identity import IDENTITY_VERSION, identity_config
+from okojo.sweep import run_sweep
 
 _DOC = Path(__file__).resolve().parents[1] / "docs" / "identity-methodology.md"
 
@@ -45,3 +46,17 @@ def test_methodology_doc_cites_published_standards_and_posture():
     # The vendor-agnostic stance is stated positively (no vendor name is embedded
     # here, so this test never introduces a screening-vendor token itself).
     assert "no vendor named or implied" in text.lower()
+
+
+def test_identity_config_stamped_in_sweep_audit(conn, sweep_designations, tmp_path):
+    """The identity policy is written into the sweep's own hash chain exactly
+    once (alongside sweep_config), and the chain verifies."""
+    live, _ = sweep_designations
+    res = run_sweep(live, out_dir=tmp_path / "sweep", conn=conn)
+    stamped = [
+        r for r in res.audit_records
+        if r["actor"] == "remediation_sweep" and r["action"] == "identity_config"
+    ]
+    assert len(stamped) == 1, "exactly one identity_config record expected"
+    assert json.loads(stamped[0]["detail"]) == identity_config()
+    assert res.audit_verified

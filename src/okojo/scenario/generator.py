@@ -351,6 +351,32 @@ _DECOY_DESIGNATION_ADDRS = [
 ]
 
 
+# ---- Phase 8 Part II (T1): identity-resolution variant-screen plants -------- #
+# INVENTED, plausible romanization personas — NO source-document provenance.
+# Each designated name is ONE published romanization of an underlying name; the
+# matching customer opened under a DIFFERENT published romanization, so an
+# exact-match (and even a single-script fuzzy) screen misses it while the variant
+# layer bridges it via cited equivalence classes. A same-surname decoy whose
+# first name is OUTSIDE the equivalence class must NOT match (discrimination).
+# These accounts are non-transacting and carry no holds, no KYC-artifact rows,
+# and no staff rows — so every legacy + Part-I-B scorecard stays byte-identical
+# (the customers move only accounts.csv / kyc_docs.csv; verified by test). Built
+# RNG-free below the generator boundary. Fields:
+#   (designation_id, family, designated_name, customer_name, decoy_name, country)
+# ``country`` is deliberately AE — a jurisdiction ALREADY present across the
+# existing accounts — so these additive personas introduce NO new jurisdiction
+# into the shared EntityBackbone. The variant screen resolves on NAME, never
+# residence; a new jurisdiction (e.g. RU) would add a jurisdiction corroborator
+# that shifts unrelated cases' advisory matching (a legacy scorecard), which the
+# additive-only rule forbids. AE keeps every legacy scorecard byte-identical.
+_IDENTITY_PLANTS = [
+    ("DES-2026-0005", "cyrillic", "Yevgeniy Zhukovskiy",
+     "Evgenii Zhukovsky", "Dmitri Zhukovsky", "AE"),
+    ("DES-2026-0006", "arabic", "Muhammad Al-Sayigh",
+     "Mohammed El-Sayegh", "Khalid El-Sayegh", "AE"),
+]
+
+
 def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     """Generate the synthetic scenario and write it to ``out_dir``.
 
@@ -835,6 +861,31 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="signal",
             listed_since="2025-03-01",
         ),
+        # ---- Part II (T1): two foreign name-only plants for VARIANT screening #
+        # Each designated_name is a published romanization of an underlying name;
+        # a customer opened under a DIFFERENT published romanization (planted in
+        # accounts.csv below the boundary) is caught by the variant layer but
+        # MISSED by the direct screen. national_ct/signal + empty addresses (the
+        # S1 name-only rule): no wallet, no exposure — surfaced purely by the
+        # variant name screen. listed_since == designation_date (not a lead-time
+        # plant; these exercise cross-romanization matching, not cross-list
+        # timing). Distinguished from the S2 foreign plants only by membership in
+        # the identity_variant_matches key (the fixtures/tests scope on that).
+        *[
+            Designation(
+                designation_id=did,
+                designated_name=desig_name,
+                program="SYNTHETIC-NCT-STYLE",
+                entity_type="individual",
+                designated_addresses="",
+                designation_date=designation_date,
+                source_regime="SYN-FOREIGN-NCT",
+                list_type="national_ct",
+                obligation_vs_signal="signal",
+                listed_since=designation_date,
+            )
+            for did, _family, desig_name, _cust, _decoy, _country in _IDENTITY_PLANTS
+        ],
     ]
 
     # ---- sanctions-hold mock systems (warehouse feed vs. admin record) ---- #
@@ -995,6 +1046,11 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "DES-2026-0002": [],
         "DES-2026-0003": [key_to_uid["KINGPIN"]],
         "DES-2026-0004": [key_to_uid["SIBLING"]],
+        # The Part-II identity plants are DIRECT-screen misses by construction
+        # (the customer opened under a different romanization) — the direct name
+        # screen finds nothing; the variant layer is what recovers them, and its
+        # answer key is ``identity_variant_matches`` below.
+        **{did: [] for did, *_ in _IDENTITY_PLANTS},
     }
     # The FOREIGN-list name matches specifically — 3a's variant resolves to the
     # already-exposed KINGPIN (so it adds no new worksheet row), while 3b's
@@ -1058,6 +1114,54 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         for u in grp if u not in live_exposed_set
     }
     insider_linkage_uids = sorted(staff_uids & device_adjacent)
+
+    # ---- Part II (T1): identity-resolution personas (RNG-free, additive) --- #
+    # Appended AFTER every per-account loop above (holds, KYC artifacts, staff
+    # register, and every legacy/Part-I-B answer key), so those tables and keys
+    # never see these accounts and regenerate byte-identically. The customers
+    # move only accounts.csv (+ their own kyc_docs.csv rows); they carry no
+    # transactions, no holds, no KYC artifacts, and no staff membership. Each
+    # customer opened under a DIFFERENT published romanization than its foreign
+    # designation, so the direct name screen misses it and the variant layer must
+    # recover it; the same-surname decoy (first name outside the equivalence
+    # class) must never be matched. All names are INVENTED (no source provenance).
+    # ``identity_variant_matches`` is the DEFINITIONAL answer key (which customer
+    # each designated name refers to, by construction) — NOT the screen's output,
+    # so the eval is a real recovery test, never circular.
+    identity_variant_matches: dict[str, list[int]] = {}
+    identity_variant_decoy_uids: list[int] = []
+    for did, _family, _desig_name, cust_name, decoy_name, country in _IDENTITY_PLANTS:
+        cust_uid = next_uid
+        next_uid += 1
+        cust_doc = KycDoc(
+            kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+            holder_name=cust_name, holder_dob="1984-05-14", issuing_country=country,
+        )
+        kyc_docs[cust_doc.kyc_doc_id] = cust_doc
+        accounts.append(Account(
+            uid=cust_uid, entity_name=cust_name, entity_type="individual",
+            role_in_ring="identity_review_subject", residence_country=country,
+            nationality_country=country, kyc_doc_id=cust_doc.kyc_doc_id,
+            registration_date="2023-06-15", vip_level="Regular",
+            prior_review_count=0, account_status="active",
+        ))
+        decoy_uid = next_uid
+        next_uid += 1
+        decoy_doc = KycDoc(
+            kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+            holder_name=decoy_name, holder_dob="1979-11-02", issuing_country=country,
+        )
+        kyc_docs[decoy_doc.kyc_doc_id] = decoy_doc
+        accounts.append(Account(
+            uid=decoy_uid, entity_name=decoy_name, entity_type="individual",
+            role_in_ring="identity_review_subject", residence_country=country,
+            nationality_country=country, kyc_doc_id=decoy_doc.kyc_doc_id,
+            registration_date="2023-06-15", vip_level="Regular",
+            prior_review_count=0, account_status="active",
+        ))
+        identity_variant_matches[did] = [cust_uid]
+        identity_variant_decoy_uids.append(decoy_uid)
+    identity_variant_decoy_uids = sorted(identity_variant_decoy_uids)
 
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
@@ -1133,6 +1237,13 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "designation_exposure_timing": designation_exposure_timing,
         "kyc_artifact_gaps": kyc_artifact_gaps,
         "insider_linkage_uids": insider_linkage_uids,
+        # Part II (T1) variant-name-screen answer keys. ``identity_variant_matches``
+        # is the customer each foreign name-only designation refers to (recovered
+        # ONLY via the transliteration variant layer, missed by the direct
+        # screen); ``identity_variant_decoy_uids`` are same-surname accounts that
+        # must NEVER be matched (discrimination). Definitional, not screen output.
+        "identity_variant_matches": identity_variant_matches,
+        "identity_variant_decoy_uids": identity_variant_decoy_uids,
     }
 
     # ---- write outputs ---------------------------------------------------- #
