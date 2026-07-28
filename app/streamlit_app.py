@@ -523,6 +523,26 @@ _TIMING_LABEL = {
     "post_designation": "Post-designation",
 }
 
+# KYC artifact machine names -> plain language (Part I-B S3 fields).
+_ARTIFACT_LABEL = {
+    "government_id": "Government ID",
+    "proof_of_address": "Proof of address",
+    "certificate_of_incorporation": "Certificate of incorporation",
+    "beneficial_ownership": "Beneficial ownership",
+}
+
+
+def _timing_label(timing) -> str:
+    if not timing:
+        return "—"
+    return _TIMING_LABEL.get(timing, timing)
+
+
+def _kyc_gap_label(missing) -> str:
+    if not missing:
+        return "—"
+    return ", ".join(_ARTIFACT_LABEL.get(a, a) for a in missing)
+
 
 def _system_label(name: str) -> str:
     return _SYSTEM_LABEL.get(name, name)
@@ -643,6 +663,8 @@ def _render_sweep_mode(conn: Connectors) -> None:
                 "hops": "—" if r.hops is None else str(r.hops),
                 "direct": "✓" if r.direct else "",
                 "exposure (USDT)": f"{r.exposure_usdt:,.0f}" if r.exposure_usdt else "—",
+                "exposure timing": _timing_label(r.exposure_timing),
+                "KYC gap": _kyc_gap_label(r.kyc_missing_artifacts),
                 _SYSTEM_LABEL["warehouse"]: _hold_label(r.warehouse_status),
                 _SYSTEM_LABEL["admin"]: _hold_label(r.admin_status),
                 "reconciliation gap": _gap_sentence(r.gap_type),

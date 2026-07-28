@@ -100,6 +100,29 @@ def test_sweep_view_gap_sentences_not_slugs(sweep_app):
         assert g not in GAP_TAXONOMY  # i.e. not a bare gap_type key
 
 
+def test_sweep_view_surfaces_s3_flag_columns_in_plain_language(sweep_app):
+    """The two S3 headline facts — exposure timing and the KYC gap — render as
+    dedicated plain-language columns, not just inside statement text. (The third
+    S3 flag, insider linkage, is already visible via its action label.)"""
+    from app.streamlit_app import _ARTIFACT_LABEL, _TIMING_LABEL
+
+    ws = _worksheet_df(sweep_app)
+    assert "exposure timing" in ws.columns
+    assert "KYC gap" in ws.columns
+
+    # Timing renders through the friendly map; no raw machine value leaks.
+    timings = set(ws["exposure timing"])
+    assert timings <= (set(_TIMING_LABEL.values()) | {"—"})
+    assert _TIMING_LABEL["timeless_control"] in timings
+    assert _TIMING_LABEL["pre_designation"] in timings
+    assert not any(t in timings for t in _TIMING_LABEL)  # no raw slugs
+
+    # The KYC gap (KINGPIN's missing proof of address) renders in plain language.
+    kyc = set(ws["KYC gap"])
+    assert _ARTIFACT_LABEL["proof_of_address"] in kyc
+    assert "proof_of_address" not in kyc  # not the raw artifact slug
+
+
 def test_provenance_source_column_keeps_real_table_names(sweep_app):
     """The deliberate exception: the source column cites records, so it keeps the
     real table names even as everything else is plain-languaged."""
