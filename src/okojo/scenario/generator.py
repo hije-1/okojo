@@ -746,6 +746,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     # set is deliberately DIFFERENT from the legacy sanctioned_exposure_uids
     # key — a sweep that replays the Phase-2 answer key fails the eval.
     designation_date = (SIM_END + timedelta(days=30)).isoformat()
+    # Both Part-I designations are DOMESTIC sdn_style/obligation entries. Per
+    # Part I-B ruling IB-B their listed_since == designation_date exactly: the
+    # lead-time gap is a property ONLY of the foreign plant (S2), so no
+    # accidental domestic "window" can ever exist (asserted by test).
     designations = [
         Designation(
             designation_id="DES-2026-0001",
@@ -754,6 +758,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             entity_type="company",
             designated_addresses=";".join([controller_addr["SHELL_NZ"], hop_addrs[2]]),
             designation_date=designation_date,
+            source_regime="SYN-DOMESTIC-OFAC",
+            list_type="sdn_style",
+            obligation_vs_signal="obligation",
+            listed_since=designation_date,
         ),
         # The decoy: same name as the SDN-0003 precision decoy (pinned equal by
         # test, not by reference, to keep this section purely additive) plus two
@@ -765,6 +773,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             entity_type="company",
             designated_addresses=";".join(_DECOY_DESIGNATION_ADDRS),
             designation_date=designation_date,
+            source_regime="SYN-DOMESTIC-OFAC",
+            list_type="sdn_style",
+            obligation_vs_signal="obligation",
+            listed_since=designation_date,
         ),
     ]
 

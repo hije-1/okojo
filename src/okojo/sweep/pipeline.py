@@ -103,6 +103,13 @@ def run_sweep(
                 "program": designation.program,
                 "designated_addresses": len(designation.designated_addresses),
                 "designation_date": designation.designation_date,
+                # Part I-B provenance: which list this came from and when — so
+                # the chain records the entry's standing (obligation vs signal)
+                # and its lead time, not just its name.
+                "source_regime": designation.source_regime,
+                "list_type": designation.list_type,
+                "obligation_vs_signal": designation.obligation_vs_signal,
+                "listed_since": designation.listed_since,
             }),
         )
         # The versioned sweep policy, once per run — mirroring the scoring /

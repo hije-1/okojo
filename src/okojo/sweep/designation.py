@@ -17,7 +17,14 @@ import re
 from datetime import date
 from typing import Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 from rapidfuzz import fuzz
 
 from ..connectors import Connectors, Record
@@ -43,8 +50,17 @@ class Designation(BaseModel):
     designated_name: str = Field(min_length=1)
     program: str = Field(min_length=1)
     entity_type: Literal["individual", "company"]
-    designated_addresses: list[str] = Field(min_length=1)
+    # NOTE: no min_length here — the empty-address case is legal for exactly one
+    # combination (national_ct + signal), enforced by _empty_addresses_only_when
+    # below, which needs list_type and obligation_vs_signal in hand.
+    designated_addresses: list[str]
     designation_date: str
+    # Phase 8 Part I-B: which list, and when (see the dataclass in
+    # scenario/models.py for the field semantics).
+    source_regime: str = Field(min_length=1)
+    list_type: Literal["national_ct", "sdn_style", "un_style"]
+    obligation_vs_signal: Literal["obligation", "signal"]
+    listed_since: str
 
     @field_validator("designated_addresses")
     @classmethod
@@ -56,14 +72,34 @@ class Designation(BaseModel):
                 raise ValueError("designated address must not contain whitespace or ';'")
         return v
 
-    @field_validator("designation_date")
+    @field_validator("designation_date", "listed_since")
     @classmethod
     def _date_is_iso(cls, v: str) -> str:
         try:
             date.fromisoformat(v)
         except ValueError as exc:
-            raise ValueError(f"designation_date must be an ISO date: {v!r}") from exc
+            raise ValueError(f"date must be ISO: {v!r}") from exc
         return v
+
+    @model_validator(mode="after")
+    def _empty_addresses_only_when_national_ct_signal(self) -> "Designation":
+        """An empty address list is permitted IFF this is a national_ct entry
+        carrying a signal (never an obligation) — a name-only foreign listing
+        with no on-chain identifiers, surfaced by the name screen for identity
+        review. Every other combination must carry at least one address, so a
+        sdn_style / obligation designation can never arrive addressless and
+        silently sweep nothing.
+        """
+        if not self.designated_addresses:
+            if not (self.list_type == "national_ct"
+                    and self.obligation_vs_signal == "signal"):
+                raise ValueError(
+                    "empty designated_addresses permitted only for a "
+                    "national_ct + signal entry (name-only foreign listing); "
+                    f"got list_type={self.list_type!r}, "
+                    f"obligation_vs_signal={self.obligation_vs_signal!r}"
+                )
+        return self
 
 
 def parse_designation(raw: Union[str, dict]) -> Designation:
@@ -95,13 +131,22 @@ def designation_from_record(rec: Record) -> Designation:
     The CSV row goes through exactly the same model as a pasted payload — one
     validation boundary, not two.
     """
+    raw_addrs = str(rec["designated_addresses"])
+    # A name-only (empty) address list round-trips through the CSV as the empty
+    # string; splitting that yields [""], which the well-formedness check would
+    # reject — so map it back to the empty list the model expects.
+    addresses = raw_addrs.split(";") if raw_addrs else []
     return parse_designation({
         "designation_id": str(rec["designation_id"]),
         "designated_name": str(rec["designated_name"]),
         "program": str(rec["program"]),
         "entity_type": str(rec["entity_type"]),
-        "designated_addresses": str(rec["designated_addresses"]).split(";"),
+        "designated_addresses": addresses,
         "designation_date": str(rec["designation_date"]),
+        "source_regime": str(rec["source_regime"]),
+        "list_type": str(rec["list_type"]),
+        "obligation_vs_signal": str(rec["obligation_vs_signal"]),
+        "listed_since": str(rec["listed_since"]),
     })
 
 

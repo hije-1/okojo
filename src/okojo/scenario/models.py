@@ -142,6 +142,17 @@ class Designation:
     entity_type: str          # "individual" | "company"
     designated_addresses: str  # ';'-separated on-chain addresses
     designation_date: str
+    # Phase 8 Part I-B: which list this came from and when. ``source_regime``
+    # keys the published ``list_source_registry`` (sweep_config); ``list_type``
+    # is national_ct | sdn_style | un_style; ``obligation_vs_signal`` records
+    # whether an entry binds our synthetic exchange (obligation) or is a
+    # timestamped risk signal only (signal); ``listed_since`` is the ISO date
+    # the source list first carried the entry (== designation_date for domestic
+    # sdn_style entries; earlier than it for a foreign lead-time plant).
+    source_regime: str
+    list_type: str            # "national_ct" | "sdn_style" | "un_style"
+    obligation_vs_signal: str  # "obligation" | "signal"
+    listed_since: str          # ISO date the source list first carried this entry
 
 
 @dataclass

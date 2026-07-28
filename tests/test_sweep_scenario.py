@@ -55,6 +55,8 @@ def test_designation_tables_written_with_expected_columns(data_dir):
     assert list(des.columns) == [
         "designation_id", "designated_name", "program", "entity_type",
         "designated_addresses", "designation_date",
+        # Part I-B: which list, and when.
+        "source_regime", "list_type", "obligation_vs_signal", "listed_since",
     ]
     assert len(des) == 2
     for did in des.designation_id:
@@ -78,6 +80,18 @@ def test_live_addresses_exist_in_ledger_decoy_addresses_do_not(data_dir, designa
     for d in (live, decoy):
         for addr in d["designated_addresses"]:
             assert re.fullmatch(r"T[1-9A-HJ-NP-Za-km-z]{33}", addr), addr
+
+
+def test_domestic_designations_are_sdn_style_obligation_listed_since_equals_date(data_dir):
+    """Part I-B ruling IB-B: both Part-I designations are domestic
+    sdn_style/obligation entries whose ``listed_since`` equals their
+    ``designation_date`` EXACTLY — the lead-time gap is a property only of the
+    foreign plant (S2), so no accidental domestic 'window' can ever exist."""
+    des = pd.read_csv(data_dir / "designations.csv")
+    assert (des.source_regime == "SYN-DOMESTIC-OFAC").all()
+    assert (des.list_type == "sdn_style").all()
+    assert (des.obligation_vs_signal == "obligation").all()
+    assert (des.listed_since == des.designation_date).all()
 
 
 def test_decoy_designation_name_is_the_sdn_decoy(data_dir, designations):

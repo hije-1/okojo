@@ -27,6 +27,10 @@ _VALID = {
     "entity_type": "company",
     "designated_addresses": ["TDecoyDesignationAddrAAAAAAAAAAAAA"],
     "designation_date": "2026-01-30",
+    "source_regime": "SYN-DOMESTIC-OFAC",
+    "list_type": "sdn_style",
+    "obligation_vs_signal": "obligation",
+    "listed_since": "2026-01-30",
 }
 
 
@@ -96,6 +100,67 @@ def test_rejected_payload_writes_nothing(tmp_path):
 def test_malformed_date_rejected():
     with pytest.raises(DesignationParseError):
         parse_designation({**_VALID, "designation_date": "January 30, 2026"})
+
+
+# --------------------------------------------------------------------------- #
+# Part I-B schema — which list, and when
+# --------------------------------------------------------------------------- #
+def test_designation_carries_part_ib_fields_on_both_models():
+    """The pydantic parse model and the generator dataclass both carry the four
+    Part I-B fields — one schema, two representations."""
+    from dataclasses import fields as dc_fields
+
+    from okojo.scenario.models import Designation as DataclassDesignation
+
+    ib = {"source_regime", "list_type", "obligation_vs_signal", "listed_since"}
+    d = parse_designation(dict(_VALID))
+    assert ib <= set(type(d).model_fields)
+    assert d.source_regime == "SYN-DOMESTIC-OFAC"
+    assert d.list_type == "sdn_style"
+    assert d.obligation_vs_signal == "obligation"
+    assert d.listed_since == "2026-01-30"
+    assert ib <= {f.name for f in dc_fields(DataclassDesignation)}
+
+
+def test_designation_rejects_bad_literals_and_non_iso_listed_since():
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID, "list_type": "watchlist"})           # not a list_type
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID, "obligation_vs_signal": "advisory"})  # not obligation|signal
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID, "listed_since": "Jan 30 2024"})       # non-ISO
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID, "source_regime": ""})                 # empty regime
+
+
+# --------------------------------------------------------------------------- #
+# conditional empty-address rule — negative BOTH ways (PM ruling Q1)
+# --------------------------------------------------------------------------- #
+def test_empty_addresses_permitted_only_for_national_ct_signal():
+    """Empty designated_addresses is legal for exactly one combination — a
+    name-only foreign listing (national_ct + signal) — and rejected for every
+    other, so a domestic sdn_style/obligation entry can never sweep nothing."""
+    name_only = {**_VALID, "designated_addresses": [], "entity_type": "individual",
+                 "list_type": "national_ct", "obligation_vs_signal": "signal",
+                 "source_regime": "SYN-FOREIGN-NCT", "listed_since": "2024-01-30"}
+    d = parse_designation(name_only)
+    assert d.designated_addresses == []
+
+    # Every other list_type / standing combination rejects an empty list.
+    for lt, ov in [("sdn_style", "obligation"), ("sdn_style", "signal"),
+                   ("national_ct", "obligation"), ("un_style", "signal"),
+                   ("un_style", "obligation")]:
+        with pytest.raises(DesignationParseError):
+            parse_designation({**name_only, "list_type": lt, "obligation_vs_signal": ov})
+
+
+def test_non_empty_addresses_always_accepted_regardless_of_type():
+    """A well-formed address list is accepted for any combination — the
+    conditional rule only ever *relaxes* the constraint, never tightens it."""
+    for lt, ov in [("sdn_style", "obligation"), ("national_ct", "signal"),
+                   ("un_style", "obligation")]:
+        d = parse_designation({**_VALID, "list_type": lt, "obligation_vs_signal": ov})
+        assert d.designated_addresses == _VALID["designated_addresses"]
 
 
 def test_name_match_threshold_mirrors_screener():

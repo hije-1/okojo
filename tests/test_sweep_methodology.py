@@ -35,6 +35,19 @@ def test_methodology_doc_states_current_version():
     assert f"v{SWEEP_VERSION}" in _DOC.read_text(encoding="utf-8")
 
 
+def test_methodology_doc_publishes_part_ib_surface():
+    """The Part I-B additions are documented, not just coded: the source-list
+    registry / visible-absence section, the required-artifact standard, and the
+    named-out declared-but-not-ingested regime all appear in the doc."""
+    text = _DOC.read_text(encoding="utf-8")
+    assert "Source lists — the published registry, and visible absence" in text
+    assert "visible absence" in text.lower()
+    assert "required-artifact standard" in text.lower()
+    # The living visible-absence demonstration is named explicitly.
+    assert "SYN-UN-CONSOLIDATED" in text
+    assert "conditionally required" in text.lower()  # the empty-address rule
+
+
 def test_sweep_config_stamped_in_audit(conn, sweep_designations, tmp_path):
     """The sweep policy is written into the sweep's own hash chain exactly
     once, and the chain verifies."""

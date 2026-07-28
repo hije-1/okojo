@@ -1,4 +1,4 @@
-# Remediation-Sweep Methodology (v1.0.0)
+# Remediation-Sweep Methodology (v1.1.0)
 
 **Status:** synthetic-data research prototype. This document explains Okojo's
 Designation-Triggered Remediation Sweep — what happens when a new synthetic
@@ -30,8 +30,18 @@ Three principles govern everything below:
 `parse_designation()` is the sweep's input boundary and it ships closed:
 
 - **Strict validation before anything else.** The payload must be a JSON
-  object with exactly the published fields — unknown fields are rejected, the
-  address list must be non-empty, every address a clean token, the date ISO.
+  object with exactly the published fields — unknown fields are rejected, every
+  address a clean token, both dates (`designation_date`, `listed_since`) ISO,
+  and `list_type` / `obligation_vs_signal` drawn only from the published
+  vocabularies.
+- **The address list is conditionally required.** An empty
+  `designated_addresses` is permitted for exactly one combination — a
+  `national_ct` entry carrying a `signal` (a name-only foreign listing with no
+  on-chain identifiers, surfaced by the name screen for identity review). Every
+  other combination — and in particular any `sdn_style` / `obligation`
+  designation — must carry at least one address, so a domestic designation can
+  never arrive addressless and silently sweep nothing. The rule is
+  negative-tested both ways.
 - **`designation_id` is treated as a filesystem input.** It must match
   `^[A-Z]{3}-\d{4}-\d{4}$` — uppercase letters, digits, hyphens, nothing a
   path could interpret — and is validated *before* any path is derived from
@@ -44,7 +54,49 @@ Three principles govern everything below:
 A designation drawn from the synthetic `designations` table goes through
 exactly the same model as a pasted payload — one validation boundary, not two.
 
-## 2. Exposure semantics — pinned to the answer key's own definition
+## 2. Source lists — the published registry, and visible absence
+
+Every designation now records **which list it came from and when**:
+`source_regime` keys a published **list-source registry** in `sweep_config()`;
+`list_type` (`national_ct` | `sdn_style` | `un_style`) and
+`obligation_vs_signal` (`obligation` | `signal`) record the entry's standing;
+`listed_since` records when the source list first carried it.
+
+**The registry is explicit, versioned, stamped per run.** It names each regime
+the sweep can screen against, its list type, its default standing, an ingestion
+provenance note, and — critically — an explicit `ingested` flag:
+
+| regime | list type | default standing | ingested |
+|---|---|---|---|
+| `SYN-DOMESTIC-OFAC` | `sdn_style` | `obligation` | **yes** |
+| `SYN-FOREIGN-NCT` | `national_ct` | `signal` | **yes** |
+| `SYN-UN-CONSOLIDATED` | `un_style` | `obligation` | **no** |
+
+**Visible absence — the living demonstration.** The `SYN-UN-CONSOLIDATED`
+regime is *declared and not ingested*. That fact is published here and stamped
+into every sweep's audit chain (the registry rides inside `sweep_config`), so
+the set of lists the sweep screened on a given date is always a documented,
+reproducible fact. Absence is **stated, never inferred from an empty result**:
+a reviewer never has to wonder whether a list was clean or simply never loaded.
+
+**Signal is not obligation.** A `national_ct` listing is ingested as a
+**timestamped risk signal**, never as a legal effect binding this synthetic
+exchange. That distinction is load-bearing downstream: foreign-signal exposure
+is surfaced for review in signal language, and asserting the legal effect of a
+foreign listing is forbidden by a calibrated-language check.
+
+### 2a. The KYC required-artifact standard
+
+The same visible-absence discipline applies to onboarding artifacts.
+`sweep_config()` publishes a per-entity-type **required-artifact standard**
+(`individual` requires a `government_id` and a `proof_of_address`; `company` a
+`certificate_of_incorporation` and a `beneficial_ownership` record). Because
+the standard is versioned and stamped, what counts as a KYC gap on a given date
+is a published policy rather than an implicit one — a required artifact removed
+from the standard changes what is flagged, provably and on the record. The
+standard is declared here and consumed by the KYC-completeness worksheet flag.
+
+## 3. Exposure semantics — pinned to the answer key's own definition
 
 The sweep owns its exposure walker: one reverse adjacency over the full
 transaction ledger, one multi-source BFS from the designated address set.
@@ -76,7 +128,7 @@ separate review-only list — the same discipline as the scorer's
 carrying an internal "do-not-block" style tag is flagged for review like any
 other; the tag exempts nothing (it is itself a finding, per the standing rule).
 
-## 3. Designated-name screening
+## 4. Designated-name screening
 
 Registered account names are fuzzy-matched (RapidFuzz `WRatio`) against the
 designated name, catching the transliteration-variant evasion an exact-match
@@ -86,7 +138,7 @@ own policy parameter — a screener retune can never silently move sweep
 behaviour without a version bump here. A name match is a *screening lead*
 carrying its account row; it neither creates nor is required for exposure.
 
-## 4. Block-status verification — the reconciliation gap
+## 5. Block-status verification — the reconciliation gap
 
 Two mock systems hold sanctions-hold status: `sanctions_hold_admin` (the
 operational system of record) and `sanctions_hold_warehouse` (the analytics
@@ -108,7 +160,7 @@ the two gaps are pre-existing synchronization failures that the sweep
 inspection, not the holds — the dates in the synthetic tables are consistent
 with exactly that reading.
 
-## 5. Triage worksheet & drafted escalations
+## 6. Triage worksheet & drafted escalations
 
 The worksheet is the sweep's per-account deliverable: one row per surfaced
 account (exposed or adjacent-review-only), carrying the exposure evidence,
@@ -149,13 +201,13 @@ it guards subject-facing text, and Phase 8 produces none.) Escalations are
 worksheet-scoped; the full-ledger gap list rides separately on the sweep
 result.
 
-## 6. Evaluation — what the numbers do and do not claim
+## 7. Evaluation — what the numbers do and do not claim
 
 The sweep's exposure classification is scored against
 `ground_truth.json`'s designation keys. Read that scorecard for what it is:
 **a dual-implementation consistency check.** The sweep engine and the
 generator's answer-key helper are two independent implementations of the same
-published semantics (§2), so recall/false-positive agreement between them is
+published semantics (§3), so recall/false-positive agreement between them is
 a consistency property of this synthetic world — not a field-performance
 claim about real ledgers.
 
@@ -178,7 +230,7 @@ each gap's direction fields, and the worksheet eval asserts full grounding
 coverage — every row and every escalation cites only evidence that resolves —
 alongside a fabricated-pointer negative control.
 
-## 7. The remediation package — built ON the chain
+## 8. The remediation package — built ON the chain
 
 The sweep emits one decision-ready JSON package per designation
 (`sweep_package.json`), the sweep's analogue of the Case Packager, reusing
@@ -205,7 +257,7 @@ with their citations, the reconciliation gaps, the full triaged worksheet, and
 the drafted (never sent) plus suppressed escalations — everything the human
 remediation owner needs, each fact resolving into the tamper-evident chain.
 
-## 8. Reproducibility & versioning
+## 9. Reproducibility & versioning
 
 Every run stamps the versioned sweep policy into its audit chain
 (`remediation_sweep / sweep_config`), mirroring the scoring, retrieval,
@@ -214,16 +266,18 @@ policy for this version is below; it is the single source of truth
 (`okojo.sweep.sweep_config`) and is regression-tested against this document,
 so the doc and the code can never silently drift.
 
-The `triage_order` and `action_vocabulary` fields are declared here and
-consumed by the triage/worksheet stage (Part I Slice C); the config is
-declared complete now so the version does not bump mid-phase.
+The full Part I-B config surface — the `list_source_registry`, the reserved
+`action_vocabulary` entries, and the `required_artifacts` standard — is
+declared here in one version bump (1.0.0 → 1.1.0) and consumed by the later
+Part I-B slices with no further bump, the same discipline that declared the
+`triage_order` / `action_vocabulary` fields ahead of Part I Slice C.
 
-**Version 1.0.0 — canonical policy:**
+**Version 1.1.0 — canonical policy:**
 
 <!-- sweep-config:begin -->
 ```json
 {
-  "version": "1.0.0",
+  "version": "1.1.0",
   "flow_edge_types": ["controls", "transaction"],
   "hop_semantics": "hops = minimum number of transaction edges on a directed path from the subject (its uid or any wallet it controls) to a designated address; 0 = the subject controls a designated address",
   "direct_hop_max": 1,
@@ -243,17 +297,48 @@ declared complete now so the version does not bump mid-phase.
   "action_vocabulary": [
     "proposes_designation_hold_review",
     "flags_reconciliation_gap",
+    "flags_insider_staff_device_overlap",
     "proposes_confirm_existing_hold",
+    "flags_foreign_signal_exposure_for_review",
+    "flags_name_match_for_identity_review",
     "flags_internal_tag_for_review",
     "flags_for_review_non_flow_linkage"
-  ]
+  ],
+  "list_source_registry": {
+    "SYN-DOMESTIC-OFAC": {
+      "name": "Synthetic Domestic Sanctions List (OFAC-style)",
+      "list_type": "sdn_style",
+      "default_obligation_vs_signal": "obligation",
+      "ingested": true,
+      "ingestion_provenance_note": "primary domestic designation feed; entries carry on-chain identifiers and bind the exchange (obligation)"
+    },
+    "SYN-FOREIGN-NCT": {
+      "name": "Synthetic Foreign National Counter-Terrorism List",
+      "list_type": "national_ct",
+      "default_obligation_vs_signal": "signal",
+      "ingested": true,
+      "ingestion_provenance_note": "foreign national counter-terrorism list; ingested as a timestamped RISK SIGNAL for cross-list early warning, never as a legal obligation of this synthetic exchange"
+    },
+    "SYN-UN-CONSOLIDATED": {
+      "name": "Synthetic UN-style Consolidated List",
+      "list_type": "un_style",
+      "default_obligation_vs_signal": "obligation",
+      "ingested": false,
+      "ingestion_provenance_note": "declared and NOT ingested in this prototype — published here and stamped into every sweep so its absence is a documented fact, not a silent configuration decision (visible absence)"
+    }
+  },
+  "required_artifacts": {
+    "individual": ["government_id", "proof_of_address"],
+    "company": ["certificate_of_incorporation", "beneficial_ownership"]
+  }
 }
 ```
 <!-- sweep-config:end -->
 
 Bump `version` whenever an edge type, a threshold, the gap taxonomy, the
-triage order, or the action vocabulary changes; already-audited sweeps remain
-reproducible under the version they were stamped with.
+triage order, the action vocabulary, the list-source registry, or the
+required-artifact standard changes; already-audited sweeps remain reproducible
+under the version they were stamped with.
 
 ---
 
