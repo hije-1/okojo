@@ -180,6 +180,40 @@ class AdminHold:
 
 
 @dataclass
+class KycArtifact:
+    """One onboarding artifact on file for an account (Phase 8 Part I-B S3).
+
+    The DATA the world holds — one row per (account, artifact) with a present
+    flag — checked by the sweep against the INDEPENDENT required-artifact
+    standard published in ``sweep_config()``. The two are deliberately separate:
+    this table records what is on file; the policy records what is required, so
+    changing the standard changes what counts as a gap without touching the
+    data. Full per-account coverage (the Slice-A hold-table pattern); the single
+    planted gap is a missing proof-of-address on the ultimate controller."""
+
+    uid: int
+    artifact_type: str        # e.g. "government_id" | "proof_of_address"
+    present: bool
+
+
+@dataclass
+class StaffRegister:
+    """An employee-account entry in the staff register (Phase 8 Part I-B S3).
+
+    Typologically real: exchanges maintain a register of employee-owned accounts
+    for conflict-of-interest monitoring. The insider-linkage worksheet flag reads
+    THIS register ONLY to identify a staff account — never ``role_in_ring`` or
+    any ground-truth key — and fires the severe flag only where staff membership
+    coincides with a device overlap into the exposed network."""
+
+    staff_id: str
+    uid: int
+    department: str
+    employment_status: str    # "active" | "former"
+    onboarded_date: str
+
+
+@dataclass
 class PriorRfi:
     """An earlier RFI answer from the same subject.
 

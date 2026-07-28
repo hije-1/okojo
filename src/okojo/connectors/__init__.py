@@ -259,6 +259,28 @@ class Connectors:
         )
         return recs[0] if recs else None
 
+    # -- KYC artifacts / staff register (Phase 8 Part I-B) ------------------- #
+    def kyc_artifacts(self) -> list[Record]:
+        """Onboarding artifacts on file, one row per (account, artifact type)."""
+        return self._records(
+            "kyc_artifacts", "SELECT * FROM kyc_artifacts ORDER BY uid, artifact_type", [],
+            lambda r: f"uid:{r['uid']}:{r['artifact_type']}",
+        )
+
+    def kyc_artifacts_for(self, uid: int) -> list[Record]:
+        return self._records(
+            "kyc_artifacts",
+            "SELECT * FROM kyc_artifacts WHERE uid = ? ORDER BY artifact_type", [uid],
+            lambda r: f"uid:{r['uid']}:{r['artifact_type']}",
+        )
+
+    def staff_register(self) -> list[Record]:
+        """The employee-account register (conflict-of-interest monitoring)."""
+        return self._records(
+            "staff_register", "SELECT * FROM staff_register ORDER BY staff_id", [],
+            lambda r: r["staff_id"],
+        )
+
     # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""

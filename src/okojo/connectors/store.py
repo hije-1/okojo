@@ -36,6 +36,8 @@ TABLES: dict[str, str] = {
     "designations": "designations.csv",
     "sanctions_hold_warehouse": "sanctions_hold_warehouse.csv",
     "sanctions_hold_admin": "sanctions_hold_admin.csv",
+    "kyc_artifacts": "kyc_artifacts.csv",
+    "staff_register": "staff_register.csv",
 }
 
 

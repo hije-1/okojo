@@ -36,8 +36,10 @@ def test_worksheet_action_assignment_full_equality(live_result, ring):
 
     Five exposed accounts with consistent no_hold get the hold-review
     proposal; the two exposed gap accounts get the gap flag; the tagged
-    adjacent account gets the named tag flag; the two other adjacent accounts
-    get the generic non-flow review flag. Nothing else appears."""
+    adjacent account gets the named tag flag; the staff-register account with a
+    device overlap (EMPLOYEE) gets the severe insider flag (S3); the remaining
+    adjacent account gets the generic non-flow review flag. Nothing else
+    appears."""
     expected = {
         ring["KINGPIN"]: "proposes_designation_hold_review",
         ring["SHELL_NZ"]: "proposes_designation_hold_review",
@@ -47,7 +49,7 @@ def test_worksheet_action_assignment_full_equality(live_result, ring):
         ring["TRUST"]: "flags_reconciliation_gap",
         ring["SHELL_TR"]: "flags_reconciliation_gap",
         ring["PRIVILEGED"]: "flags_internal_tag_for_review",
-        ring["EMPLOYEE"]: "flags_for_review_non_flow_linkage",
+        ring["EMPLOYEE"]: "flags_insider_staff_device_overlap",
         ring["SIBLING"]: "flags_for_review_non_flow_linkage",
     }
     assert {r.uid: r.recommended_action for r in live_result.worksheet} == expected
@@ -289,3 +291,82 @@ def test_worksheet_build_guard_rejects_signal_legal_effect(lead_result):
     })
     with pytest.raises(CalibratedLanguageError):
         assert_calibrated_signal_language([bad])
+
+
+# --------------------------------------------------------------------------- #
+# Part I-B S3 — three worksheet flags: timing, KYC completeness, insider linkage
+# --------------------------------------------------------------------------- #
+def test_exposure_timing_control_is_timeless_flow_is_pre_designation(live_result, ring, ground_truth):
+    """Each exposed row carries a timing classification matching the answer key:
+    control (hops 0) is timeless, flow is pre-designation here. Review-only rows
+    (adjacency, name-match) carry no timing."""
+    by_uid = {r.uid: r for r in live_result.worksheet}
+    gold = ground_truth["designation_exposure_timing"][live_result.designation.designation_id]
+    assert {str(u): by_uid[u].exposure_timing for u in map(int, gold)} == gold
+    # hops-0 accounts are timeless_control specifically.
+    assert by_uid[ring["KINGPIN"]].exposure_timing == "timeless_control"
+    assert by_uid[ring["SHELL_NZ"]].exposure_timing == "timeless_control"
+    assert by_uid[ring["TRUST"]].exposure_timing == "pre_designation"
+    # Review-only rows are untimed.
+    assert by_uid[ring["PRIVILEGED"]].exposure_timing is None
+    assert by_uid[ring["SIBLING"]].exposure_timing is None
+
+
+def test_kyc_gap_is_kingpin_poa_cited_and_absent_elsewhere(live_result, ring, ground_truth):
+    """Exactly one KYC gap — KINGPIN's proof_of_address — grounded on the
+    artifact row, matching the answer key; every other row is complete."""
+    by_uid = {r.uid: r for r in live_result.worksheet}
+    gaps = {r.uid: r.kyc_missing_artifacts for r in live_result.worksheet if r.kyc_missing_artifacts}
+    assert gaps == {ring["KINGPIN"]: ["proof_of_address"]}
+    assert {str(u): v for u, v in gaps.items()} == ground_truth["kyc_artifact_gaps"]
+    king = by_uid[ring["KINGPIN"]]
+    # The gap is grounded on the kyc_artifacts row proving absence.
+    assert any(p.source == "kyc_artifacts" for p in king.provenance)
+    assert "proof_of_address" in king.statement and "required-artifact standard" in king.statement
+
+
+def test_kyc_gap_measured_against_the_published_standard(conn, live_result, monkeypatch):
+    """A required artifact removed from the standard changes what counts as a
+    gap — the check reads the published policy, not a hardcoded list. Data plane
+    (kyc_artifacts) and policy plane (required_artifacts) are independent."""
+    import okojo.sweep.worksheet as wsmod
+    from okojo.sweep import build_worksheet
+
+    monkeypatch.setattr(wsmod, "REQUIRED_ARTIFACTS",
+                        {"individual": ["government_id"], "company": []})
+    ws = build_worksheet(conn, live_result.designation, live_result.exposure,
+                         live_result.gaps, live_result.name_matches)
+    # With proof_of_address no longer required, KINGPIN's absence is not a gap.
+    assert all(r.kyc_missing_artifacts == [] for r in ws)
+
+
+def test_insider_flag_distinct_from_generic_and_reads_register_only(live_result, ring):
+    """EMPLOYEE — on the staff register AND device-overlapping the exposed ring
+    — takes the SEVERE named insider flag, cites the register row, and is ranked
+    strictly above the generic non-flow linkage. SIBLING (adjacent by reused KYC,
+    not on the register) stays generic."""
+    from okojo.sweep import ACTION_VOCABULARY
+
+    by_uid = {r.uid: r for r in live_result.worksheet}
+    emp = by_uid[ring["EMPLOYEE"]]
+    assert emp.recommended_action == "flags_insider_staff_device_overlap"
+    assert emp.staff_account is True
+    assert any(p.source == "staff_register" for p in emp.provenance)
+    assert "staff-account register" in emp.statement and "insider" in emp.statement.lower()
+    # Distinct from — and more severe than — generic non-flow linkage.
+    sib = by_uid[ring["SIBLING"]]
+    assert sib.recommended_action == "flags_for_review_non_flow_linkage"
+    assert sib.staff_account is False
+    assert (ACTION_VOCABULARY.index(emp.recommended_action)
+            < ACTION_VOCABULARY.index(sib.recommended_action))
+
+
+def test_staff_membership_alone_produces_no_row(live_result, conn, ring):
+    """The register's ordinary staffer (no device overlap into the ring) never
+    appears in the worksheet — the insider flag needs BOTH register membership
+    and a device overlap, not membership alone."""
+    staff_uids = {int(r["uid"]) for r in conn.staff_register()}
+    ordinary = staff_uids - {ring["EMPLOYEE"]}
+    assert ordinary, "the register must carry a second, ordinary staffer"
+    ws_uids = {r.uid for r in live_result.worksheet}
+    assert not (ordinary & ws_uids)

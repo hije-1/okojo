@@ -61,13 +61,18 @@ class GroundingResolver:
         add(conn.all_prior_rfis())
         add(conn.all_registry())
         add(conn.sdn_list())
-        # Phase 8: the sweep's worksheet/escalations cite these three tables.
-        # ONE grounding membership definition serves both pipelines — inert for
+        # Phase 8: the sweep's worksheet/escalations cite these tables. ONE
+        # grounding membership definition serves both pipelines — inert for
         # existing claims (resolves() tests membership of cited pairs, and no
-        # pre-Phase-8 claim cites these sources), a superset for the sweep.
+        # pre-Phase-8 claim cites these sources), a superset for the sweep. The
+        # designation/hold sources arrived in Part I Slice C; Part I-B Slice S3
+        # adds the KYC-artifact and staff-register sources the KYC-completeness
+        # and insider-linkage worksheet flags cite.
         add(conn.all_designations())
         add(conn.warehouse_holds())
         add(conn.admin_holds())
+        add(conn.kyc_artifacts())
+        add(conn.staff_register())
         self._valid = valid
 
     def resolves(self, prov: Provenance) -> bool:

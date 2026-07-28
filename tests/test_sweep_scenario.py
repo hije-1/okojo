@@ -288,3 +288,66 @@ def test_new_dates_postdate_activity_and_holds_predate_designation(data_dir, gro
     gap_uids = [g["uid"] for g in ground_truth["block_status_gaps"]]
     assert (wh[wh.uid.isin(gap_uids)].as_of_date < designation_date).all()
     assert (adm[adm.uid.isin(gap_uids)].status_date < designation_date).all()
+
+
+# --------------------------------------------------------------------------- #
+# Part I-B S3 — KYC artifacts + staff register (the two new data planes)
+# --------------------------------------------------------------------------- #
+def test_kyc_artifacts_full_coverage_with_single_planted_gap(data_dir, accounts, ring):
+    """Every account carries a row for each artifact its entity type holds; the
+    only absence is KINGPIN's proof_of_address (the maximally test-separable
+    gap: the sole exposed individual)."""
+    kyc = pd.read_csv(data_dir / "kyc_artifacts.csv")
+    assert list(kyc.columns) == ["uid", "artifact_type", "present"]
+    # Full per-account coverage: two artifacts per account (individual + company
+    # each carry two), so every account appears exactly twice.
+    counts = kyc.groupby("uid").size()
+    assert set(counts.unique()) == {2}
+    assert sorted(counts.index) == sorted(accounts.uid)
+    # Exactly one absent artifact — KINGPIN's proof_of_address.
+    absent = kyc[~kyc.present]
+    assert len(absent) == 1
+    row = absent.iloc[0]
+    assert row.uid == ring["KINGPIN"] and row.artifact_type == "proof_of_address"
+
+
+def test_kyc_artifact_gaps_key_is_exactly_kingpin_poa(ground_truth, ring):
+    assert ground_truth["kyc_artifact_gaps"] == {str(ring["KINGPIN"]): ["proof_of_address"]}
+
+
+def test_staff_register_shape_and_membership(data_dir, ring):
+    """The staff register carries EMPLOYEE (the staff cutout) plus one ordinary
+    staffer, identified by uid — never a role label."""
+    staff = pd.read_csv(data_dir / "staff_register.csv")
+    assert list(staff.columns) == [
+        "staff_id", "uid", "department", "employment_status", "onboarded_date",
+    ]
+    assert ring["EMPLOYEE"] in set(staff.uid)
+    assert staff.staff_id.is_unique and len(staff) == 2
+
+
+def test_insider_linkage_key_is_exactly_employee(ground_truth, ring):
+    """Insider linkage is the register account with a device overlap into the
+    exposed network — EMPLOYEE, and only EMPLOYEE. The ordinary staffer (no ring
+    device) is excluded, so the flag needs BOTH register membership and overlap."""
+    assert ground_truth["insider_linkage_uids"] == [ring["EMPLOYEE"]]
+
+
+def test_exposure_timing_key_control_timeless_flow_pre_designation(ground_truth, designations, ring):
+    """Every exposed account's timing: the two control (hops-0) accounts are
+    timeless; every flow-exposed account is pre-designation (all activity
+    predates the designation date — legacy exposure the designation surfaces)."""
+    live, _ = designations
+    timing = ground_truth["designation_exposure_timing"][live["designation_id"]]
+    assert timing == {
+        str(ring["KINGPIN"]): "timeless_control",
+        str(ring["SHELL_NZ"]): "timeless_control",
+        str(ring["TRUST"]): "pre_designation",
+        str(ring["SHELL_AE"]): "pre_designation",
+        str(ring["SHELL_TR"]): "pre_designation",
+        str(ring["SHELL_HK"]): "pre_designation",
+        str(ring["SHELL_CN"]): "pre_designation",
+    }
+    # No account is post-designation in this scenario (a coherence property, not
+    # an assumption): every transaction predates every designation date.
+    assert "post_designation" not in set(timing.values())

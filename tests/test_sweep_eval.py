@@ -228,3 +228,105 @@ def test_sweep_eval_foreign_granularity_scorecard(
     # Additive, not duplicative — absent from every domestic exposure set.
     assert not in_any_domestic_exposure
     assert res.audit_verified
+
+
+# --------------------------------------------------------------------------- #
+# Part I-B S3 — three worksheet flags (the announced sweep_eval worksheet-map
+# delta; the domestic exposure/gap/grounding scorecards above are unchanged)
+# --------------------------------------------------------------------------- #
+def test_sweep_eval_exposure_timing_scorecard(
+    conn, ground_truth, ring, sweep_designations, tmp_path, capsys
+):
+    """Pre/post-designation timing (5a): the worksheet stamps each exposed row
+    with WHEN its driving flow occurred vs the designation date. Control is
+    timeless; all flow here is pre-designation (legacy exposure surfaced by the
+    designation) — reproduced exactly from the row's own cited transaction
+    dates, an independent read of the generator's answer key."""
+    live, _ = sweep_designations
+    res = run_sweep(live, out_dir=tmp_path / "live", conn=conn)
+
+    timing = {str(r.uid): r.exposure_timing
+              for r in res.worksheet if r.exposure_timing is not None}
+    gold = ground_truth["designation_exposure_timing"][live.designation_id]
+    from collections import Counter
+    bands = Counter(timing.values())
+
+    scorecard = {
+        "exposed_rows_timed": len(timing),
+        "timing_matches_gold": timing == gold,
+        "timeless_control": bands["timeless_control"],
+        "pre_designation": bands["pre_designation"],
+        "post_designation": bands["post_designation"],
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (worksheet flag 5a: exposure timing):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    assert timing == gold and len(timing) > 0
+    # Control is timeless; all flow is pre-designation; none post-designation.
+    assert bands["post_designation"] == 0 and bands["pre_designation"] > 0
+    assert bands["timeless_control"] > 0
+
+
+def test_sweep_eval_kyc_completeness_scorecard(
+    conn, ground_truth, ring, sweep_designations, tmp_path, capsys
+):
+    """KYC completeness (5b): in-scope exposed accounts checked against the
+    published required-artifact standard. Exactly one gap — the ultimate
+    controller (KINGPIN) missing proof_of_address — matching the answer key."""
+    live, _ = sweep_designations
+    res = run_sweep(live, out_dir=tmp_path / "live", conn=conn)
+
+    gaps = {str(r.uid): r.kyc_missing_artifacts
+            for r in res.worksheet if r.kyc_missing_artifacts}
+    gold = ground_truth["kyc_artifact_gaps"]
+
+    scorecard = {
+        "in_scope_exposed_rows": sum(1 for r in res.worksheet if r.hops is not None),
+        "kyc_gaps": gaps,
+        "matches_gold": gaps == gold,
+        "grounded_on_artifact_rows": all(
+            any(p.source == "kyc_artifacts" for p in r.provenance)
+            for r in res.worksheet if r.kyc_missing_artifacts
+        ),
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (worksheet flag 5b: KYC completeness):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    assert gaps == gold == {str(ring["KINGPIN"]): ["proof_of_address"]}
+    assert scorecard["grounded_on_artifact_rows"]
+
+
+def test_sweep_eval_insider_linkage_scorecard(
+    conn, ground_truth, ring, sweep_designations, tmp_path, capsys
+):
+    """Insider linkage (5c): a staff-register account whose non-flow linkage is a
+    device overlap into the exposed network takes the severe named flag —
+    EMPLOYEE, and only EMPLOYEE, distinct from generic non-flow linkage and read
+    from the register alone (never a role label)."""
+    live, _ = sweep_designations
+    res = run_sweep(live, out_dir=tmp_path / "live", conn=conn)
+
+    insiders = sorted(r.uid for r in res.worksheet
+                      if r.recommended_action == "flags_insider_staff_device_overlap")
+    generic = sorted(r.uid for r in res.worksheet
+                     if r.recommended_action == "flags_for_review_non_flow_linkage")
+    gold = ground_truth["insider_linkage_uids"]
+
+    scorecard = {
+        "insider_uids": insiders,
+        "matches_gold": insiders == gold,
+        "generic_non_flow_uids": generic,
+        "insider_distinct_from_generic": not (set(insiders) & set(generic)),
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (worksheet flag 5c: insider linkage):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    assert insiders == gold == [ring["EMPLOYEE"]]
+    assert ring["EMPLOYEE"] not in generic  # promoted OUT of the generic band
+    assert scorecard["insider_distinct_from_generic"]

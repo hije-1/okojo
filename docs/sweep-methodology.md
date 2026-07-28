@@ -206,15 +206,47 @@ per row, from the published vocabulary:
 
 | row | condition | recommended_action |
 |---|---|---|
+| exposed | under a signal-type (foreign national-list) designation | `flags_foreign_signal_exposure_for_review` (a risk signal, never an obligation) |
 | exposed | has a reconciliation gap | `flags_reconciliation_gap` (the hold state must be trued up before any new action is meaningful) |
 | exposed | blocked in both systems | `proposes_confirm_existing_hold` |
 | exposed | otherwise | `proposes_designation_hold_review` |
+| name-match | foreign name-only listing, no flow | `flags_name_match_for_identity_review` |
+| adjacent | staff-register account with a device overlap | `flags_insider_staff_device_overlap` (a conflict-of-interest finding, severe) |
 | adjacent | carries an internal tag | `flags_internal_tag_for_review` (the tag is itself a finding — flagged, never obeyed) |
 | adjacent | otherwise | `flags_for_review_non_flow_linkage` |
 
 **Triage order** is the published `(action_severity, -exposure_usdt, hops,
 uid)` — severity is the action's position in the vocabulary; adjacency rows
 (no hop distance) sort after any real hop count within their band.
+
+### 6a. Three worksheet flags — timing, KYC completeness, insider linkage
+
+Each exposed or review-only row carries three further, independently-grounded
+flags, each a single rule over evidence already on hand:
+
+- **Pre/post-designation timing.** Every exposed row records *when* its
+  exposure-driving flow occurred relative to the designation date. Control of a
+  designated wallet (`hops = 0`) is a **timeless** fact — no transaction dates
+  it, the same discipline that excludes control edges from the lead-time window.
+  Flow exposure is **post-designation** iff a cited driving transaction
+  postdates the designation (the categorically worse fact), otherwise
+  **pre-designation** — pre-existing exposure the designation surfaces. The
+  classification is read from the row's own cited transaction dates, so it
+  resolves into the same evidence the exposure walk already grounds.
+- **KYC completeness.** Each in-scope exposed account is checked against the
+  published `required_artifacts` standard (§2a): any required artifact absent
+  from `kyc_artifacts` (or missing entirely) is stamped as a gap, cited to the
+  artifact row proving the absence. Because the standard is the versioned
+  policy and `kyc_artifacts` is the data, a required artifact removed from the
+  standard changes what counts as a gap — provably, without touching a row.
+- **Insider linkage.** An adjacency row whose account is on the **staff
+  register** (the employee-account register kept for conflict-of-interest
+  monitoring) *and* whose non-flow linkage is a **device overlap** into the
+  exposed network is promoted from generic linkage to the severe named
+  `flags_insider_staff_device_overlap`, cited to the register row. Staff status
+  is read from the register alone — never a role label — and the flag requires
+  both register membership and the device overlap, so register membership by
+  itself never manufactures a finding.
 
 **Grounding is fail-closed at build time.** Every row must carry at least one
 provenance pointer and every pointer must resolve to a real evidence row —

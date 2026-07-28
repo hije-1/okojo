@@ -61,14 +61,29 @@ from .models import (
     DeviceLink,
     GasFund,
     IpLog,
+    KycArtifact,
     KycDoc,
     PriorRfi,
     RegistryRecord,
     Rfi,
     SdnEntry,
+    StaffRegister,
     Transaction,
     WarehouseHold,
 )
+
+# The onboarding artifacts the synthetic world holds on file, per entity type —
+# the DATA plane of the KYC-completeness check (Slice S3). Deliberately kept
+# INDEPENDENT of the sweep's required-artifact POLICY (``sweep_config()``'s
+# ``required_artifacts``): the generator plants what is on file, the sweep
+# decides what is required, so removing an artifact from the standard changes
+# what counts as a gap without touching a single generated row. The literals
+# happen to mirror the standard so that a clean account satisfies it exactly;
+# the 5b eval asserts the policy-independence directly.
+_KYC_EMITTED_ARTIFACTS = {
+    "individual": ["government_id", "proof_of_address"],
+    "company": ["certificate_of_incorporation", "beneficial_ownership"],
+}
 
 _BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 _HEX = "0123456789abcdef"
@@ -861,6 +876,43 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
          "admin_status": "no_hold", "gap_type": "unrecorded_unblock"},
     ]
 
+    # ---- KYC artifacts on file (Part I-B S3: the completeness data plane) --- #
+    # Full per-account coverage: one row per (account, artifact) for the
+    # artifacts the entity type carries. Every artifact is on file (present) with
+    # exactly ONE planted gap — the ultimate controller (KINGPIN) is missing a
+    # proof-of-address. KINGPIN is the only exposed INDIVIDUAL (proof-of-address
+    # is an individual artifact; the exposed shells/trust are companies), so the
+    # gap is maximally test-separable from the insider (EMPLOYEE) and granularity
+    # (SIBLING) beats — the ultimate controller onboarded without a POA on file.
+    kyc_artifacts: list[KycArtifact] = []
+    for a in accounts:
+        for art in _KYC_EMITTED_ARTIFACTS[a.entity_type]:
+            present = not (a.uid == key_to_uid["KINGPIN"] and art == "proof_of_address")
+            kyc_artifacts.append(KycArtifact(uid=a.uid, artifact_type=art, present=present))
+
+    # ---- staff-account register (Part I-B S3: the insider-linkage data plane) #
+    # The employee-account register an exchange keeps for conflict-of-interest
+    # monitoring. EMPLOYEE (the staff cutout) is on it; a second, ordinary staff
+    # member (a noise account with no ring linkage) is also on it, so the insider
+    # flag must require BOTH register membership AND a device overlap into the
+    # exposed network — register membership alone never produces a worksheet row.
+    # Detection reads THIS table only, never role_in_ring. onboarded_date reuses
+    # the account's own (coherent) registration date.
+    noise_uids = sorted(a.uid for a in accounts if a.role_in_ring == "noise")
+    staff_register: list[StaffRegister] = [
+        StaffRegister(
+            staff_id="EMP-0001", uid=key_to_uid["EMPLOYEE"], department="Operations",
+            employment_status="active",
+            onboarded_date=accounts_by_uid[key_to_uid["EMPLOYEE"]].registration_date,
+        ),
+        StaffRegister(
+            staff_id="EMP-0002", uid=noise_uids[0], department="Customer Support",
+            employment_status="active",
+            onboarded_date=accounts_by_uid[noise_uids[0]].registration_date,
+        ),
+    ]
+    staff_uids = {s.uid for s in staff_register}
+
     # ---- derived Phase-8 designation labels (no RNG; in sync by construction) #
     all_uids = [a.uid for a in accounts]
 
@@ -954,6 +1006,59 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "DES-2026-0004": [key_to_uid["SIBLING"]],
     }
 
+    # ---- Part I-B S3: pre/post-designation exposure timing (no RNG) ------- #
+    # For each exposed account, WHEN did its exposure-driving flow occur relative
+    # to the designation date? Control of a designated wallet (hops == 0) is a
+    # TIMELESS fact — no transaction dates it — the same discipline that excludes
+    # hops-0 from the in-window key. Flow exposure (hops >= 1) is
+    # post-designation iff a driving path uses a transaction dated AFTER the
+    # designation date (the categorically worse fact); otherwise pre-designation.
+    # In this scenario every transaction predates every designation_date, so all
+    # flow exposure is pre-designation (legacy exposure the designation surfaces)
+    # — computed here, never assumed, so a future post-dated plant flips it.
+    designation_exposure_timing: dict[str, dict[str, str]] = {}
+    for d in designations:
+        addrs = _split_addrs(d.designated_addresses)
+        hops_map = {int(u): h for u, h in des_hops[d.designation_id].items()}
+        post_txs = [t for t in txs if t.timestamp[:10] > d.designation_date]
+        _, post_hops, _ = _designation_exposure(post_txs, address_controllers, addrs, all_uids)
+        timing: dict[str, str] = {}
+        for uid in des_exposed[d.designation_id]:
+            if hops_map[uid] == 0:
+                timing[str(uid)] = "timeless_control"
+            elif post_hops.get(uid, 0) >= 1:
+                timing[str(uid)] = "post_designation"
+            else:
+                timing[str(uid)] = "pre_designation"
+        designation_exposure_timing[d.designation_id] = timing
+
+    # ---- Part I-B S3: KYC completeness + insider-linkage answer keys ------ #
+    # KYC gaps: required-and-absent artifacts per account, from the DATA plane
+    # (kyc_artifacts) against the emitted-artifact list (which mirrors the sweep
+    # standard). Exactly one: KINGPIN missing proof_of_address.
+    kyc_present = {(k.uid, k.artifact_type): k.present for k in kyc_artifacts}
+    kyc_artifact_gaps = {
+        str(a.uid): sorted(
+            art for art in _KYC_EMITTED_ARTIFACTS[a.entity_type]
+            if not kyc_present[(a.uid, art)]
+        )
+        for a in accounts
+    }
+    kyc_artifact_gaps = {u: gaps for u, gaps in kyc_artifact_gaps.items() if gaps}
+
+    # Insider linkage: staff-register accounts that ALSO overlap a device with
+    # the live domestic designation's exposed set. EMPLOYEE qualifies (staff +
+    # shared device with KINGPIN/TRUST); the ordinary staffer does not (no ring
+    # device). Derived from the register + device graph — never role_in_ring.
+    live_did = next(d.designation_id for d in designations
+                    if d.list_type == "sdn_style" and des_exposed[d.designation_id])
+    live_exposed_set = set(des_exposed[live_did])
+    device_adjacent = {
+        u for grp in shared_devices.values() if set(grp) & live_exposed_set
+        for u in grp if u not in live_exposed_set
+    }
+    insider_linkage_uids = sorted(staff_uids & device_adjacent)
+
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
         "readme": "Fabricated data. Labels below are the answer key for scoring Okojo's capabilities.",
@@ -1021,6 +1126,13 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "designation_lead_time_window": designation_lead_time_window,
         "designation_exposure_in_window": designation_exposure_in_window,
         "foreign_name_match_uids": foreign_name_match_uids,
+        # Part I-B S3 worksheet flags: WHEN exposure-driving flow occurred vs the
+        # designation date (control is timeless); the required-and-absent KYC
+        # artifacts per account; and the staff accounts whose device overlap into
+        # the exposed network makes them insider-linkage flags.
+        "designation_exposure_timing": designation_exposure_timing,
+        "kyc_artifact_gaps": kyc_artifact_gaps,
+        "insider_linkage_uids": insider_linkage_uids,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -1039,6 +1151,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("designations.csv", designations)
     _write("sanctions_hold_warehouse.csv", warehouse_holds)
     _write("sanctions_hold_admin.csv", admin_holds)
+    _write("kyc_artifacts.csv", kyc_artifacts)
+    _write("staff_register.csv", staff_register)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -1081,5 +1195,9 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "designations": len(designations),
         "hold_status_rows": len(warehouse_holds) + len(admin_holds),
         "block_status_gaps": len(block_status_gaps),
+        "kyc_artifacts": len(kyc_artifacts),
+        "kyc_artifact_gaps": len(kyc_artifact_gaps),
+        "staff_register_rows": len(staff_register),
+        "insider_linkage_uids": len(insider_linkage_uids),
     }
     return summary

@@ -23,10 +23,19 @@ from pydantic import BaseModel
 from ..connectors import Connectors
 from ..provenance import Provenance
 from ..sar import GroundingReport, GroundingResolver, UnresolvableCitationError
-from . import ACTION_VOCABULARY, calibrated_language_violations
+from . import ACTION_VOCABULARY, REQUIRED_ARTIFACTS, calibrated_language_violations
 from .designation import Designation
 from .exposure import ExposureResult
 from .verify import StatusGap
+
+
+def _is_present(value) -> bool:
+    """A KYC-artifact ``present`` cell as a bool, robust to the CSV round-trip.
+
+    pandas reads a clean True/False column as bool, but an empty or object-typed
+    cell can arrive as ``None``/``"False"``/numpy bool — and ``bool("False")`` is
+    ``True``. Comparing the string form avoids that trap (the S2 NaN lesson)."""
+    return str(value) == "True"
 
 # Sort sentinel for adjacency rows, which have no hop distance: they sort
 # after any real hop count within their (already less severe) action band.
@@ -49,6 +58,14 @@ class WorksheetRow(BaseModel):
     admin_status: str
     gap_type: Optional[str]
     internal_tag_flag: bool
+    # Part I-B S3 flags. ``exposure_timing`` classifies WHEN an exposed row's
+    # driving flow occurred vs the designation date (None for review-only rows);
+    # ``kyc_missing_artifacts`` are the required-but-absent onboarding artifacts;
+    # ``staff_account`` marks membership of the staff register (drives the
+    # insider-linkage action when it coincides with a device overlap).
+    exposure_timing: Optional[str] = None   # pre_designation | post_designation | timeless_control
+    kyc_missing_artifacts: list[str] = []
+    staff_account: bool = False
     recommended_action: str        # one of ACTION_VOCABULARY
     statement: str
     provenance: list[Provenance]
@@ -59,7 +76,8 @@ class WorksheetRow(BaseModel):
 
 def _action_for(row_kind: str, is_signal: bool, gap_type: Optional[str],
                 warehouse_status: str, admin_status: str,
-                internal_tag_flag: bool) -> str:
+                internal_tag_flag: bool, is_staff: bool = False,
+                link_types: Optional[list[str]] = None) -> str:
     """The fixed assignment rule — one action per row, from the row's fields.
 
     Exposed accounts under a SIGNAL-type (foreign national-list) designation
@@ -69,9 +87,15 @@ def _action_for(row_kind: str, is_signal: bool, gap_type: Optional[str],
     (domestic) designation keep the original rule: a reconciliation gap outranks
     everything (the hold state must be trued up first), a consistent existing
     block is confirmed, otherwise a designation hold review is proposed. A
-    name-only listing match is a review-tier identity row. Adjacency rows: the
-    internal tag carries its own named flag (flagged, never obeyed); otherwise
-    the generic non-flow-linkage review flag.
+    name-only listing match is a review-tier identity row.
+
+    Adjacency rows, most severe first: a **staff account** (per the staff
+    register) whose non-flow linkage is a **device overlap** into the exposed
+    network is the named severe insider flag — an employee-owned account sharing
+    a device with the designated ring is a conflict-of-interest finding well
+    above generic linkage. Otherwise the internal tag carries its own named flag
+    (flagged, never obeyed); otherwise the generic non-flow-linkage review flag.
+    Staff membership is read from the register alone, never a role label.
     """
     if row_kind == "exposed":
         if is_signal:
@@ -83,16 +107,37 @@ def _action_for(row_kind: str, is_signal: bool, gap_type: Optional[str],
         return "proposes_designation_hold_review"
     if row_kind == "name_match":
         return "flags_name_match_for_identity_review"
+    if is_staff and "shared_device" in (link_types or []):
+        return "flags_insider_staff_device_overlap"
     if internal_tag_flag:
         return "flags_internal_tag_for_review"
     return "flags_for_review_non_flow_linkage"
+
+
+_TIMING_PHRASE = {
+    "timeless_control": (
+        "Exposure timing: control of a designated wallet is a timeless fact, "
+        "not bound to any transaction date."
+    ),
+    "pre_designation": (
+        "Exposure timing: the driving transactions predate the designation date "
+        "— pre-existing exposure the designation surfaces."
+    ),
+    "post_designation": (
+        "Exposure timing: driving activity postdates the designation date "
+        "— post-designation exposure, the categorically worse fact."
+    ),
+}
 
 
 def _statement(row_kind: str, entity_name: str, designation: Designation,
                hops: Optional[int], direct: bool, exposure_usdt: float,
                warehouse_status: str, admin_status: str,
                gap_type: Optional[str], internal_tag_flag: bool,
-               link_types: Optional[list[str]] = None) -> str:
+               link_types: Optional[list[str]] = None,
+               exposure_timing: Optional[str] = None,
+               kyc_missing: Optional[list[str]] = None,
+               is_staff_device_overlap: bool = False) -> str:
     """Calibrated row narrative — asserts only facts the row's pointers back.
 
     Signal-type output uses risk-signal language and never asserts a legal
@@ -116,12 +161,28 @@ def _statement(row_kind: str, entity_name: str, designation: Designation,
                 f"{did} at hop distance {hops}; "
                 f"tainted amount {exposure_usdt:,.2f} USDT from the cited transactions."
             ]
+        if exposure_timing in _TIMING_PHRASE:
+            parts.append(_TIMING_PHRASE[exposure_timing])
+        if kyc_missing:
+            parts.append(
+                "KYC completeness: missing required onboarding artifact(s) on file "
+                f"— {', '.join(kyc_missing)} (measured against the published "
+                "required-artifact standard)."
+            )
     elif row_kind == "name_match":
         parts = [
             f"{entity_name}: customer name matches an individual on "
             f"{designation.source_regime}'s national list ({did}, listed since "
             f"{designation.listed_since}); no domestic designation exists and no "
             "flow exposure was found; surfaced for identity review."
+        ]
+    elif is_staff_device_overlap:
+        links = " and ".join((link_types or [])).replace("_", " ")
+        parts = [
+            f"{entity_name}: no flow exposure to designation {did}; the account is "
+            "on the staff-account register (conflict-of-interest monitoring) and "
+            f"its non-flow linkage ({links}) is a staff device overlap with the "
+            "exposed network — surfaced for review as a potential insider link."
         ]
     else:
         links = " and ".join((link_types or [])).replace("_", " ")
@@ -161,8 +222,45 @@ def build_worksheet(
     adm = {int(r["uid"]): r for r in conn.admin_holds()}
     accounts = {int(r["uid"]): r for r in conn.all_accounts()}
     gap_by_uid = {g.uid: g for g in gaps}
+    # Part I-B S3 evidence planes: transaction dates (timing), KYC artifacts on
+    # file (completeness), and the staff register (insider linkage).
+    tx_date = {str(t["tx_id"]): str(t["timestamp"])[:10] for t in conn.all_transactions()}
+    kyc_recs = {(int(r["uid"]), str(r["artifact_type"])): r for r in conn.kyc_artifacts()}
+    staff_recs = {int(r["uid"]): r for r in conn.staff_register()}
+    designation_date = designation.designation_date
 
     rows: list[WorksheetRow] = []
+
+    def _exposure_timing(hops: Optional[int], base_provenance: list[Provenance]) -> Optional[str]:
+        """When did this exposure's driving flow occur vs the designation date?
+
+        Control (hops == 0) is timeless — no transaction dates it (the same
+        discipline that excludes hops-0 from the in-window key). Flow exposure is
+        post-designation iff any cited driving transaction postdates the
+        designation; otherwise it is pre-existing exposure the designation
+        surfaces. Read from the row's OWN cited transaction dates — an
+        independent read of the same evidence the generator's key derives."""
+        if hops is None:
+            return None
+        if hops == 0:
+            return "timeless_control"
+        dates = [tx_date[p.row_key] for p in base_provenance
+                 if p.source == "transactions" and p.row_key in tx_date]
+        return "post_designation" if any(d > designation_date for d in dates) else "pre_designation"
+
+    def _kyc_gap(uid: int, entity_type: str) -> tuple[list[str], list[Provenance]]:
+        """Required-but-absent onboarding artifacts for an in-scope account,
+        measured against the published standard, each absence cited to its
+        artifact row. A required artifact with no row at all is a gap too."""
+        missing: list[str] = []
+        prov: list[Provenance] = []
+        for art in REQUIRED_ARTIFACTS.get(entity_type, []):
+            rec = kyc_recs.get((uid, art))
+            if rec is None or not _is_present(rec["present"]):
+                missing.append(art)
+                if rec is not None:
+                    prov.append(rec.provenance)
+        return sorted(missing), prov
 
     def _add(uid: int, entity_name: str, *, row_kind: str,
              hops: Optional[int], direct: bool, exposure_usdt: float,
@@ -172,12 +270,32 @@ def build_worksheet(
         gap = gap_by_uid.get(uid)
         acct = accounts[uid]
         tag_flag = acct.get("internal_tag") is not None
+        is_staff = uid in staff_recs
         prov = list(base_provenance) + [w.provenance, a.provenance]
         if tag_flag:
             prov.append(Provenance(
                 source=acct.provenance.source, row_key=acct.provenance.row_key,
                 field="internal_tag", detail="internal tag flagged for review, never obeyed",
             ))
+
+        # S3 timing (exposed rows) + KYC completeness (in-scope exposed rows).
+        timing = _exposure_timing(hops, base_provenance) if row_kind == "exposed" else None
+        kyc_missing: list[str] = []
+        if row_kind == "exposed":
+            kyc_missing, kyc_prov = _kyc_gap(uid, str(acct["entity_type"]))
+            prov += kyc_prov
+
+        # S3 insider linkage: a staff account whose non-flow linkage is a device
+        # overlap into the exposed network. The register row is cited.
+        action = _action_for(
+            row_kind, is_signal, gap.gap_type if gap else None,
+            str(w["hold_status"]), str(a["hold_status"]), tag_flag,
+            is_staff=is_staff, link_types=link_types,
+        )
+        insider = action == "flags_insider_staff_device_overlap"
+        if insider:
+            prov.append(staff_recs[uid].provenance)
+
         rows.append(WorksheetRow(
             uid=uid,
             entity_name=entity_name,
@@ -188,14 +306,16 @@ def build_worksheet(
             admin_status=str(a["hold_status"]),
             gap_type=gap.gap_type if gap else None,
             internal_tag_flag=tag_flag,
-            recommended_action=_action_for(
-                row_kind, is_signal, gap.gap_type if gap else None,
-                str(w["hold_status"]), str(a["hold_status"]), tag_flag,
-            ),
+            exposure_timing=timing,
+            kyc_missing_artifacts=kyc_missing,
+            staff_account=is_staff,
+            recommended_action=action,
             statement=_statement(
                 row_kind, entity_name, designation, hops, direct, exposure_usdt,
                 str(w["hold_status"]), str(a["hold_status"]),
                 gap.gap_type if gap else None, tag_flag, link_types,
+                exposure_timing=timing, kyc_missing=kyc_missing,
+                is_staff_device_overlap=insider,
             ),
             provenance=prov,
         ))
