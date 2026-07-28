@@ -24,12 +24,28 @@ into its published-romanization variant space and matches each variant against
 customer-typed names, showing **which rule path fired** and the score for every
 hit — the evidence for *how* the name resolved, never a bare "match".
 
-Part II lands in slices. **T1 (this version) is the variant-aware name screen.**
-The corroboration decision point (T2), the beneficial-owner + officer walk (T3),
-and the proximity ring (T4) consume the reserved policy declared below (the
-ownership-control threshold and the proximity-signal registry) with **no further
-version bump** — the same "declare the full surface once" discipline
-`sweep_config()` used in Slice S1.
+Part II lands in slices. **T1 is the variant-aware name screen; T2 (this
+version's companion) adds the corroboration decision.** The beneficial-owner +
+officer walk (T3) and the proximity ring (T4) consume the reserved policy
+declared below (the ownership-control threshold and the proximity-signal
+registry) with **no further version bump** — the same "declare the full surface
+once" discipline `sweep_config()` used in Slice S1.
+
+**Corroboration before proposal (T2) — a recorded decision, not a routing
+branch.** A name match, and especially a cross-romanization one, is never enough
+to assert identity. T2 compares a matched customer's KYC identity attributes
+against the identifiers the sanctions list published for the designated party
+and proposes one of three REVIEW-tier dispositions — *corroborated true hit*,
+*possible match (needs human)*, or *name-only dismissed* — with a dismissal
+always recording **which identifiers disqualified the match**. Crucially, this
+step **adds no branch to the sweep**: the remediation sweep stays a linear
+pipeline, and each corroboration is *stamped into its audit chain as a recorded
+decision* that drives review triage, never control flow. The decision rule, its
+outcomes, and its version live in the agency policy (`agency_config`,
+`docs/agency-methodology.md` §6); the identity module supplies the identifiers
+and KYC-attribute substrate it compares. This is the "corroboration-before-
+proposal" value named in §3: identifying data must agree before the system ever
+proposes that a customer *is* a designated party.
 
 ## 2. Variant-aware name screen
 

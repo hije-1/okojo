@@ -1,4 +1,4 @@
-# Agency Methodology (v1.2.0)
+# Agency Methodology (v1.3.0)
 
 **Status:** synthetic-data research prototype. This document explains what
 "agency" means in Okojo, why every agentic decision is deterministic, and what
@@ -21,7 +21,7 @@ Three principles govern everything below:
    disagree.
 3. **The thresholds are tunable policy parameters, not universal truths.** The
    values here are defensible defaults for the synthetic scenario; a deploying
-   institution would calibrate them. They are version-stamped (see §7) so any
+   institution would calibrate them. They are version-stamped (see §8) so any
    historical decision trace is reproducible.
 
 A hard boundary above all of it: the agent **proposes, surfaces, drafts, and
@@ -160,7 +160,43 @@ quality bar — one rubric, one threshold, one version stamp (`critic_config`).
 Either way the case is packaged and a human reviews it; `sar_bar` records the
 disposition, it does not file.
 
-## 6. Determinism, replay, and the decision-trace eval
+## 6. `corroboration` — is a name match the designated party, or a collision? (Part II)
+
+**Question:** *once a customer's name matches a designation (directly or via a
+romanization variant), do their KYC identity attributes corroborate that they
+ARE the designated party — or is this a same-name collision?*
+
+This is the one decision point that lives in the **Designation-Triggered
+Remediation Sweep**, not the case pipeline. A name match — especially a
+cross-romanization one — is never enough to assert identity; sanctions
+screening's core false positive is two different people who legitimately
+romanize to the same name. `corroboration` compares the matched customer's KYC
+identity attributes against the identifiers the sanctions list published for
+the designated party, per hard field:
+
+- `corroborated_true_hit` — the document number matches, **or** both date of
+  birth and nationality match. A strong unique-identity signal; surfaced as a
+  likely true match for an officer to confirm.
+- `name_only_dismissed` — two or more hard identifiers (date of birth,
+  nationality, document number) **actively** mismatch: a provably different
+  person. Dismissed as a name-only collision, **with the mismatched fields
+  recorded** — the dismissal and its reason are a first-class audit artifact,
+  not a silent drop.
+- `possible_match_needs_human` — neither corroborated nor disqualified (for
+  example, a name-only foreign listing that published no date of birth or
+  document number, so nothing confirms and nothing rules out). Routed to a
+  human to resolve.
+
+An identifier absent on either side is read as **unknown**, never as a
+mismatch — a listing cannot be disqualified for omitting a field it never
+published. Every disposition is a REVIEW-tier proposal: the sweep proposes,
+records the comparison and its provenance (the KYC row and the identifier row),
+and a human decides. Because the sweep has no downstream branch to route, the
+outcome drives review triage, not control flow — it is a **recorded decision,
+not a routing branch** (see `docs/identity-methodology.md`), so the sweep stays
+a linear pipeline while still stamping each corroboration into its chain.
+
+## 7. Determinism, replay, and the decision-trace eval
 
 Every rule takes only explicit evidence values (counts, verdicts, coverage) —
 never a ground-truth label, never a subject or claim id. Each
@@ -173,9 +209,11 @@ mirrored by an `agency / decision` audit stamp whose JSON round-trips to the
 in-memory record. The decision trace is evaluated against a committed
 expected-decision key (exact match, scored as precision/recall/F1 over
 `(subject, decision, outcome)` triples), the same way every other Okojo
-capability ships with its eval.
+capability ships with its eval. The `corroboration` decision (Part II) is
+stamped and round-tripped the same way, into the remediation sweep's chain, and
+scored by the identity-resolution corroboration eval.
 
-## 7. Reproducibility & versioning
+## 8. Reproducibility & versioning
 
 Every run stamps the versioned decision policy into the audit trail
 (`agency / agency_config`), mirroring the scoring, retrieval, critic, and
@@ -184,12 +222,12 @@ it is the single source of truth (`okojo.agency.agency_config`) and is
 regression-tested against this document, so the doc and the code can never
 silently drift.
 
-**Version 1.2.0 — canonical policy:**
+**Version 1.3.0 — canonical policy:**
 
 <!-- agency-config:begin -->
 ```json
 {
-  "version": "1.2.0",
+  "version": "1.3.0",
   "decision_points": {
     "expand_hop": [
       "continue",
@@ -213,6 +251,11 @@ silently drift.
     "sar_bar": [
       "clears_bar",
       "human_review"
+    ],
+    "corroboration": [
+      "corroborated_true_hit",
+      "possible_match_needs_human",
+      "name_only_dismissed"
     ]
   },
   "thresholds": {
@@ -222,6 +265,7 @@ silently drift.
     "sufficiency_min_events": 1
   },
   "sar_bar_rule": "delegates to the Critic: clears_bar iff the bounded revision loop converged (Critique.meets_bar at the critic_config threshold)",
+  "corroboration_rule": "compares a name/variant-matched customer's KYC identity attributes against the designation's published identifiers, per hard field (date of birth, nationality, document number): corroborated_true_hit iff the document number matches or both date of birth and nationality match; name_only_dismissed iff two or more hard identifiers actively mismatch (a provably different person, reason recorded); otherwise possible_match_needs_human. An absent field on either side is UNKNOWN, never a mismatch. Recorded into the remediation-sweep chain; it drives review triage, not control flow",
   "decision_provenance": "each stamped decision carries row-level citations where its inputs are row properties (expand_hop: accounts discovered last hop; second_advisory: the matches' evidence rows; re_rfi: the contradicted claims' assertion+rebuttal rows; sufficiency: the subject account row); aggregate-input decisions (sar_bar, and cap/frontier stops) carry none and are covered by the aggregates' own audit stamps",
   "boundaries": {
     "second_advisory": "surfaced to the analyst only; the SAR drafter consumes the primary match alone",

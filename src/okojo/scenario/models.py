@@ -214,6 +214,45 @@ class StaffRegister:
 
 
 @dataclass
+class DesignationIdentifier:
+    """The identifying data a sanctions list publishes for a designated party
+    (Phase 8 Part II T2).
+
+    Kept in its own sibling table so ``designations.csv`` stays byte-identical
+    (Decision R4). A field left empty means the list published no such
+    identifier for this entry (a name-only foreign listing) — corroboration
+    reads an absent field as UNKNOWN, never as a mismatch. Compared against a
+    matched customer's :class:`KycIdentityAttribute` row by the corroboration
+    decision to separate a true hit from a same-name collision."""
+
+    designation_id: str
+    dob: str                  # ISO date, or "" if the list published none
+    nationality: str          # ISO-3166 alpha-2, or ""
+    doc_type: str             # e.g. "PASSPORT", or ""
+    doc_number: str           # government document number, or ""
+
+
+@dataclass
+class KycIdentityAttribute:
+    """A customer's KYC identity attributes for identity resolution (Phase 8
+    Part II T2; the shared substrate T4's proximity ring also reads).
+
+    One row per identity-review subject — the corroboration substrate compared
+    against a :class:`DesignationIdentifier`. ``address`` / ``email`` are
+    synthetic and carried for T4 (shared-attribute proximity signals); T2 uses
+    ``dob`` / ``nationality`` / ``doc_number``. A new sibling table (R4), so
+    every existing CSV stays byte-identical."""
+
+    uid: int
+    dob: str                  # ISO date
+    nationality: str          # ISO-3166 alpha-2
+    address: str
+    email: str
+    doc_type: str
+    doc_number: str
+
+
+@dataclass
 class PriorRfi:
     """An earlier RFI answer from the same subject.
 

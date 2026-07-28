@@ -52,7 +52,11 @@ from ..sar import CritiqueHistory
 # the published methodology doc.
 # 1.2.0 — DecisionRecord carries row-level provenance (audit-stamped with
 # each decision; per-decision semantics in the methodology doc).
-AGENCY_VERSION = "1.2.0"
+# 1.3.0 — Part II adds the `corroboration` decision point (identity match vs
+# a designation's published identifiers). It is stamped into the remediation
+# sweep's chain as a recorded decision, not a case-graph routing branch — the
+# sweep stays linear (see docs/identity-methodology.md).
+AGENCY_VERSION = "1.3.0"
 
 # --- Tunable policy thresholds (see docs/agency-methodology.md) --------------
 
@@ -74,15 +78,22 @@ RE_RFI_MIN_CONTRADICTED = 1
 # fail-closed drafter needs to attempt a citable narrative.
 SUFFICIENCY_MIN_EVENTS = 1
 
-# The five decision points and their closed outcome sets. The outcome strings
-# double as LangGraph routing keys, so the branch taken is exactly the outcome
-# recorded in the audit trail.
+# The decision points and their closed outcome sets. For the five case-pipeline
+# points the outcome strings double as LangGraph routing keys, so the branch
+# taken is exactly the outcome recorded in the audit trail. The sixth,
+# `corroboration`, is a REMEDIATION-SWEEP decision (Part II): it is recorded,
+# not routed — the sweep has no branch to take, so the outcome drives review
+# triage, never control flow.
 DECISION_OUTCOMES: dict[str, tuple[str, ...]] = {
     "expand_hop": ("continue", "stop_cap", "stop_frontier_exhausted"),
     "second_advisory": ("pull_second", "single_match", "no_match"),
     "re_rfi": ("recommend_re_rfi", "no_contradictions", "not_applicable"),
     "sufficiency": ("sufficient", "insufficient"),
     "sar_bar": ("clears_bar", "human_review"),
+    "corroboration": (
+        "corroborated_true_hit", "possible_match_needs_human",
+        "name_only_dismissed",
+    ),
 }
 
 
@@ -165,6 +176,17 @@ def agency_config() -> dict:
         "sar_bar_rule": (
             "delegates to the Critic: clears_bar iff the bounded revision loop "
             "converged (Critique.meets_bar at the critic_config threshold)"
+        ),
+        "corroboration_rule": (
+            "compares a name/variant-matched customer's KYC identity attributes "
+            "against the designation's published identifiers, per hard field "
+            "(date of birth, nationality, document number): corroborated_true_hit "
+            "iff the document number matches or both date of birth and "
+            "nationality match; name_only_dismissed iff two or more hard "
+            "identifiers actively mismatch (a provably different person, reason "
+            "recorded); otherwise possible_match_needs_human. An absent field on "
+            "either side is UNKNOWN, never a mismatch. Recorded into the "
+            "remediation-sweep chain; it drives review triage, not control flow"
         ),
         "decision_provenance": (
             "each stamped decision carries row-level citations where its "
@@ -375,6 +397,92 @@ def decide_sar_bar(history: CritiqueHistory, *,
                  "it is routed to an investigator to complete, and gaps are "
                  "never invented.")
     return DecisionRecord(decision_id="sar_bar", outcome=outcome,
+                          rationale=rationale, plain_language=plain,
+                          evidence=evidence, provenance=list(provenance or []))
+
+
+# --- Corroboration (Part II): identity match vs published identifiers ---------
+
+# The hard identifiers compared, in the order they appear in a recorded reason.
+# ``doc_number`` is decisive on its own (a shared government document number is
+# a strong unique-identity signal); ``dob`` + ``nationality`` corroborate
+# jointly. Ordered so the recorded rationale reads the same way every time.
+_CORROBORATION_FIELDS: tuple[tuple[str, str], ...] = (
+    ("dob", "date of birth"),
+    ("nationality", "nationality"),
+    ("doc_number", "document number"),
+)
+
+
+def _cmp_identifier(a: Optional[str], b: Optional[str]) -> str:
+    """Compare one identifier field: ``match`` / ``mismatch`` / ``unknown``.
+
+    ``unknown`` iff either side is absent — an identifier the list never
+    published (a name-only listing) can neither confirm nor disqualify, so it is
+    never read as a mismatch. Case-insensitive, whitespace-trimmed."""
+    x = (a or "").strip().lower()
+    y = (b or "").strip().lower()
+    if not x or not y:
+        return "unknown"
+    return "match" if x == y else "mismatch"
+
+
+def decide_corroboration(candidate_uid: int, designated_name: str,
+                         kyc: dict, identifiers: dict, *,
+                         provenance: Optional[list[str]] = None) -> DecisionRecord:
+    """Corroborate a name/variant-matched customer against a designation's
+    published identifiers — the step that separates a true hit from a same-name
+    collision. A name match alone is never enough to assert identity; this
+    decision proposes one of three review dispositions and, on a dismissal,
+    records exactly which identifiers disqualified the match.
+
+    Pure over its inputs (``kyc`` and ``identifiers`` are ``{dob, nationality,
+    doc_type, doc_number}`` maps): no row, id, or ground-truth label is read.
+    The disposition is a *proposal for human review*, never an assertion of
+    identity — every branch stays REVIEW-tier.
+    """
+    cmp = {field: _cmp_identifier(kyc.get(field), identifiers.get(field))
+           for field, _ in _CORROBORATION_FIELDS}
+    matched = [label for field, label in _CORROBORATION_FIELDS if cmp[field] == "match"]
+    mismatched = [label for field, label in _CORROBORATION_FIELDS if cmp[field] == "mismatch"]
+    evidence = {
+        "candidate_uid": candidate_uid,
+        "designated_name": designated_name,
+        "field_comparison": dict(cmp),
+        "matched_fields": matched,
+        "mismatched_fields": mismatched,
+    }
+
+    if cmp["doc_number"] == "match" or (cmp["dob"] == "match" and cmp["nationality"] == "match"):
+        outcome = "corroborated_true_hit"
+        basis = ("the document number matches" if cmp["doc_number"] == "match"
+                 else "date of birth and nationality both match")
+        rationale = (f"KYC identity attributes corroborate the name match to "
+                     f"{designated_name!r}: {basis} ({', '.join(matched)}); "
+                     "proposed as a corroborated hit for human confirmation")
+        plain = (f"The customer's identity documents line up with the "
+                 f"designated party's published details ({basis}); this is "
+                 "surfaced as a likely true match for an officer to confirm.")
+    elif len(mismatched) >= 2:
+        outcome = "name_only_dismissed"
+        rationale = (f"name match to {designated_name!r} is not corroborated: "
+                     f"{', '.join(mismatched)} each differ from the designated "
+                     "party's published identifiers — a same-name collision; "
+                     "dismissed with the mismatch recorded for review")
+        plain = (f"The customer shares the designated party's name but is a "
+                 f"different person — {', '.join(mismatched)} do not match the "
+                 "published details; dismissed as a name-only collision, with "
+                 "the reason on record.")
+    else:
+        outcome = "possible_match_needs_human"
+        rationale = (f"name match to {designated_name!r} is partially "
+                     f"corroborated (matched: {matched or 'none'}; the list "
+                     "published no disqualifying identifier); neither confirmed "
+                     "nor dismissible, so it is routed to a human to resolve")
+        plain = ("The customer's name matches but the available identity "
+                 "details neither confirm nor rule out the designated party; "
+                 "routed to an officer to resolve.")
+    return DecisionRecord(decision_id="corroboration", outcome=outcome,
                           rationale=rationale, plain_language=plain,
                           evidence=evidence, provenance=list(provenance or []))
 

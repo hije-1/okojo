@@ -28,7 +28,7 @@
     "",
     "Subjects are keyed by role_in_ring (seed-stable), never by uid."
   ],
-  "agency_version": "1.2.0",
+  "agency_version": "1.3.0",
   "hop_cap": 2,
   "subjects": [
     {
