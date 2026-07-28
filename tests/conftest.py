@@ -114,9 +114,12 @@ def foreign_designations(conn, ground_truth):
     """
     from okojo.sweep import designation_from_record
 
-    # Part-II identity variant-screen plants are also national_ct/signal; exclude
-    # them via the identity_variant_matches key so this stays the S2 (3a/3b) pair.
-    identity_ids = set(ground_truth["identity_variant_matches"])
+    # Part-II identity plants are also national_ct/signal; exclude them so this
+    # stays the S2 (3a/3b) pair. The variant-screen designations live in
+    # identity_variant_matches; the T2 corroboration-collision designation lives
+    # only in corroboration_outcomes — exclude the union of both.
+    identity_ids = (set(ground_truth["identity_variant_matches"])
+                    | set(ground_truth["corroboration_outcomes"]))
     recs = {r["designation_id"]: r for r in conn.all_designations()}
     foreign = {i: recs[i] for i in recs
                if str(recs[i]["list_type"]) == "national_ct" and i not in identity_ids}

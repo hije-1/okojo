@@ -281,6 +281,40 @@ class Connectors:
             lambda r: r["staff_id"],
         )
 
+    # -- identity resolution (Phase 8 Part II) ------------------------------- #
+    def designation_identifiers(self) -> list[Record]:
+        """Identifying data a sanctions list published per designation (T2)."""
+        return self._records(
+            "designation_identifiers",
+            "SELECT * FROM designation_identifiers ORDER BY designation_id", [],
+            lambda r: r["designation_id"],
+        )
+
+    def designation_identifier_for(self, designation_id: str) -> Optional[Record]:
+        recs = self._records(
+            "designation_identifiers",
+            "SELECT * FROM designation_identifiers WHERE designation_id = ?",
+            [designation_id],
+            lambda r: r["designation_id"],
+        )
+        return recs[0] if recs else None
+
+    def kyc_identity_attributes(self) -> list[Record]:
+        """Per-customer KYC identity attributes for identity resolution (T2)."""
+        return self._records(
+            "kyc_identity_attributes",
+            "SELECT * FROM kyc_identity_attributes ORDER BY uid", [],
+            lambda r: f"uid:{r['uid']}",
+        )
+
+    def kyc_identity_attributes_for(self, uid: int) -> Optional[Record]:
+        recs = self._records(
+            "kyc_identity_attributes",
+            "SELECT * FROM kyc_identity_attributes WHERE uid = ?", [uid],
+            lambda r: f"uid:{r['uid']}",
+        )
+        return recs[0] if recs else None
+
     # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""

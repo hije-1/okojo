@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Union
 
+from ..agency import DecisionRecord, decide_corroboration
 from ..audit import AuditLog
 from ..config import REPO_ROOT
 from ..connectors import Connectors
@@ -47,6 +48,7 @@ class SweepResult:
     designation: Designation
     name_matches: list[DesignationNameMatch]
     variant_name_matches: list[VariantNameMatch]  # Part II: transliteration-variant hits
+    corroboration: list[DecisionRecord]           # Part II: per-candidate corroboration decisions
     exposure: ExposureResult
     gaps: list[StatusGap]              # full-ledger reconciliation, uid order
     worksheet: list[WorksheetRow]      # triaged; grounded fail-closed
@@ -78,6 +80,53 @@ def default_sweep_dir(designation_id: str) -> Path:
     """``data/sweeps/<designation_id>/`` — the id is validated by the caller
     before this is ever derived."""
     return REPO_ROOT / "data" / "sweeps" / designation_id
+
+
+def _identity_attr(rec, field: str) -> str:
+    """One identity-attribute cell as a clean string, robust to the CSV round-trip.
+
+    An empty cell can arrive as ``None`` or a NaN float (whose ``str()`` is
+    ``"nan"``); either is an ABSENT identifier — normalised to ``""`` so
+    corroboration reads it as unknown, never a spurious "nan" value (the S2
+    empty-cell lesson)."""
+    v = rec[field]
+    if v is None:
+        return ""
+    s = str(v).strip()
+    return "" if s.lower() == "nan" else s
+
+
+def _corroborate_candidates(
+    conn: Connectors,
+    designation: Designation,
+    name_matches: list,
+    variant_matches: list,
+) -> list[DecisionRecord]:
+    """Run the corroboration decision for each name/variant-matched customer.
+
+    Returns [] unless the designation carries published identifiers to
+    corroborate against; each candidate is corroborated only if it has KYC
+    identity attributes on file. Candidates are the union of direct and variant
+    name matches, deterministic in uid order; every decision cites the KYC row
+    and the identifier row it compared."""
+    id_rec = conn.designation_identifier_for(designation.designation_id)
+    if id_rec is None:
+        return []
+    identifiers = {f: _identity_attr(id_rec, f)
+                   for f in ("dob", "nationality", "doc_type", "doc_number")}
+    cand_uids = sorted({m.uid for m in name_matches} | {m.uid for m in variant_matches})
+    out: list[DecisionRecord] = []
+    for uid in cand_uids:
+        kyc_rec = conn.kyc_identity_attributes_for(uid)
+        if kyc_rec is None:
+            continue
+        kyc = {f: _identity_attr(kyc_rec, f)
+               for f in ("dob", "nationality", "doc_type", "doc_number")}
+        out.append(decide_corroboration(
+            uid, designation.designated_name, kyc, identifiers,
+            provenance=[kyc_rec.provenance.cite(), id_rec.provenance.cite()],
+        ))
+    return out
 
 
 def run_sweep(
@@ -164,6 +213,27 @@ def run_sweep(
             provenance=([p for m in name_matches for p in m.provenance]
                         + [p for m in variant_matches for p in m.provenance]),
         )
+
+        # 1b. Corroboration (Part II): for each name/variant-matched customer,
+        # compare their KYC identity attributes against the identifiers the list
+        # published for the designated party — the step that separates a true hit
+        # from a same-name collision. A recorded decision, NOT a routing branch:
+        # the sweep stays linear and stamps each corroboration into its chain
+        # (record-only; the outcome drives review triage, never control flow). It
+        # runs only where the designation carries identifiers to corroborate
+        # against and the candidate has KYC identity attributes on file — so a
+        # domestic designation with neither adds no record and its chain is
+        # byte-unchanged.
+        corroboration = _corroborate_candidates(conn, designation, name_matches, variant_matches)
+        for rec in corroboration:
+            uid = rec.evidence["candidate_uid"]
+            audit.append(
+                "remediation_sweep", "corroboration_decision",
+                target=f"{designation.designation_id}:uid:{uid}",
+                detail=json.dumps(rec.summary()),
+                provenance=[conn.kyc_identity_attributes_for(uid).provenance,
+                            conn.designation_identifier_for(designation.designation_id).provenance],
+            )
 
         # 2. Full-ledger exposure walk from the designated address set.
         exposure = sweep_exposure(conn, list(designation.designated_addresses))
@@ -252,6 +322,7 @@ def run_sweep(
             designation=designation,
             name_matches=name_matches,
             variant_name_matches=variant_matches,
+            corroboration=corroboration,
             exposure=exposure,
             gaps=gaps,
             worksheet=worksheet,

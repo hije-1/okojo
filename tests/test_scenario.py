@@ -29,6 +29,7 @@ ALL_TABLES = [
     "rfi_prior.csv", "registry.csv", "sdn_list.csv", "designations.csv",
     "sanctions_hold_warehouse.csv", "sanctions_hold_admin.csv",
     "kyc_artifacts.csv", "staff_register.csv",
+    "designation_identifiers.csv", "kyc_identity_attributes.csv",
     "ground_truth.json",
 ]
 

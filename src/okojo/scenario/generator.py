@@ -58,11 +58,13 @@ from .models import (
     Address,
     AdminHold,
     Designation,
+    DesignationIdentifier,
     DeviceLink,
     GasFund,
     IpLog,
     KycArtifact,
     KycDoc,
+    KycIdentityAttribute,
     PriorRfi,
     RegistryRecord,
     Rfi,
@@ -375,6 +377,52 @@ _IDENTITY_PLANTS = [
     ("DES-2026-0006", "arabic", "Muhammad Al-Sayigh",
      "Mohammed El-Sayegh", "Khalid El-Sayegh", "AE"),
 ]
+
+# ---- Phase 8 Part II (T2): corroboration name-COLLISION plant --------------- #
+# A third foreign name-only designation whose published-romanization variant
+# ("Alexander Volkoff") matches an EXISTING-looking customer who is NOT the
+# designated party — same Cyrillic name family, different individual. The
+# variant screen (correctly) surfaces the collision; corroboration on DOB +
+# nationality + document number DISMISSES it with the reason recorded. This is
+# the sanctions-screening false positive the corroboration step exists to
+# remove. NOT a member of identity_variant_matches (the designation does NOT
+# refer to this customer), so the T1 variant-screen answer key and scorecard are
+# untouched. INVENTED names; AE jurisdiction (no new jurisdiction introduced).
+#   (designation_id, family, designated_name, customer_name, country)
+_CORROBORATION_COLLISION = (
+    "DES-2026-0007", "cyrillic", "Aleksandr Volkov", "Alexander Volkoff", "AE")
+
+# The identifiers the FOREIGN list published for each identity designation's
+# designated party (designation_identifiers.csv), and the DEFINITIONAL
+# corroboration outcome the scenario is built to realize. decide_corroboration
+# recomputes the outcome from the KYC-vs-identifier comparison, so the eval is a
+# real check, never circular. A "" field == the list published no such
+# identifier (a name-only listing) — read as UNKNOWN, never a mismatch.
+#   did: (dob, nationality, doc_type, doc_number, outcome, mismatched_fields)
+_DESIGNATION_IDENTIFIER_DATA = {
+    # true hit: document number matches (and DOB + nationality match too).
+    "DES-2026-0005": ("1984-05-14", "AE", "PASSPORT", "P-AE-550014",
+                      "corroborated_true_hit", []),
+    # needs human: nationality matches, but the list published no DOB and no
+    # document number — nothing confirms and nothing disqualifies.
+    "DES-2026-0006": ("", "AE", "", "",
+                      "possible_match_needs_human", []),
+    # dismissed: a same-name collision — DOB, nationality, and document number
+    # all differ from the designated party. The reason is recorded.
+    "DES-2026-0007": ("1970-03-22", "RU", "PASSPORT", "P-RU-778120",
+                      "name_only_dismissed",
+                      ["date of birth", "nationality", "document number"]),
+}
+
+# The matched customer's KYC identity attributes (kyc_identity_attributes.csv),
+# keyed by the designation their name matches. dob mirrors the customer's KYC
+# document; document numbers are distinct per customer (only DES-0005's equals
+# its designation's, giving the decisive true-hit corroboration).
+_CORROBORATION_CUSTOMER_KYC = {
+    "DES-2026-0005": ("PASSPORT", "P-AE-550014"),
+    "DES-2026-0006": ("PASSPORT", "P-AE-660021"),
+    "DES-2026-0007": ("PASSPORT", "P-AE-770033"),
+}
 
 
 def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
@@ -886,6 +934,24 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             )
             for did, _family, desig_name, _cust, _decoy, _country in _IDENTITY_PLANTS
         ],
+        # ---- Part II (T2): the corroboration name-COLLISION plant ---------- #
+        # Same national_ct/signal/name-only shape as the T1 identity plants; its
+        # variant screen surfaces a customer whose KYC identity attributes do NOT
+        # corroborate the designated party (a same-name collision), so the
+        # corroboration decision dismisses it with the reason recorded. Not in
+        # identity_variant_matches (does not refer to that customer).
+        Designation(
+            designation_id=_CORROBORATION_COLLISION[0],
+            designated_name=_CORROBORATION_COLLISION[2],
+            program="SYNTHETIC-NCT-STYLE",
+            entity_type="individual",
+            designated_addresses="",
+            designation_date=designation_date,
+            source_regime="SYN-FOREIGN-NCT",
+            list_type="national_ct",
+            obligation_vs_signal="signal",
+            listed_since=designation_date,
+        ),
     ]
 
     # ---- sanctions-hold mock systems (warehouse feed vs. admin record) ---- #
@@ -1130,6 +1196,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     # so the eval is a real recovery test, never circular.
     identity_variant_matches: dict[str, list[int]] = {}
     identity_variant_decoy_uids: list[int] = []
+    identity_customer_uid: dict[str, int] = {}   # did -> matched customer uid
+    # (uid, dob, nationality, doc_type, doc_number) for every identity subject —
+    # the substrate for kyc_identity_attributes.csv (Part II T2).
+    identity_subject_attrs: list[tuple[int, str, str, str, str]] = []
     for did, _family, _desig_name, cust_name, decoy_name, country in _IDENTITY_PLANTS:
         cust_uid = next_uid
         next_uid += 1
@@ -1145,6 +1215,9 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             registration_date="2023-06-15", vip_level="Regular",
             prior_review_count=0, account_status="active",
         ))
+        cust_doc_type, cust_doc_number = _CORROBORATION_CUSTOMER_KYC[did]
+        identity_subject_attrs.append(
+            (cust_uid, "1984-05-14", country, cust_doc_type, cust_doc_number))
         decoy_uid = next_uid
         next_uid += 1
         decoy_doc = KycDoc(
@@ -1159,9 +1232,73 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             registration_date="2023-06-15", vip_level="Regular",
             prior_review_count=0, account_status="active",
         ))
+        # A decoy never reaches corroboration (its name is not a match); it
+        # carries an attribute row only for full identity-subject coverage.
+        identity_subject_attrs.append(
+            (decoy_uid, "1979-11-02", country, "PASSPORT", f"P-{country}-DEC{decoy_uid}"))
         identity_variant_matches[did] = [cust_uid]
+        identity_customer_uid[did] = cust_uid
         identity_variant_decoy_uids.append(decoy_uid)
     identity_variant_decoy_uids = sorted(identity_variant_decoy_uids)
+
+    # ---- Part II (T2): the corroboration name-COLLISION customer ----------- #
+    # Alexander Volkoff — a same-name-family customer the DES-0007 variant screen
+    # surfaces but corroboration DISMISSES (a different individual). Additive:
+    # accounts.csv + kyc_docs.csv only; not in identity_variant_matches.
+    col_did, _col_family, _col_desig, col_cust_name, col_country = _CORROBORATION_COLLISION
+    collision_uid = next_uid
+    next_uid += 1
+    col_doc = KycDoc(
+        kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+        holder_name=col_cust_name, holder_dob="1984-05-14", issuing_country=col_country,
+    )
+    kyc_docs[col_doc.kyc_doc_id] = col_doc
+    accounts.append(Account(
+        uid=collision_uid, entity_name=col_cust_name, entity_type="individual",
+        role_in_ring="identity_review_subject", residence_country=col_country,
+        nationality_country=col_country, kyc_doc_id=col_doc.kyc_doc_id,
+        registration_date="2023-06-15", vip_level="Regular",
+        prior_review_count=0, account_status="active",
+    ))
+    identity_customer_uid[col_did] = collision_uid
+    col_doc_type, col_doc_number = _CORROBORATION_CUSTOMER_KYC[col_did]
+    identity_subject_attrs.append(
+        (collision_uid, "1984-05-14", col_country, col_doc_type, col_doc_number))
+
+    # ---- Part II (T2): the two new corroboration tables + answer keys ------ #
+    # designation_identifiers.csv: what the FOREIGN list published for each
+    # identity designation's designated party. kyc_identity_attributes.csv: the
+    # matched customer's identity attributes (the shared substrate T4 reuses).
+    designation_identifiers = [
+        DesignationIdentifier(
+            designation_id=did, dob=dob, nationality=nat,
+            doc_type=doc_type, doc_number=doc_number,
+        )
+        for did, (dob, nat, doc_type, doc_number, _outcome, _reason)
+        in _DESIGNATION_IDENTIFIER_DATA.items()
+    ]
+    kyc_identity_attributes = [
+        KycIdentityAttribute(
+            uid=uid, dob=dob, nationality=nat,
+            address=f"{nat} (synthetic address on file)",
+            email=f"subject{uid}@example.invalid",
+            doc_type=doc_type, doc_number=doc_number,
+        )
+        for (uid, dob, nat, doc_type, doc_number) in sorted(identity_subject_attrs)
+    ]
+    # DEFINITIONAL corroboration answer key: the outcome each matched customer
+    # SHOULD resolve to, and — for the dismissal — the mismatched identifier
+    # fields recorded as the reason. decide_corroboration recomputes the outcome
+    # independently from the attributes, so the eval is a real check.
+    corroboration_outcomes = {
+        did: {str(identity_customer_uid[did]): data[4]}
+        for did, data in _DESIGNATION_IDENTIFIER_DATA.items()
+    }
+    corroboration_dismissal_reasons = {
+        did: data[5]
+        for did, data in _DESIGNATION_IDENTIFIER_DATA.items()
+        if data[4] == "name_only_dismissed"
+    }
 
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
@@ -1244,6 +1381,15 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         # must NEVER be matched (discrimination). Definitional, not screen output.
         "identity_variant_matches": identity_variant_matches,
         "identity_variant_decoy_uids": identity_variant_decoy_uids,
+        # Part II (T2) corroboration answer keys. ``corroboration_outcomes`` is
+        # the definitional disposition each name/variant-matched customer should
+        # resolve to (per designation, keyed by str uid); DES-0007 is the
+        # name-COLLISION case whose customer is dismissed. ``corroboration_
+        # dismissal_reasons`` records the mismatched identifier fields for every
+        # dismissal. decide_corroboration recomputes both from the two new
+        # identity tables, so the eval is a real check, never circular.
+        "corroboration_outcomes": corroboration_outcomes,
+        "corroboration_dismissal_reasons": corroboration_dismissal_reasons,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -1264,6 +1410,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("sanctions_hold_admin.csv", admin_holds)
     _write("kyc_artifacts.csv", kyc_artifacts)
     _write("staff_register.csv", staff_register)
+    _write("designation_identifiers.csv", designation_identifiers)
+    _write("kyc_identity_attributes.csv", kyc_identity_attributes)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -1310,5 +1458,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "kyc_artifact_gaps": len(kyc_artifact_gaps),
         "staff_register_rows": len(staff_register),
         "insider_linkage_uids": len(insider_linkage_uids),
+        "designation_identifiers": len(designation_identifiers),
+        "kyc_identity_attributes": len(kyc_identity_attributes),
+        "corroboration_dismissals": len(corroboration_dismissal_reasons),
     }
     return summary

@@ -61,8 +61,9 @@ def test_designation_tables_written_with_expected_columns(data_dir):
         "source_regime", "list_type", "obligation_vs_signal", "listed_since",
     ]
     # Two domestic (Part I) + two foreign national-CT plants (Part I-B S2) +
-    # two Part-II foreign name-only plants for variant screening (T1).
-    assert len(des) == 6
+    # two Part-II foreign name-only plants for variant screening (T1) + one
+    # Part-II corroboration name-collision plant (T2).
+    assert len(des) == 7
     for did in des.designation_id:
         assert _DESIGNATION_ID_RE.fullmatch(did), did
 
@@ -105,10 +106,12 @@ def test_foreign_plants_are_national_ct_signal_with_lead_time(data_dir, ground_t
     listed ~2 years before the domestic date; 3b (granularity) is a variant of
     SIBLING's name with NO addresses. Both are risk signals, never obligations."""
     des = pd.read_csv(data_dir / "designations.csv", keep_default_na=False)
-    # Scope to the S2 cross-list plants: the Part-II identity variant-screen
-    # plants are also national_ct/signal, distinguished only by membership in the
-    # identity_variant_matches answer key (excluded here so this stays the S2 pair).
-    identity_ids = set(ground_truth["identity_variant_matches"])
+    # Scope to the S2 cross-list plants: the Part-II identity plants are also
+    # national_ct/signal — the T1 variant-screen pair lives in
+    # identity_variant_matches and the T2 corroboration-collision plant lives in
+    # corroboration_outcomes; exclude the union so this stays the S2 (3a/3b) pair.
+    identity_ids = (set(ground_truth["identity_variant_matches"])
+                    | set(ground_truth["corroboration_outcomes"]))
     foreign = des[(des.list_type == "national_ct")
                   & (~des.designation_id.isin(identity_ids))]
     assert len(foreign) == 2
