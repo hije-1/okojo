@@ -83,14 +83,43 @@ def ring(data_dir) -> dict[str, int]:
 
 @pytest.fixture()
 def sweep_designations(conn, ground_truth):
-    """(live, decoy) validated Designations from the synthetic table.
+    """(live, decoy) validated DOMESTIC designations from the synthetic table.
 
-    Identified structurally via the answer key (the live one has a non-empty
-    expected exposure), never by hardcoded id.
+    Identified structurally (the DOMESTIC ``sdn_style`` designation with a
+    non-empty expected exposure is live; the other domestic one is the decoy),
+    never by hardcoded id. Part I-B adds foreign ``national_ct`` plants that
+    also carry exposure — those are the separate ``foreign_designations``
+    fixture, so the Part-I domestic tests stay pinned to the domestic pair.
     """
     from okojo.sweep import designation_from_record
 
     recs = {r["designation_id"]: r for r in conn.all_designations()}
-    live_id = next(i for i, v in ground_truth["designation_exposed_uids"].items() if v)
-    decoy_id = next(i for i, v in ground_truth["designation_exposed_uids"].items() if not v)
-    return designation_from_record(recs[live_id]), designation_from_record(recs[decoy_id])
+    domestic = {i: recs[i] for i in recs
+                if str(recs[i]["list_type"]) == "sdn_style"}
+    live_id = next(i for i in domestic
+                   if ground_truth["designation_exposed_uids"][i])
+    decoy_id = next(i for i in domestic
+                    if not ground_truth["designation_exposed_uids"][i])
+    return designation_from_record(domestic[live_id]), designation_from_record(domestic[decoy_id])
+
+
+@pytest.fixture()
+def foreign_designations(conn, ground_truth):
+    """(lead_time, name_only) validated FOREIGN national-CT plants (Part I-B S2).
+
+    Identified structurally via the answer key, never by hardcoded id: the
+    lead-time plant is the ``national_ct`` designation with a non-empty exposure
+    (3a, chain-traced); the name-only plant is the ``national_ct`` designation
+    with empty addresses and a foreign name match (3b, granularity).
+    """
+    from okojo.sweep import designation_from_record
+
+    recs = {r["designation_id"]: r for r in conn.all_designations()}
+    foreign = {i: recs[i] for i in recs
+               if str(recs[i]["list_type"]) == "national_ct"}
+    lead_id = next(i for i in foreign
+                   if ground_truth["designation_exposed_uids"][i])
+    name_only_id = next(i for i in foreign
+                        if not ground_truth["designation_exposed_uids"][i])
+    return (designation_from_record(foreign[lead_id]),
+            designation_from_record(foreign[name_only_id]))

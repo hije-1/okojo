@@ -29,15 +29,17 @@ def accounts(data_dir) -> pd.DataFrame:
 
 @pytest.fixture(scope="module")
 def designations(ground_truth) -> tuple[dict, dict]:
-    """(live, decoy) designation entries, identified structurally.
+    """(live, decoy) DOMESTIC designation entries, identified structurally.
 
-    The live designation is the one with at least one name match / non-empty
-    expected exposure; the decoy is the other. Identified via the answer key's
-    own structure rather than hardcoded ids.
+    The live domestic designation is the ``sdn_style`` one with a non-empty
+    expected exposure; the decoy is the other domestic one. Part I-B adds
+    foreign ``national_ct`` plants (also carrying exposure) — those are covered
+    separately, so this stays pinned to the domestic pair the Part-I tests use.
     """
-    live = [d for d in ground_truth["designations"]
+    domestic = [d for d in ground_truth["designations"] if d["list_type"] == "sdn_style"]
+    live = [d for d in domestic
             if ground_truth["designation_exposed_uids"][d["designation_id"]]]
-    decoy = [d for d in ground_truth["designations"]
+    decoy = [d for d in domestic
              if not ground_truth["designation_exposed_uids"][d["designation_id"]]]
     assert len(live) == 1 and len(decoy) == 1
     return live[0], decoy[0]
@@ -58,7 +60,8 @@ def test_designation_tables_written_with_expected_columns(data_dir):
         # Part I-B: which list, and when.
         "source_regime", "list_type", "obligation_vs_signal", "listed_since",
     ]
-    assert len(des) == 2
+    # Two domestic (Part I) + two foreign national-CT plants (Part I-B S2).
+    assert len(des) == 4
     for did in des.designation_id:
         assert _DESIGNATION_ID_RE.fullmatch(did), did
 
@@ -88,10 +91,47 @@ def test_domestic_designations_are_sdn_style_obligation_listed_since_equals_date
     ``designation_date`` EXACTLY — the lead-time gap is a property only of the
     foreign plant (S2), so no accidental domestic 'window' can ever exist."""
     des = pd.read_csv(data_dir / "designations.csv")
-    assert (des.source_regime == "SYN-DOMESTIC-OFAC").all()
-    assert (des.list_type == "sdn_style").all()
-    assert (des.obligation_vs_signal == "obligation").all()
-    assert (des.listed_since == des.designation_date).all()
+    domestic = des[des.list_type == "sdn_style"]
+    assert len(domestic) == 2
+    assert (domestic.source_regime == "SYN-DOMESTIC-OFAC").all()
+    assert (domestic.obligation_vs_signal == "obligation").all()
+    assert (domestic.listed_since == domestic.designation_date).all()
+
+
+def test_foreign_plants_are_national_ct_signal_with_lead_time(data_dir, ground_truth, ring):
+    """Part I-B S2: two FOREIGN national-CT/signal plants. 3a (lead-time) is a
+    transliteration variant of KINGPIN's name (IB-B) over an existing wallet,
+    listed ~2 years before the domestic date; 3b (granularity) is a variant of
+    SIBLING's name with NO addresses. Both are risk signals, never obligations."""
+    des = pd.read_csv(data_dir / "designations.csv", keep_default_na=False)
+    foreign = des[des.list_type == "national_ct"]
+    assert len(foreign) == 2
+    assert (foreign.obligation_vs_signal == "signal").all()
+    assert (foreign.source_regime == "SYN-FOREIGN-NCT").all()
+
+    accounts = pd.read_csv(data_dir / "accounts.csv")
+    king_name = accounts[accounts.uid == ring["KINGPIN"]].entity_name.iloc[0]
+    sib_name = accounts[accounts.uid == ring["SIBLING"]].entity_name.iloc[0]
+
+    # 3a: lead-time plant — exposure non-empty, addresses present, name is a
+    # KINGPIN variant (shares the first token, is not the exact registered name),
+    # listed strictly before the domestic designation date.
+    lead = next(d for d in ground_truth["designations"]
+                if d["list_type"] == "national_ct"
+                and ground_truth["designation_exposed_uids"][d["designation_id"]])
+    assert lead["designated_addresses"] and lead["listed_since"] < lead["designation_date"]
+    assert lead["designated_name"] != king_name
+    assert lead["designated_name"].split()[0] == king_name.split()[0]
+    assert ground_truth["designation_lead_time_window"][lead["designation_id"]]["lead_days"] > 700
+
+    # 3b: granularity plant — no addresses, name is a SIBLING variant, and the
+    # empty-address list survives the round-trip (conditional rule, S1).
+    name_only = next(d for d in ground_truth["designations"]
+                     if d["list_type"] == "national_ct"
+                     and not ground_truth["designation_exposed_uids"][d["designation_id"]])
+    assert name_only["designated_addresses"] == []
+    assert name_only["designated_name"] != sib_name
+    assert name_only["designated_name"].split()[0] == sib_name.split()[0]
 
 
 def test_decoy_designation_name_is_the_sdn_decoy(data_dir, designations):

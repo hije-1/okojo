@@ -131,11 +131,18 @@ def designation_from_record(rec: Record) -> Designation:
     The CSV row goes through exactly the same model as a pasted payload — one
     validation boundary, not two.
     """
-    raw_addrs = str(rec["designated_addresses"])
-    # A name-only (empty) address list round-trips through the CSV as the empty
-    # string; splitting that yields [""], which the well-formedness check would
-    # reject — so map it back to the empty list the model expects.
-    addresses = raw_addrs.split(";") if raw_addrs else []
+    # A name-only (empty) address list round-trips through the CSV as an empty
+    # cell, which pandas/DuckDB surface as NULL/None or a float NaN (and str()
+    # would turn into "None"/"nan"). Normalise all of those — plus the literal
+    # empty string — back to the empty list the model expects, rather than a
+    # bogus single-token address that the well-formedness check would accept.
+    raw_val = rec["designated_addresses"]
+    is_nan = isinstance(raw_val, float) and raw_val != raw_val  # NaN != NaN
+    if raw_val is None or is_nan:
+        addresses: list[str] = []
+    else:
+        raw_addrs = str(raw_val)
+        addresses = raw_addrs.split(";") if raw_addrs else []
     return parse_designation({
         "designation_id": str(rec["designation_id"]),
         "designated_name": str(rec["designated_name"]),

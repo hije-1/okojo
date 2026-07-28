@@ -182,3 +182,110 @@ def test_decoy_worksheet_and_escalations_empty(conn, sweep_designations, tmp_pat
     assert res.escalations == []
     assert res.suppressed_escalations == []
     assert res.audit_verified
+
+
+# --------------------------------------------------------------------------- #
+# Part I-B S2 — foreign national-list plants: signal exposure + name-match rows
+# --------------------------------------------------------------------------- #
+@pytest.fixture()
+def lead_result(conn, foreign_designations, tmp_path):
+    lead, _ = foreign_designations
+    return run_sweep(lead, out_dir=tmp_path / "lead", conn=conn)
+
+
+@pytest.fixture()
+def name_only_result(conn, foreign_designations, tmp_path):
+    _, name_only = foreign_designations
+    return run_sweep(name_only, out_dir=tmp_path / "name_only", conn=conn)
+
+
+def test_signal_exposed_rows_use_signal_action_and_language(lead_result):
+    """Under a SIGNAL-type foreign designation, EVERY flow-exposed row takes the
+    review-tier foreign-signal action and signal language — never an obligation
+    action (propose/confirm a hold) and never a legal-effect assertion."""
+    exposed = [r for r in lead_result.worksheet if r.hops is not None]
+    assert exposed, "the lead-time plant must expose accounts"
+    for r in exposed:
+        assert r.recommended_action == "flags_foreign_signal_exposure_for_review"
+        assert "risk signal" in r.statement.lower()
+        assert "not a designation obligation" in r.statement.lower()
+    # No obligation action appears anywhere in a signal worksheet.
+    actions = {r.recommended_action for r in lead_result.worksheet}
+    assert "proposes_designation_hold_review" not in actions
+    assert "proposes_confirm_existing_hold" not in actions
+
+
+def test_name_only_plant_yields_one_identity_review_row(name_only_result, ring):
+    """The name-only plant (no wallet, no domestic designation) yields exactly
+    one review-tier identity row for the matched account, grounded on its
+    account row — never a flow-exposure or adjacency row."""
+    ws = name_only_result.worksheet
+    assert len(ws) == 1
+    row = ws[0]
+    assert row.uid == ring["SIBLING"]
+    assert row.recommended_action == "flags_name_match_for_identity_review"
+    assert row.hops is None and row.exposure_usdt == 0.0
+    assert "identity review" in row.statement.lower()
+    assert row.provenance  # grounded on the account row
+    assert name_only_result.exposure.exposed == []
+
+
+def test_domestic_name_match_adds_no_identity_row(live_result):
+    """The domestic live name matches an already-EXPOSED shell, so it adds no
+    separate identity row — the additive rule only fires for accounts surfaced
+    by neither flow nor linkage (proof the domestic worksheet is unchanged)."""
+    actions = {r.recommended_action for r in live_result.worksheet}
+    assert "flags_name_match_for_identity_review" not in actions
+
+
+def test_signal_output_carries_zero_legal_effect_terms(lead_result):
+    """Calibrated-language ban: no signal-type statement or escalation body may
+    assert a legal effect of a foreign listing."""
+    from okojo.sweep import calibrated_language_violations
+
+    for r in lead_result.worksheet:
+        assert calibrated_language_violations(r.statement) == [], r.statement
+    for e in lead_result.escalations:
+        assert calibrated_language_violations(f"{e.subject} {e.body}") == [], e.escalation_id
+    # The signal escalations are review-flavoured, not hold proposals.
+    assert {e.kind for e in lead_result.escalations} <= {
+        "foreign_signal_exposure", "reconciliation_gap",
+    }
+
+
+def test_signal_escalation_calibration_violation_suppressed_never_silent(
+    conn, foreign_designations, tmp_path, monkeypatch
+):
+    """Force a legal-effect assertion into the signal escalation template: the
+    affected drafts are suppressed WITH the reason, the rest still emit."""
+    import okojo.sweep.escalations as esc
+
+    lead, _ = foreign_designations
+    res = run_sweep(lead, out_dir=tmp_path / "s", conn=conn)
+
+    doctored = lambda row, d: "This account must be blocked immediately."  # noqa: E731
+    monkeypatch.setattr(esc, "_signal_exposure_body", doctored)
+    drafts, suppressed = draft_escalations(conn, lead, res.worksheet)
+
+    signal_uids = {
+        r.uid for r in res.worksheet
+        if r.hops is not None and r.gap_type is None
+        and r.warehouse_status == "no_hold" and r.admin_status == "no_hold"
+    }
+    assert signal_uids and {s.uid for s in suppressed} == signal_uids
+    for s in suppressed:
+        assert "calibration violation" in s.reason and "must be blocked" in s.reason
+    # The reconciliation-gap drafts (neutral, untouched) still emit.
+    assert {e.kind for e in drafts} == {"reconciliation_gap"}
+
+
+def test_worksheet_build_guard_rejects_signal_legal_effect(lead_result):
+    """The worksheet build-time tripwire fails closed on a signal row that
+    asserts a legal effect — defence in depth behind the authored-clean text."""
+    from okojo.sweep import CalibratedLanguageError, assert_calibrated_signal_language
+
+    bad = lead_result.worksheet[0].model_copy(update={
+        "statement": "This account is sanctioned and must be blocked.",
+    })
+    with pytest.raises(CalibratedLanguageError):
+        assert_calibrated_signal_language([bad])

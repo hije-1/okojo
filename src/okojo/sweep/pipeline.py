@@ -57,6 +57,16 @@ class SweepResult:
         return self.exposure.exposed_uids()
 
 
+@dataclass
+class BatchResult:
+    """A whole list-drop swept: one independent SweepResult per designation,
+    plus a deterministic roll-up. No cross-designation state — each sweep owns
+    its chain, its ``data/sweeps/<id>/`` directory, and its package."""
+
+    results: list[SweepResult]         # per designation, sorted by designation_id
+    rollup: dict
+
+
 def default_sweep_dir(designation_id: str) -> Path:
     """``data/sweeps/<designation_id>/`` — the id is validated by the caller
     before this is ever derived."""
@@ -154,8 +164,9 @@ def run_sweep(
         )
 
         # 4. Triage worksheet — grounded fail-closed (build raises rather than
-        # emit a row that cannot cite real evidence).
-        worksheet = build_worksheet(conn, designation, exposure, gaps)
+        # emit a row that cannot cite real evidence). Name-screen hits feed the
+        # review-tier identity rows (additive foreign-list coverage).
+        worksheet = build_worksheet(conn, designation, exposure, gaps, name_matches)
         actions: dict[str, int] = {}
         for row in worksheet:
             actions[row.recommended_action] = actions.get(row.recommended_action, 0) + 1
@@ -241,6 +252,70 @@ def run_sweep(
         result.package_path = package_path
         result.package_sha256 = sha
         return result
+    finally:
+        if owns_conn:
+            conn.close()
+
+
+def run_sweep_batch(
+    designations: list[Union[Designation, str, dict]],
+    out_root: Optional[Path] = None,
+    conn: Optional[Connectors] = None,
+    audit_clock: Optional[Callable[[], str]] = None,
+) -> BatchResult:
+    """Sweep a whole list drop — one independent ``run_sweep`` per designation.
+
+    A batch is a convenience over the unchanged per-designation pipeline: each
+    designation is parsed fail-closed, swept into its OWN ``data/sweeps/<id>/``
+    directory (or ``out_root/<id>/``) with its OWN fresh chain and package over
+    a SHARED read-only connector, and the results are rolled up. There is no
+    cross-designation state, so a single-designation ``run_sweep`` and the same
+    designation inside a batch produce byte-identical output. Deterministic:
+    designations are processed in ``designation_id`` order.
+    """
+    owns_conn = conn is None
+    conn = conn or Connectors()
+    try:
+        parsed = [d if isinstance(d, Designation) else parse_designation(d)
+                  for d in designations]
+        parsed.sort(key=lambda d: d.designation_id)
+        results: list[SweepResult] = []
+        for d in parsed:
+            out_dir = (Path(out_root) / d.designation_id) if out_root else None
+            results.append(run_sweep(d, out_dir=out_dir, conn=conn, audit_clock=audit_clock))
+
+        per_designation = [
+            {
+                "designation_id": r.designation.designation_id,
+                "source_regime": r.designation.source_regime,
+                "list_type": r.designation.list_type,
+                "obligation_vs_signal": r.designation.obligation_vs_signal,
+                "exposed": len(r.exposure.exposed),
+                "adjacent_review_only": len(r.exposure.adjacent),
+                "name_matches": len(r.name_matches),
+                "block_status_gaps": len(r.gaps),
+                "worksheet_rows": len(r.worksheet),
+                "escalations_drafted": len(r.escalations),
+                "escalations_suppressed": len(r.suppressed_escalations),
+                "audit_verified": r.audit_verified,
+            }
+            for r in results
+        ]
+        totals = {
+            key: sum(row[key] for row in per_designation)
+            for key in ("exposed", "adjacent_review_only", "name_matches",
+                        "block_status_gaps", "worksheet_rows",
+                        "escalations_drafted", "escalations_suppressed")
+        }
+        rollup = {
+            "designation_count": len(results),
+            "all_audit_verified": all(r.audit_verified for r in results),
+            "per_designation": per_designation,
+            "totals": totals,
+            "note": "each designation swept independently for human remediation; "
+                    "nothing is blocked, unblocked, or sent",
+        }
+        return BatchResult(results=results, rollup=rollup)
     finally:
         if owns_conn:
             conn.close()

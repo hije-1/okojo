@@ -94,6 +94,39 @@ LIST_SOURCE_REGISTRY = {
     },
 }
 
+# Part I-B calibrated-language ban for SIGNAL-type (foreign national-list)
+# output: a foreign listing is a timestamped risk signal, never a legal effect
+# binding this synthetic exchange, so signal-type worksheet statements and
+# escalation bodies must never ASSERT one. These are positive legal-effect
+# assertions only — the calibrated disclaimers ("not a designation obligation",
+# "risk signal") are deliberately NOT banned. Enforced at worksheet-build
+# (fail-closed) and escalation-draft (suppress-and-surface) time. This mirrors
+# the SAR BANNED_TERMS mechanism and, like it, is intentionally NOT part of the
+# versioned sweep_config (a language guard, not a scoring parameter).
+SIGNAL_BANNED_TERMS = [
+    "is sanctioned",
+    "must be blocked",
+    "must block",
+    "must be frozen",
+    "must freeze",
+    "legally required",
+    "legally obligated",
+    "obligated to block",
+    "required to block",
+    "required to freeze",
+    "designated by us",
+    "sanctions violation",
+    "freeze required",
+    "mandatory hold",
+]
+
+
+def calibrated_language_violations(text: str) -> list[str]:
+    """Signal-type calibration hits in ``text`` (case-insensitive), or []."""
+    low = text.lower()
+    return [t for t in SIGNAL_BANNED_TERMS if t in low]
+
+
 # Part I-B: the published KYC required-artifact standard, per account entity
 # type — the yardstick S3's KYC-completeness check measures each in-scope
 # account against. Declared here (visible-absence applied to onboarding
@@ -177,7 +210,9 @@ from .exposure import (  # noqa: E402
 )
 from .verify import StatusGap, verify_block_status  # noqa: E402
 from .worksheet import (  # noqa: E402
+    CalibratedLanguageError,
     WorksheetRow,
+    assert_calibrated_signal_language,
     assert_worksheet_resolvable,
     build_worksheet,
     worksheet_grounding_report,
@@ -188,7 +223,13 @@ from .escalations import (  # noqa: E402
     SuppressedEscalation,
     draft_escalations,
 )
-from .pipeline import SweepResult, default_sweep_dir, run_sweep  # noqa: E402
+from .pipeline import (  # noqa: E402
+    BatchResult,
+    SweepResult,
+    default_sweep_dir,
+    run_sweep,
+    run_sweep_batch,
+)
 from .packager import build_sweep_package, write_sweep_package  # noqa: E402
 
 __all__ = [
@@ -200,6 +241,8 @@ __all__ = [
     "GAP_TAXONOMY",
     "LIST_SOURCE_REGISTRY",
     "REQUIRED_ARTIFACTS",
+    "SIGNAL_BANNED_TERMS",
+    "calibrated_language_violations",
     "sweep_config",
     "DESIGNATION_ID_PATTERN",
     "Designation",
@@ -215,6 +258,8 @@ __all__ = [
     "StatusGap",
     "verify_block_status",
     "WorksheetRow",
+    "CalibratedLanguageError",
+    "assert_calibrated_signal_language",
     "assert_worksheet_resolvable",
     "build_worksheet",
     "worksheet_grounding_report",
@@ -223,8 +268,10 @@ __all__ = [
     "SuppressedEscalation",
     "draft_escalations",
     "SweepResult",
+    "BatchResult",
     "default_sweep_dir",
     "run_sweep",
+    "run_sweep_batch",
     "build_sweep_package",
     "write_sweep_package",
 ]

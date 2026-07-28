@@ -32,7 +32,7 @@ from __future__ import annotations
 import json
 import random
 from dataclasses import asdict
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -778,6 +778,48 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="obligation",
             listed_since=designation_date,
         ),
+        # ---- Part I-B: two FOREIGN national-CT plants (signal, not obligation) #
+        # A foreign national-list entry is a timestamped RISK SIGNAL, never a
+        # legal effect binding this synthetic exchange. designation_date is the
+        # common sweep reference date; listed_since is when the FOREIGN list
+        # first carried the entry, so the lead-time window is [listed_since,
+        # designation_date] — positive for a foreign plant, zero for domestic.
+        #
+        # 3a LEAD-TIME (chain-traced, TIME axis): a transliteration variant of
+        # KINGPIN's name (IB-B) over an existing KINGPIN-controlled hop wallet
+        # (hop_addrs[0] — distinct from the domestic designation's hop_addrs[2],
+        # no legacy-CSV change). The foreign list flagged this network on
+        # 2024-01-30; the domestic designation is 2026-01-30 — so the sweep can
+        # measure the money that moved while ONLY the foreign list knew.
+        Designation(
+            designation_id="DES-2026-0003",
+            designated_name=_alias_variant(accounts_by_uid[key_to_uid["KINGPIN"]].entity_name),
+            program="SYNTHETIC-NCT-STYLE",
+            entity_type="individual",
+            designated_addresses=hop_addrs[0],
+            designation_date=designation_date,
+            source_regime="SYN-FOREIGN-NCT",
+            list_type="national_ct",
+            obligation_vs_signal="signal",
+            listed_since="2024-01-30",
+        ),
+        # 3b GRANULARITY (name-only, DEPTH axis): a transliteration variant of
+        # SIBLING's name with NO wallet and NO domestic designation — permitted
+        # empty-address path (national_ct + signal). Surfaced by the name screen
+        # as a review-tier identity row, proving foreign-list coverage is
+        # ADDITIVE, not duplicative (SIBLING is never in a domestic exposure set).
+        Designation(
+            designation_id="DES-2026-0004",
+            designated_name=_alias_variant(accounts_by_uid[key_to_uid["SIBLING"]].entity_name),
+            program="SYNTHETIC-NCT-STYLE",
+            entity_type="individual",
+            designated_addresses="",
+            designation_date=designation_date,
+            source_regime="SYN-FOREIGN-NCT",
+            list_type="national_ct",
+            obligation_vs_signal="signal",
+            listed_since="2025-03-01",
+        ),
     ]
 
     # ---- sanctions-hold mock systems (warehouse feed vs. admin record) ---- #
@@ -821,13 +863,19 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
 
     # ---- derived Phase-8 designation labels (no RNG; in sync by construction) #
     all_uids = [a.uid for a in accounts]
+
+    def _split_addrs(joined: str) -> list[str]:
+        # A name-only (empty) address list round-trips as "" — split to [], not
+        # [""], so the exposure walk sees no address rather than a bogus empty one.
+        return joined.split(";") if joined else []
+
     des_exposed: dict[str, list[int]] = {}
     des_hops: dict[str, dict[str, int]] = {}
     des_direct: dict[str, list[int]] = {}
     des_adjacent: dict[str, list[int]] = {}
     for d in designations:
         exposed, hops, direct = _designation_exposure(
-            txs, address_controllers, d.designated_addresses.split(";"), all_uids
+            txs, address_controllers, _split_addrs(d.designated_addresses), all_uids
         )
         des_exposed[d.designation_id] = exposed
         des_hops[d.designation_id] = {str(u): hops[u] for u in sorted(hops)}
@@ -842,12 +890,68 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
                 adjacent.update(u for u in group if u not in exposed_set)
         des_adjacent[d.designation_id] = sorted(adjacent)
 
-    # Name matches are definitional: the live designated name IS the
-    # transliteration variant of SHELL_NZ's registered name; the decoy name was
-    # built to match no account (the SDN-0003 precision probe).
+    # ---- Part I-B cross-list early warning (no RNG) ---------------------- #
+    # Lead-time window = [listed_since, designation_date]: positive only for a
+    # foreign plant; zero for domestic (listed_since == designation_date, IB-B).
+    #
+    # In-window exposure measures the MONEY THAT MOVED while only the foreign
+    # list knew — i.e. transaction flow, not control. Control of a designated
+    # wallet is a timeless fact (hops == 0) that would survive even a zero-length
+    # window, so it is deliberately EXCLUDED here: in-window exposure is the set
+    # of accounts FLOW-exposed (hops >= 1) using only transactions dated inside
+    # the window. All of 3a's downstream flow falls inside its 731-day window, so
+    # its in-window flow set is its full set of flow-exposed counterparties; the
+    # domestic windows are single instants with no in-window transactions, so
+    # their in-window flow sets are empty — the cross-list contrast.
+    designation_lead_time_window: dict[str, dict] = {}
+    designation_exposure_in_window: dict[str, dict] = {}
+    for d in designations:
+        lead_days = (date.fromisoformat(d.designation_date)
+                     - date.fromisoformat(d.listed_since)).days
+        designation_lead_time_window[d.designation_id] = {
+            "listed_since": d.listed_since,
+            "designation_date": d.designation_date,
+            "lead_days": lead_days,
+        }
+        addrs = _split_addrs(d.designated_addresses)
+        in_window_txs = [
+            t for t in txs
+            if d.listed_since <= t.timestamp[:10] <= d.designation_date
+        ]
+        _, in_hops, _ = _designation_exposure(
+            in_window_txs, address_controllers, addrs, all_uids
+        )
+        flow_uids = sorted(u for u, h in in_hops.items() if h >= 1)
+        # Direct inflow that landed on a designated wallet inside the window —
+        # the value the foreign list's lead time let move onto the designated
+        # address before the domestic designation acted.
+        designated = set(addrs)
+        direct_inflow = round(sum(
+            float(t.amount_usdt) for t in in_window_txs if t.to_ref in designated
+        ), 2)
+        designation_exposure_in_window[d.designation_id] = {
+            "flow_uids": flow_uids,
+            "direct_inflow_usdt": direct_inflow,
+        }
+
+    # Name matches are definitional: a designated name IS a transliteration
+    # variant of a registered persona name (SHELL_NZ for the domestic live;
+    # KINGPIN for 3a; SIBLING for 3b), so an exact-match screen misses it. The
+    # decoy name was built to match no account (the SDN-0003 precision probe).
     designation_name_match_uids = {
         "DES-2026-0001": [key_to_uid["SHELL_NZ"]],
         "DES-2026-0002": [],
+        "DES-2026-0003": [key_to_uid["KINGPIN"]],
+        "DES-2026-0004": [key_to_uid["SIBLING"]],
+    }
+    # The FOREIGN-list name matches specifically — 3a's variant resolves to the
+    # already-exposed KINGPIN (so it adds no new worksheet row), while 3b's
+    # variant resolves to SIBLING, who has NO wallet and NO domestic designation
+    # and is therefore surfaced ONLY by the name screen (additive, not
+    # duplicative — proven absent from every domestic exposure set by test).
+    foreign_name_match_uids = {
+        "DES-2026-0003": [key_to_uid["KINGPIN"]],
+        "DES-2026-0004": [key_to_uid["SIBLING"]],
     }
 
     # ---- assemble ground truth ------------------------------------------- #
@@ -900,7 +1004,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         # exposure key, same flow-edge semantics); adjacency is review-only and
         # disjoint from exposure; the gap list is the reconciliation answer key.
         "designations": [
-            {**asdict(d), "designated_addresses": d.designated_addresses.split(";")}
+            {**asdict(d), "designated_addresses": _split_addrs(d.designated_addresses)}
             for d in designations
         ],
         "designation_exposed_uids": des_exposed,
@@ -909,6 +1013,14 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "designation_adjacent_uids": des_adjacent,
         "designation_name_match_uids": designation_name_match_uids,
         "block_status_gaps": block_status_gaps,
+        # Part I-B cross-list early warning: the lead-time window per designation
+        # (zero for domestic, ~2yr for the 3a foreign plant), the in-window
+        # exposure set (money that moved while only the foreign list knew), and
+        # the foreign-list name matches (3a -> KINGPIN already exposed; 3b ->
+        # SIBLING, name-only and additive).
+        "designation_lead_time_window": designation_lead_time_window,
+        "designation_exposure_in_window": designation_exposure_in_window,
+        "foreign_name_match_uids": foreign_name_match_uids,
     }
 
     # ---- write outputs ---------------------------------------------------- #

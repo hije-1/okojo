@@ -96,6 +96,40 @@ is a published policy rather than an implicit one — a required artifact remove
 from the standard changes what is flagged, provably and on the record. The
 standard is declared here and consumed by the KYC-completeness worksheet flag.
 
+### 2b. Cross-list early warning — signal, not obligation
+
+A foreign `national_ct` entry is ingested as a **timestamped risk signal**. Two
+things follow, both test-enforced:
+
+- **Lead time is measured, not assumed.** Each designation carries a
+  `listed_since`; the lead-time window is `[listed_since, designation_date]`.
+  For a domestic `sdn_style` entry the two are equal (zero window). For a
+  foreign entry over a wallet already in the network, `listed_since` can predate
+  the domestic designation by years — and the sweep measures the flow that moved
+  **while only the foreign list knew** (the counterparties whose transactions
+  fall inside the window, and the value that landed on the designated wallet).
+  That is the early-warning number: the cost of the domestic list arriving late.
+- **A name-only listing is additive, not duplicative.** A foreign entry may
+  carry a name and **no wallet** (the conditional empty-address path). It never
+  produces flow exposure; it is surfaced by the name screen as a **review-tier
+  identity row** for an account that appears in no exposure set at all — foreign
+  coverage the address-first sweep would otherwise miss entirely.
+
+**Calibrated-language ban.** Signal-type output — worksheet statements and
+escalation bodies for a foreign listing — may never **assert a legal effect**
+("is sanctioned", "must be blocked", "legally required", …). The ban is a
+labelled term set (the sibling of the SAR `BANNED_TERMS`) enforced at
+worksheet-build time (fail-closed) and escalation-draft time (suppress-and-
+surface: a violating draft is withheld **with its reason**, never silently
+dropped). A foreign listing is a reason to look, with a timestamp — not an
+obligation this synthetic exchange must discharge.
+
+A **batch** entry point (`run_sweep_batch`) sweeps a whole list drop: each
+designation runs through the unchanged per-designation pipeline into its own
+chain, directory, and package, with a deterministic roll-up over the set. There
+is no cross-designation state, so a designation swept alone and the same one
+inside a batch produce byte-identical output.
+
 ## 3. Exposure semantics — pinned to the answer key's own definition
 
 The sweep owns its exposure walker: one reverse adjacency over the full

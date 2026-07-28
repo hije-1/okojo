@@ -116,3 +116,115 @@ def test_sweep_eval_worksheet_grounding_scorecard(
     assert report.fully_grounded and report.fully_resolved
     assert esc_grounded == len(res.escalations) > 0
     assert res.suppressed_escalations == []
+
+
+# --------------------------------------------------------------------------- #
+# Part I-B S2 — cross-list early warning (the announced sweep_eval foreign
+# sections; the domestic scorecards above are unchanged)
+# --------------------------------------------------------------------------- #
+def test_sweep_eval_foreign_lead_time_scorecard(
+    conn, ground_truth, sweep_designations, foreign_designations, tmp_path, capsys
+):
+    """Lead-time (time axis): a foreign national-list entry over an existing
+    network wallet, listed ~2 years before the domestic designation — so the
+    sweep measures the money that moved while ONLY the foreign list knew. The
+    domestic designation, listed the day it was designated, has zero window."""
+    lead, _ = foreign_designations
+    domestic_live, _ = sweep_designations
+    res = run_sweep(lead, out_dir=tmp_path / "lead", conn=conn)
+
+    window = ground_truth["designation_lead_time_window"][lead.designation_id]
+    gold_inwin = ground_truth["designation_exposure_in_window"][lead.designation_id]
+
+    # Recompute the in-window FLOW set from the SWEEP: exposed counterparties
+    # (hops >= 1) whose driving transactions fall inside the lead-time window.
+    tx_date = {str(t["tx_id"]): str(t["timestamp"])[:10] for t in conn.all_transactions()}
+    tx_amt = {str(t["tx_id"]): float(t["amount_usdt"]) for t in conn.all_transactions()}
+    lo, hi = window["listed_since"], window["designation_date"]
+    sweep_flow = sorted(
+        e.uid for e in res.exposure.exposed
+        if e.hops and e.hops >= 1
+        and any(p.source == "transactions" and lo <= tx_date[p.row_key] <= hi
+                for p in e.provenance)
+    )
+    # In-window direct inflow onto the designated wallet, from the SWEEP's addr.
+    designated = set(lead.designated_addresses)
+    sweep_inflow = round(sum(
+        tx_amt[str(t["tx_id"])] for t in conn.all_transactions()
+        if str(t["to_ref"]) in designated and lo <= str(t["timestamp"])[:10] <= hi
+    ), 2)
+
+    domestic_window = ground_truth["designation_lead_time_window"][domestic_live.designation_id]
+
+    scorecard = {
+        "regime": lead.source_regime,
+        "standing": lead.obligation_vs_signal,
+        "lead_days (foreign)": window["lead_days"],
+        "lead_days (domestic)": domestic_window["lead_days"],
+        "in_window_flow_uids": sweep_flow,
+        "in_window_flow_matches_gold": sweep_flow == gold_inwin["flow_uids"],
+        "in_window_direct_inflow_usdt": sweep_inflow,
+        "inflow_matches_gold": sweep_inflow == gold_inwin["direct_inflow_usdt"],
+        "audit_verified": res.audit_verified,
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (cross-list lead-time / foreign national list):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    # A real lead time exists for the foreign plant, none for the domestic.
+    assert window["lead_days"] > 700 and domestic_window["lead_days"] == 0
+    # The in-window flow set and inflow are exactly the gold (money that moved
+    # while only the foreign list knew) and the sweep reproduces them.
+    assert sweep_flow == gold_inwin["flow_uids"] and len(sweep_flow) > 0
+    assert sweep_inflow == gold_inwin["direct_inflow_usdt"] > 0
+    assert res.audit_verified
+
+
+def test_sweep_eval_foreign_granularity_scorecard(
+    conn, ground_truth, ring, foreign_designations, tmp_path, capsys
+):
+    """Granularity (depth axis): a name-only foreign listing (no wallet, no
+    domestic designation) is surfaced by the name screen as a review-tier
+    identity row — proving foreign-list coverage is ADDITIVE, not duplicative:
+    the matched account appears in NO domestic exposure set."""
+    _, name_only = foreign_designations
+    res = run_sweep(name_only, out_dir=tmp_path / "name_only", conn=conn)
+
+    matched = [m.uid for m in res.name_matches]
+    gold_match = ground_truth["foreign_name_match_uids"][name_only.designation_id]
+    # The matched account is absent from EVERY domestic (sdn_style) exposure set.
+    domestic_ids = [d["designation_id"] for d in ground_truth["designations"]
+                    if d["list_type"] == "sdn_style"]
+    in_any_domestic_exposure = any(
+        ring["SIBLING"] in ground_truth["designation_exposed_uids"][did]
+        for did in domestic_ids
+    )
+    name_rows = [r for r in res.worksheet
+                 if r.recommended_action == "flags_name_match_for_identity_review"]
+
+    scorecard = {
+        "regime": name_only.source_regime,
+        "designated_addresses": len(name_only.designated_addresses),
+        "name_matches": matched,
+        "matches_gold": matched == gold_match,
+        "flow_exposure": len(res.exposure.exposed),
+        "adjacency": len(res.exposure.adjacent),
+        "name_match_worksheet_rows": len(name_rows),
+        "matched_absent_from_domestic_exposure": not in_any_domestic_exposure,
+        "audit_verified": res.audit_verified,
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (cross-list granularity / name-only foreign match):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    # The conditional empty-address path, end to end: a name-only listing.
+    assert name_only.designated_addresses == []
+    # Surfaced ONLY by the name screen: matched, no flow, no adjacency.
+    assert matched == gold_match == [ring["SIBLING"]]
+    assert res.exposure.exposed == [] and res.exposure.adjacent == []
+    assert len(name_rows) == 1 and name_rows[0].uid == ring["SIBLING"]
+    # Additive, not duplicative — absent from every domestic exposure set.
+    assert not in_any_domestic_exposure
+    assert res.audit_verified

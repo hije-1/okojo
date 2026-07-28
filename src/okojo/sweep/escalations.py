@@ -22,6 +22,7 @@ from pydantic import BaseModel
 from ..connectors import Connectors
 from ..provenance import Provenance
 from ..sar import BANNED_TERMS, GroundingResolver
+from . import calibrated_language_violations
 from .designation import Designation
 from .worksheet import WorksheetRow
 
@@ -73,6 +74,23 @@ def _unblocked_body(row: WorksheetRow, designation: Designation) -> str:
     )
 
 
+def _signal_exposure_body(row: WorksheetRow, designation: Designation) -> str:
+    """SIGNAL-type variant: a foreign national-list entry is a timestamped risk
+    signal, not an obligation, so this draft proposes REVIEW — never a hold. It
+    carries no legal-effect language (enforced by the calibrated-language ban)."""
+    kind = "direct" if row.direct else "indirect"
+    return (
+        f"Account {row.uid} ({row.entity_name}) shows {kind} flow exposure to "
+        f"{designation.source_regime} national-list entry {designation.designation_id} "
+        f"(a risk signal listed since {designation.listed_since}, not a designation "
+        f"obligation) at hop distance {row.hops} (tainted amount "
+        f"{row.exposure_usdt:,.2f} USDT from the cited transactions), and carries no "
+        f"hold in either system (warehouse={row.warehouse_status}, "
+        f"admin={row.admin_status}). This draft surfaces the foreign-list signal for "
+        "analyst review; a human assesses it. Prepared by an automated sweep; not sent."
+    )
+
+
 def draft_escalations(
     conn: Connectors,
     designation: Designation,
@@ -86,14 +104,21 @@ def draft_escalations(
     refused, surfaced with reasons for human authoring.
     """
     resolver = GroundingResolver(conn)
+    is_signal = designation.obligation_vs_signal == "signal"
     drafts: list[EscalationDraft] = []
     suppressed: list[SuppressedEscalation] = []
     counter = 0
 
     def _emit(kind: str, row: WorksheetRow, subject: str, body: str) -> None:
         nonlocal counter
-        low = f"{subject} {body}".lower()
+        text = f"{subject} {body}"
+        low = text.lower()
+        # SAR calibration terms always; for a SIGNAL-type designation, ALSO the
+        # legal-effect ban — a foreign listing must never be written as an
+        # obligation. Both are suppress-and-surface (never silently dropped).
         hits = [t for t in BANNED_TERMS if t in low]
+        if is_signal:
+            hits = hits + calibrated_language_violations(text)
         if hits:
             suppressed.append(SuppressedEscalation(
                 kind=kind, uid=row.uid,
@@ -134,9 +159,16 @@ def draft_escalations(
     for row in worksheet:
         if (row.hops is not None and row.gap_type is None
                 and row.warehouse_status == "no_hold" and row.admin_status == "no_hold"):
-            _emit(
-                "exposed_unblocked", row,
-                f"[{designation.designation_id}] designation exposure with no hold: account {row.uid}",
-                _unblocked_body(row, designation),
-            )
+            if is_signal:
+                _emit(
+                    "foreign_signal_exposure", row,
+                    f"[{designation.designation_id}] foreign-list signal exposure (review): account {row.uid}",
+                    _signal_exposure_body(row, designation),
+                )
+            else:
+                _emit(
+                    "exposed_unblocked", row,
+                    f"[{designation.designation_id}] designation exposure with no hold: account {row.uid}",
+                    _unblocked_body(row, designation),
+                )
     return drafts, suppressed
