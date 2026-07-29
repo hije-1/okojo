@@ -1497,6 +1497,17 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         for did, data in _DESIGNATION_IDENTIFIER_DATA.items()
         if data[4] == "name_only_dismissed"
     }
+    # Part II (T5a) identity-review RFI answer key: the candidates corroboration
+    # could neither confirm nor dismiss (possible_match_needs_human) — the only
+    # outcome that earns a subject-facing identity-verification request. A true
+    # hit is already resolved and a dismissal is a cleared collision, so neither
+    # is contacted. Derived from the SAME definitional corroboration classification
+    # (no new plant, no CSV change); draft_identity_review_rfis recomputes it.
+    identity_review_rfi_uids = {
+        did: [str(identity_customer_uid[did])]
+        for did, data in _DESIGNATION_IDENTIFIER_DATA.items()
+        if data[4] == "possible_match_needs_human"
+    }
 
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
@@ -1588,6 +1599,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         # identity tables, so the eval is a real check, never circular.
         "corroboration_outcomes": corroboration_outcomes,
         "corroboration_dismissal_reasons": corroboration_dismissal_reasons,
+        # Part II (T5a) identity-review RFI answer key: per designation, the
+        # candidate uid(s) that earn a subject-facing identity-verification
+        # request — exactly the possible_match_needs_human candidates.
+        "identity_review_rfi_uids": identity_review_rfi_uids,
         # Part II (T3) beneficial-owner + officer walk answer keys, all hung off
         # the DES-2026-0005 resolved party. ``ownership_propagated_uids`` are the
         # companies owned at/above OWNERSHIP_CONTROL_THRESHOLD (review-tier

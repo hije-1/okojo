@@ -80,6 +80,14 @@ class GroundingResolver:
         add(conn.officer_appointments())
         add(conn.relationships())
         add(conn.relationship_assertions())
+        # Part II T5a: the identity-review RFI is grounded in the candidate's own
+        # KYC identity-attributes row (the record it asks the customer to
+        # confirm); the corroboration decision it derives from also cites the
+        # published-identifier row. Registered here so both resolve through the
+        # one membership definition — inert for every case claim (none cite
+        # them), a superset for the sweep.
+        add(conn.kyc_identity_attributes())
+        add(conn.designation_identifiers())
         self._valid = valid
 
     def resolves(self, prov: Provenance) -> bool:

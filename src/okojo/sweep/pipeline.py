@@ -43,6 +43,11 @@ from .designation import (
 )
 from .escalations import EscalationDraft, SuppressedEscalation, draft_escalations
 from .exposure import ExposureResult, sweep_exposure
+from .identity_rfi import (
+    IdentityReviewRfi,
+    SuppressedIdentityRfi,
+    draft_identity_review_rfis,
+)
 from .verify import StatusGap, verify_block_status
 from .worksheet import WorksheetRow, build_worksheet, worksheet_grounding_report
 
@@ -60,6 +65,8 @@ class SweepResult:
     worksheet: list[WorksheetRow]      # triaged; grounded fail-closed
     escalations: list[EscalationDraft]         # drafted, never sent
     suppressed_escalations: list[SuppressedEscalation]
+    identity_rfis: list[IdentityReviewRfi]     # Part II T5a: subject-facing, drafted never sent
+    suppressed_identity_rfis: list[SuppressedIdentityRfi]
     out_dir: Path
     audit_log_path: Path
     audit_records: list[dict] = field(default_factory=list)
@@ -370,6 +377,32 @@ def run_sweep(
             }),
         )
 
+        # 5b. Identity-review RFI (Part II T5a) — the FIRST subject-facing surface
+        # in Phase 8. For each candidate corroboration could neither confirm nor
+        # dismiss (possible_match_needs_human), draft a routine identity/document-
+        # verification request to the customer: grounded in their own KYC row,
+        # validated fail-closed by assert_no_tipping_off (it reveals no match, no
+        # method, no list, no interest), drafted-pending-human-review only, with
+        # no send path. Anything the guard refuses is surfaced as suppressed.
+        # Stamped ONLY where a draft or a suppression exists (a sweep with no
+        # possible-match candidate leaves its chain byte-unchanged).
+        identity_rfis, suppressed_identity_rfis = draft_identity_review_rfis(
+            conn, designation, corroboration)
+        if identity_rfis or suppressed_identity_rfis:
+            audit.append(
+                "remediation_sweep", "identity_review_rfi",
+                target=designation.designation_id,
+                detail=json.dumps({
+                    "drafted": [{"id": r.rfi_id, "uid": r.uid, "status": r.status}
+                                for r in identity_rfis],
+                    "suppressed": [{"uid": s.uid, "reason": s.reason}
+                                   for s in suppressed_identity_rfis],
+                    "note": "subject-facing identity-verification requests prepared "
+                            "for human review; anti-tipping-off enforced; nothing is sent",
+                }),
+                provenance=[p for r in identity_rfis for p in r.provenance],
+            )
+
         audit.append(
             "remediation_sweep", "sweep_complete",
             target=designation.designation_id,
@@ -408,6 +441,8 @@ def run_sweep(
             worksheet=worksheet,
             escalations=escalations,
             suppressed_escalations=suppressed,
+            identity_rfis=identity_rfis,
+            suppressed_identity_rfis=suppressed_identity_rfis,
             out_dir=out_dir,
             audit_log_path=audit_path,
             audit_records=audit.read_all(),

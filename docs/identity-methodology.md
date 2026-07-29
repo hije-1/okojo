@@ -160,6 +160,31 @@ unconnected* associates). The ring carries **zero flow exposure** (asserted), is
 stamped into the sweep chain only where non-empty, and — like the ownership walk
 — never runs for a party corroboration dismissed as a same-name collision.
 
+## 2.6 Identity-review RFI (T5) — the first subject-facing surface
+
+Every layer above is *internal*: worksheets, decisions, and drafts read by a
+compliance officer. The identity-review RFI is the first surface in the sweep
+that could ever be put to a **customer**, so it is the most tightly governed.
+
+- **Who it addresses.** Only the candidate corroboration could neither confirm
+  nor dismiss (outcome ``possible_match_needs_human``). A *corroborated true hit*
+  is already resolved and a *name-only dismissal* is a cleared collision — asking
+  either would be pointless or a disclosure risk, so neither is ever contacted.
+- **What it may say.** A **routine identity/document-verification request** —
+  please confirm the identity details already on file and provide a current
+  identity document. It reveals **nothing** about a designation match, the
+  screening or corroboration method, any list source, or any investigation or
+  law-enforcement interest.
+- **The guard.** The fully rendered text is validated **fail-closed** by
+  ``assert_no_tipping_off`` (the subject-facing guard). A request that trips the
+  check is **suppressed and surfaced** for human authoring — never emitted.
+- **Grounded, and drafted-only.** Each request cites the candidate's own KYC
+  identity-attributes row (the record it asks them to confirm), and that pointer
+  must resolve before the draft is emitted. The only representable status is
+  ``drafted_pending_human_review``: **no send path exists**; a human owns
+  assembly, judgment, and any sending. It is stamped into the sweep chain only
+  where a draft (or a suppression) exists.
+
 ## 3. Production posture (vendor-agnostic)
 
 In a real deployment, the variant-matching layer above is the piece an
