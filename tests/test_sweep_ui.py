@@ -246,3 +246,82 @@ def test_identity_review_rfi_renders_with_status(sweep_app_identity):
     assert "identity" in text.lower()
     # Two-register: the RFI citation keeps the real KYC table name.
     assert "kyc_identity_attributes" in text
+
+
+# --- Part III geo-triangulation panel (U3) ----------------------------------
+#
+# The geo panel renders only for a TERRITORY designation, so these drive the
+# shared sweep-mode app to DES-2026-0008 (Qazrun Free Zone, the synthetic
+# territory). Reuses the module-scoped ``sweep_app_identity`` fixture (a
+# sweep-mode app selected per test) rather than spinning a THIRD AppTest — that
+# is the most expensive tenant, and the fixture is just "sweep mode, pick a
+# designation", which is exactly what a geo test needs. The three surfaced
+# demo cases map to three DIFFERENT proposals.
+
+_TERRITORY = "DES-2026-0008"
+
+
+def test_geo_triangulation_renders_three_proposals(sweep_app_identity):
+    from app.streamlit_app import _GEO_PROPOSAL_LABEL
+
+    at = _select(sweep_app_identity, _TERRITORY)
+    assert not at.exception
+    text = _all_text(at)
+
+    assert "Geo triangulation" in text
+    # A territory designates a geography, not a party — so there is no name screen.
+    assert "no name screen" in text.lower()
+    # The three demo proposals render through their plain labels, never the raw
+    # outcome slug (the calibrated two-register boundary).
+    for outcome in ("propose_edd_rfi", "propose_withdrawal_only_restriction",
+                    "propose_full_block_and_escalate"):
+        assert _GEO_PROPOSAL_LABEL[outcome] in text
+        assert outcome not in text
+    # The net presence score is shown in plain terms (N and its band).
+    assert "net presence score" in text.lower()
+
+
+def test_geo_signals_render_calibrated_plain_language(sweep_app_identity):
+    from app.streamlit_app import _GEO_SIGNAL_LABEL
+
+    at = _select(sweep_app_identity, _TERRITORY)
+    assert not at.exception
+    text = _all_text(at)
+
+    # Signal ids render through their plain labels, never the raw id. (The
+    # timezone id is the one deliberate exception: it is a substring of the
+    # ``device_timezones`` table name that the two-register citation keeps —
+    # so it is checked by its plain label, not the raw-absent set.)
+    assert _GEO_SIGNAL_LABEL["vpn_slip"] in text
+    assert _GEO_SIGNAL_LABEL["exclusive_carrier"] in text
+    assert _GEO_SIGNAL_LABEL["device_timezone"] in text
+    for raw in ("vpn_slip", "exclusive_carrier", "declared_residence",
+                "ip_geolocation", "kyc_geography", "phone_prefix"):
+        assert raw not in text, f"raw signal id leaked to screen: {raw}"
+    # Calibrated: signals indicate *possible* presence, never proof.
+    assert "possible presence" in text.lower()
+    # VPN discipline stated positively: an obfuscation marker, never evidence.
+    assert "obfuscation marker" in text.lower()
+    assert "never" in text.lower() and "location evidence" in text.lower()
+
+
+def test_geo_traveller_counter_evidence_and_edd_rfi_render(sweep_app_identity):
+    from app.streamlit_app import _GEO_STALENESS_LABEL, _RFI_STATUS_LABEL
+
+    at = _select(sweep_app_identity, _TERRITORY)
+    assert not at.exception
+    text = _all_text(at)
+
+    # The ambiguous traveller's counter-evidence renders with its degraded
+    # staleness (an EXPIRED residency card argues against presence but weakly);
+    # expiry is never read as presence.
+    assert "Counter-evidence" in text
+    assert _GEO_STALENESS_LABEL["expired"] in text
+    # The KYC-refresh control gap surfaces separately from any location signal.
+    assert "Control gaps" in text
+    # The EDD RFI is drafted (never sent), rendered with its plain status.
+    assert _RFI_STATUS_LABEL["drafted_pending_human_review"] in text
+    assert "drafted_pending_human_review" not in text
+    # Two-register: the dossier citations keep the real table names.
+    assert "ip_logs" in text
+    assert "kyc_artifact_validity" in text

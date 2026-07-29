@@ -34,6 +34,7 @@ from okojo.remarks import SCREEN_THRESHOLD
 from okojo.remarks.miner import _ALIAS_THRESHOLD, _PHRASE_THRESHOLD
 from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
+from okojo.geo import GEO_VERSION
 from okojo.identity import IDENTITY_VERSION, OWNERSHIP_CONTROL_THRESHOLD
 from okojo.sweep import (
     GAP_TAXONOMY,
@@ -560,6 +561,47 @@ _RFI_STATUS_LABEL = {
     "drafted_pending_human_review": "Drafted — pending human review (not sent)",
 }
 
+# Geo-triangulation plain language (Part III U3). Two-register throughout: plain
+# phrasing on screen, the real table names kept in the provenance/citation
+# captions (a citation must name its store). Calibrated: a signal *indicates
+# possible presence*, it never *proves location*.
+_GEO_SIGNAL_LABEL = {
+    "ip_geolocation": "a login IP resolved inside the territory",
+    "phone_prefix": "a registered phone carries the regional dialling prefix",
+    "exclusive_carrier": "the number is on a region-only carrier",
+    "kyc_geography": "a KYC document was issued inside the territory",
+    "declared_residence": "declared residence is inside the territory",
+    "device_timezone": "a device clock is set to the territory's timezone",
+    "vpn_slip": "a territory IP appeared in a gap of continuous VPN use (VPN-slip)",
+}
+
+# Signal weight class -> how much a signal counts, in plain terms. A distinctive
+# locator (a region-locked carrier, a VPN-slip) counts for more than an ordinary
+# hit; a shared timezone is coarse.
+_GEO_WEIGHT_LABEL = {
+    "high_value": "distinctive (counts for more)",
+    "standard": "standard",
+    "weak": "coarse (counts for less)",
+}
+
+# The seven decide_geo_action outcomes -> plain proposal wording. Calibrated:
+# every one is a *proposal drafted for an officer*, nothing is executed; the
+# no_action outcome is a resolved review, never a silent dismissal (PM Rider A).
+_GEO_PROPOSAL_LABEL = {
+    "no_action_totality_resolves": "No restriction proposed — resolved review",
+    "propose_edd_rfi": "Proposed — ask the customer (enhanced due-diligence RFI)",
+    "propose_withdrawal_only_restriction": "Proposed — withdrawal-only restriction",
+    "propose_trade_and_withdrawal_block": "Proposed — trade + withdrawal block",
+    "propose_full_block_and_escalate": "Proposed — full block + escalate",
+}
+
+# Counter-evidence staleness -> plain counter-weight. Expiry is NEVER read as
+# presence; it only degrades a document's weight AGAINST presence.
+_GEO_STALENESS_LABEL = {
+    "valid": "valid — argues against presence in full",
+    "expired": "expired — still argues against presence, but its weight is degraded",
+}
+
 
 def _corroboration_label(outcome: str) -> str:
     return _CORROBORATION_LABEL.get(outcome, outcome)
@@ -708,6 +750,133 @@ def _render_identity_resolution(res, names) -> None:
             )
 
 
+def _render_geo_triangulation(res, names) -> None:
+    """Render the Part-III geo-triangulation dossiers + proposals that otherwise
+    live only in the sweep result + audit chain: per surfaced account, the
+    location signals (with weight class), the VPN obfuscation markers, the
+    counter-evidence + staleness, the KYC-refresh control gaps, the one-signal
+    verdict, and the drafted (never sent) proposal — including the subject-facing
+    EDD RFI text. Two-register throughout: compliance-officer wording on screen,
+    real table names in the provenance. Rendered only for a TERRITORY designation
+    (a designation of a geography, not a party — so there is no name screen)."""
+    if not res.geo_dossiers:
+        return
+
+    st.markdown("#### Geo triangulation")
+    st.caption(
+        "This designation names a **territory**, not a person or company — so "
+        "there is no name screen. Instead the sweep triangulates **possible "
+        "presence** inside the sanctioned region from location signals, one "
+        "account at a time. Everything here is **review-tier and calibrated**: a "
+        "signal *indicates possible presence*, it never *proves location*; VPN use "
+        "is an **obfuscation marker, never evidence**; document staleness never "
+        "argues *for* presence. Every proposal is drafted for an officer — nothing "
+        "is executed, no RFI is sent."
+    )
+
+    proposals = {p.uid: p for p in res.geo_proposals}
+    # A compact roster line: each surfaced account and its proposal, plain.
+    for d in res.geo_dossiers:
+        p = proposals.get(d.uid)
+        proposal_label = (_GEO_PROPOSAL_LABEL.get(p.outcome, p.outcome)
+                          if p else "—")
+        header = (f"uid {d.uid} ({names.get(d.uid, d.entity_name)}) · "
+                  f"**{proposal_label}**")
+        with st.expander(header):
+            if p is not None:
+                # N and its band, in plain terms (the analyst-facing decision text
+                # is p.plain_language; the raw outcome slug never reaches screen).
+                st.markdown(
+                    f"**{proposal_label}** · net presence score **N = "
+                    f"{p.net_presence_score}** "
+                    f"({len(d.signals)} location signal(s) − counter-evidence)."
+                )
+                st.caption(p.plain_language)
+
+            # -- location signals ------------------------------------------- #
+            st.markdown("**Location signals** — each *indicates possible presence*, "
+                        "never proof:")
+            for s in d.signals:
+                st.markdown(
+                    f"- **{_GEO_SIGNAL_LABEL.get(s.signal_id, s.signal_id)}** · "
+                    f"weight: {_GEO_WEIGHT_LABEL.get(s.weight_class, s.weight_class)} "
+                    f"— {s.detail}"
+                )
+                _source_caption(s.provenance)
+
+            # -- VPN markers (never location evidence) ---------------------- #
+            if d.vpn_markers:
+                st.markdown(
+                    "**VPN / anonymising logins** — recorded as obfuscation "
+                    "markers, **never as location evidence**:"
+                )
+                for m in d.vpn_markers:
+                    st.markdown(f"- a VPN login at {m.timestamp}")
+                    _source_caption(m.provenance)
+
+            # -- counter-evidence + staleness ------------------------------- #
+            if d.counter_evidence:
+                st.markdown(
+                    "**Counter-evidence** — documents arguing *against* presence; "
+                    "staleness degrades their weight, and expiry is **never** read "
+                    "as evidence of presence:"
+                )
+                for c in d.counter_evidence:
+                    st.markdown(
+                        f"- a {c.artifact_type} issued in {c.issuing_geography} — "
+                        f"{_GEO_STALENESS_LABEL.get(c.staleness, c.staleness)}"
+                    )
+                    _source_caption(c.provenance)
+
+            # -- control gaps (KYC-refresh; not a location signal) ---------- #
+            if d.control_gaps:
+                st.markdown(
+                    "**Control gaps** — the exchange failed to re-verify a "
+                    "document; surfaced for the control owner, **separately from "
+                    "any location signal**:"
+                )
+                for g in d.control_gaps:
+                    st.markdown(f"- {g.detail}")
+                    _source_caption(g.provenance)
+
+            # -- the one-signal-rule verdict -------------------------------- #
+            # A plain restatement of dossier.note (which names raw signal ids as
+            # analyst shorthand): the screen register stays plain, the machine
+            # ids stay in the audit stamp.
+            st.caption(
+                f"Surfaced under the **one-signal rule**: {len(d.signals)} "
+                "location signal(s) indicate possible presence. Signals are "
+                "correlational and calibrated — presence is not asserted; a "
+                "human resolves."
+            )
+
+            # -- the drafted (never sent) EDD RFI, or its suppression ------- #
+            if p is not None and p.rfi_text:
+                st.markdown(
+                    "**Enhanced due-diligence RFI — subject-facing, "
+                    f"{_RFI_STATUS_LABEL.get(p.status, p.status)}**"
+                )
+                st.caption(
+                    "Anti-tipping-off is enforced **fail-closed** on the rendered "
+                    "text: it reveals no territory, match, method, list, or "
+                    "interest; a draft that trips the guard is suppressed and "
+                    "surfaced, never sent."
+                )
+                st.write(p.rfi_text)
+                st.caption("citations: " + "; ".join(p.citations))
+            elif p is not None and p.rfi_suppressed_reason:
+                st.warning(
+                    "**EDD RFI suppressed (surfaced, not drafted):** "
+                    + p.rfi_suppressed_reason
+                )
+
+    st.caption(
+        f"Geo-triangulation methodology v{GEO_VERSION} · signals indicate "
+        "possible presence, never prove location · proposals are drafted for a "
+        "human, never executed."
+    )
+
+
 def _render_sweep_mode(conn: Connectors) -> None:
     """Designation-triggered remediation sweep — the ledger-wide second entry
     point. No subject selector: the sweep runs over the whole ledger from a
@@ -827,6 +996,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
 
     # -- identity resolution (Part II) -------------------------------------- #
     _render_identity_resolution(res, names)
+
+    # -- geo triangulation (Part III) --------------------------------------- #
+    _render_geo_triangulation(res, names)
 
     # -- hold-status reconciliation ----------------------------------------- #
     st.markdown("#### Hold-status reconciliation")

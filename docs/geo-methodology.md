@@ -110,6 +110,32 @@ the tamper-evident audit chain — plus the discipline that VPN is never locatio
 evidence and that document staleness never argues *for* presence. No real
 territory, carrier, or jurisdiction is named or implied.
 
+### 6.1 Guard-surface map (the two-audience boundary)
+
+Geo triangulation produces one **subject-facing** surface — the enhanced-due-
+diligence RFI proposed for the ambiguous case — and several **internal** ones
+(the dossier a reviewer reads, the decision rationale, the audit stamps). Which
+guard applies is a function of **who could read the text**, never of the
+surface's name:
+
+| Surface | Who reads it | Guard | On failure |
+|---|---|---|---|
+| EDD identity/geography RFI (`propose_edd_rfi`) | the **customer** (subject-facing) | `assert_no_tipping_off`, on the fully rendered text, plus grounding to the account row | suppressed & surfaced for human authoring; never sent |
+| Geo dossier / signal detail / decision rationale | internal (compliance reviewer) | grounding to the single row read; calibrated language | flagged; a signal that cannot cite its row is never emitted |
+| `geo_triangulation` / `geo_proposal` audit stamps | internal (audit) | provenance-pointed, chain-verified | — |
+
+The single rule behind the table: **only subject-facing text passes through
+`assert_no_tipping_off`.** The EDD RFI is the sole subject-facing surface geo
+triangulation produces; the neutral records-maintenance template names no
+territory, match, method, or list, and is validated fail-closed *after*
+rendering (the interpolated customer name is the likeliest smuggling path). The
+`drafted_pending_human_review` status is the only one representable — there is no
+send path and no execution path. Everything else is internal analyst material,
+which legitimately names the territory, the signals, and the net-presence score a
+customer must never see. The guard is chosen by the audience, so no internal
+artifact is ever weakened to satisfy a subject-facing rule, and no subject-facing
+surface can be added without inheriting the tipping-off guard by construction.
+
 ## 7. The versioned policy (canonical block)
 
 The block below is the single source of truth, stamped into every territory
