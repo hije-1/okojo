@@ -26,7 +26,9 @@ from ..connectors import Connectors
 from ..identity import (
     VARIANT_MATCH_THRESHOLD,
     OwnershipWalkResult,
+    ProximityRing,
     VariantNameMatch,
+    build_proximity_ring,
     identity_config,
     screen_name_variants,
     walk_ownership,
@@ -52,6 +54,7 @@ class SweepResult:
     variant_name_matches: list[VariantNameMatch]  # Part II: transliteration-variant hits
     corroboration: list[DecisionRecord]           # Part II: per-candidate corroboration decisions
     ownership: OwnershipWalkResult                 # Part II T3: beneficial-owner + officer walk
+    proximity: ProximityRing                       # Part II T4: relatives/associates ring
     exposure: ExposureResult
     gaps: list[StatusGap]              # full-ledger reconciliation, uid order
     worksheet: list[WorksheetRow]      # triaged; grounded fail-closed
@@ -292,6 +295,38 @@ def run_sweep(
             }),
         )
 
+        # 2b. Proximity ring (Part II T4). Around the RESOLVED individual
+        # party/parties (reusing the corroboration-filtered resolved set), surface
+        # the relatives/associates for REVIEW — never exposure, never asserted
+        # kinship. Accounts already surfaced by this sweep as exposed or adjacent
+        # are excluded (the ring is the otherwise-unconnected associates), so it
+        # runs after the exposure walk. Record-only, stamped ONLY where non-empty
+        # (a designation with no resolved individual footprint leaves its chain
+        # unchanged). NOT weighted by activity volume.
+        resolved_individuals = [
+            uid for uid in resolved_parties
+            if (acct := conn.get_account(uid)) is not None
+            and str(acct["entity_type"]) == "individual"]
+        proximity_exclude = set(exposure.exposed_uids()) | set(exposure.adjacent_uids())
+        proximity = build_proximity_ring(conn, resolved_individuals, proximity_exclude)
+        if not proximity.is_empty():
+            audit.append(
+                "remediation_sweep", "proximity_ring",
+                target=designation.designation_id,
+                detail=json.dumps({
+                    "resolved_parties": resolved_individuals,
+                    "members": [
+                        {"uid": m.uid, "related_party_uid": m.related_party_uid,
+                         "account_status": m.account_status,
+                         "primary_signals": [s.signal_id for s in m.primary_signals],
+                         "weighting_signals": [s.signal_id for s in m.weighting_signals]}
+                        for m in proximity.members],
+                    "note": "review-tier relatives/associates; correlational "
+                            "signals, no kinship asserted; no flow exposure",
+                }),
+                provenance=[p for m in proximity.members for p in m.provenance],
+            )
+
         # 3. Two-system hold reconciliation over the full ledger.
         gaps = verify_block_status(conn)
         audit.append(
@@ -367,6 +402,7 @@ def run_sweep(
             variant_name_matches=variant_matches,
             corroboration=corroboration,
             ownership=ownership,
+            proximity=proximity,
             exposure=exposure,
             gaps=gaps,
             worksheet=worksheet,
