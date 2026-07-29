@@ -325,3 +325,90 @@ def test_geo_traveller_counter_evidence_and_edd_rfi_render(sweep_app_identity):
     # Two-register: the dossier citations keep the real table names.
     assert "ip_logs" in text
     assert "kyc_artifact_validity" in text
+
+
+# --- Simulated list-feed update (DEMO FIX 2) --------------------------------
+#
+# The "Simulate list-feed update (advanced)" source is a manual stand-in for an
+# inbound list-feed event. The example payloads are the regression guard: the
+# valid one is serialized FROM the Designation model, so it can never drift out
+# of schema again (the prior hand-written example silently lost four required
+# fields when Part I-B added them).
+
+
+def test_example_designation_payloads_valid_and_malformed():
+    """The pure anti-drift guarantee (no app spin): the generated valid payload
+    parses through the same fail-closed boundary the UI uses, and the malformed
+    one is rejected. If a future required field is added to the model, the
+    generator's constructor breaks here loudly rather than shipping a stale,
+    invalid example in the demo."""
+    from app.streamlit_app import _example_designation_payloads
+    from okojo.sweep import DesignationParseError, parse_designation
+
+    valid_json, malformed_json = _example_designation_payloads()
+
+    d = parse_designation(valid_json)          # must round-trip through the boundary
+    assert d.designation_id == "DES-2026-9001"
+    assert d.list_type == "sdn_style"
+
+    with pytest.raises(DesignationParseError):
+        parse_designation(malformed_json)      # missing required fields → rejected
+
+
+@pytest.fixture(scope="module")
+def sweep_app_simulate(data_dir):
+    """A sweep-mode AppTest switched to the simulate-list-feed source. Distinct
+    module-scoped instance (the button clicks below mutate widget state, so it
+    must not share the read-only ``sweep_app`` / ``sweep_app_identity``)."""
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+
+    import streamlit as st
+    import okojo.connectors.store as store_mod
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(store_mod, "SYNTHETIC_DIR", data_dir)
+    st.cache_resource.clear()
+
+    at = AppTest.from_file(str(_APP), default_timeout=60)
+    at.run()
+    at.radio(key="app_mode").set_value("Designation sweep").run()
+    at.radio(key="sweep_source").set_value(
+        "Simulate list-feed update (advanced)").run()
+    yield at
+
+    mp.undo()
+    st.cache_resource.clear()
+
+
+def test_simulate_option_and_verbatim_caption(sweep_app_simulate):
+    at = sweep_app_simulate
+    assert not at.exception
+    # The source option is renamed (calibrated: it SIMULATES an inbound event).
+    assert ("Simulate list-feed update (advanced)"
+            in at.radio(key="sweep_source").options)
+    # The PM-approved caption is present verbatim (distinctive substrings).
+    caps = " ".join(c.value for c in at.caption)
+    assert "This box simulates that inbound event." in caps
+    assert ("pass the same fail-closed validation before anything runs" in caps)
+    # No claim of live connectivity — calibrated "simulates / arrives".
+    assert "simulates" in caps.lower()
+
+
+def test_simulate_malformed_payload_rejected_fail_closed(sweep_app_simulate):
+    at = sweep_app_simulate
+    at.button(key="sweep_load_malformed").click().run()
+    assert not at.exception
+    # The fail-closed rejection renders; nothing runs past the boundary.
+    errs = " ".join(e.value for e in at.error).lower()
+    assert "rejected (fail-closed)" in errs
+
+
+def test_simulate_valid_payload_runs_sweep(sweep_app_simulate):
+    at = sweep_app_simulate
+    at.button(key="sweep_load_valid").click().run()
+    assert not at.exception
+    assert not at.error
+    # The valid example is a company touching nothing in the ledger → the clean
+    # false-positive path renders (worksheet section present, no exception).
+    text = _all_text(at)
+    assert "Remediation worksheet" in text

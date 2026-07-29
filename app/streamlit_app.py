@@ -39,6 +39,7 @@ from okojo.identity import IDENTITY_VERSION, OWNERSHIP_CONTROL_THRESHOLD
 from okojo.sweep import (
     GAP_TAXONOMY,
     SWEEP_VERSION,
+    Designation,
     DesignationParseError,
     designation_from_record,
     parse_designation,
@@ -877,11 +878,42 @@ def _render_geo_triangulation(res, names) -> None:
     )
 
 
+def _example_designation_payloads() -> tuple[str, str]:
+    """The two one-click example payloads for the simulated list-feed box.
+
+    The VALID payload is serialized FROM a constructed :class:`Designation`, so it
+    is schema-valid by construction and can never silently drift from the model
+    again: a new required field breaks this constructor loudly (at demo/test time),
+    rather than leaving a stale, invalid example sitting in the box. The MALFORMED
+    payload omits required fields, so a visitor can trigger the fail-closed
+    rejection deliberately. All values are obviously synthetic."""
+    valid = Designation(
+        designation_id="DES-2026-9001",
+        designated_name="Example Shell Trading",
+        program="SYNTHETIC-IRGC-STYLE",
+        entity_type="company",
+        designated_addresses=["T9syntheticExampleAddr000"],
+        designation_date="2026-02-01",
+        source_regime="SYNTHETIC-OFAC-STYLE",
+        list_type="sdn_style",
+        obligation_vs_signal="obligation",
+        listed_since="2026-02-01",
+    )
+    valid_json = json.dumps(valid.model_dump(), indent=2)
+    # Deliberately missing every field but two → fails the fail-closed validator.
+    malformed_json = json.dumps({
+        "designation_id": "DES-2026-9002",
+        "designated_name": "Broken Example Corp",
+    }, indent=2)
+    return valid_json, malformed_json
+
+
 def _render_sweep_mode(conn: Connectors) -> None:
     """Designation-triggered remediation sweep — the ledger-wide second entry
     point. No subject selector: the sweep runs over the whole ledger from a
-    pasted or picked designation, surfaces exposed accounts + reconciliation
-    gaps, and drafts (never sends) escalations."""
+    picked synthetic designation or a simulated inbound list-feed payload,
+    surfaces exposed accounts + reconciliation gaps, and drafts (never sends)
+    escalations."""
     st.subheader("Designation-triggered remediation sweep")
     st.caption(
         "A second entry point over the finished core: input a synthetic "
@@ -902,7 +934,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
     with st.sidebar:
         st.header("Designation")
         source = st.radio(
-            "Source", ["Synthetic list", "Paste JSON"], key="sweep_source",
+            "Source",
+            ["Synthetic list", "Simulate list-feed update (advanced)"],
+            key="sweep_source",
         )
 
     designation = None
@@ -914,23 +948,37 @@ def _render_sweep_mode(conn: Connectors) -> None:
         rec = conn.get_designation(chosen)
         designation = designation_from_record(rec)
     else:
-        example = json.dumps({
-            "designation_id": "DES-2026-9001",
-            "designated_name": "Example Shell Trading",
-            "program": "SYNTHETIC-IRGC-STYLE",
-            "entity_type": "company",
-            "designated_addresses": ["T..."],
-            "designation_date": "2026-02-01",
-        }, indent=2)
+        # The paste box is a MANUAL STAND-IN for a list-feed event: in production
+        # the payload arrives from an external source (a vendor screening API, a
+        # parsed OFAC-style list file, or an internal list-management system) and
+        # hits Okojo's ingestion boundary. This simulates that inbound payload.
+        valid_payload, malformed_payload = _example_designation_payloads()
+        st.sidebar.caption(
+            "In production, designations arrive as structured payloads from a "
+            "sanctions-list feed or vendor API. This box simulates that inbound "
+            "event. All payloads, real or simulated, pass the same fail-closed "
+            "validation before anything runs."
+        )
+        # Seed the box with the valid example on first render; the two buttons
+        # overwrite it with one click (no typing). Setting the text_area's own
+        # session_state key BEFORE the widget is instantiated is the supported
+        # Streamlit pattern — the text_area then reads it, so no value= is passed.
+        if "sweep_paste" not in st.session_state:
+            st.session_state["sweep_paste"] = valid_payload
+        if st.sidebar.button("Load valid example payload", key="sweep_load_valid"):
+            st.session_state["sweep_paste"] = valid_payload
+        if st.sidebar.button("Load malformed example payload",
+                             key="sweep_load_malformed"):
+            st.session_state["sweep_paste"] = malformed_payload
         raw = st.sidebar.text_area(
-            "Designation JSON", value=example, height=240, key="sweep_paste",
+            "Inbound designation payload (JSON)", height=240, key="sweep_paste",
         )
         try:
             designation = parse_designation(raw)
         except DesignationParseError as exc:
             st.error(
                 "**Designation rejected (fail-closed).** Nothing was written — "
-                "parsing is a pure function; a malformed paste leaves no chain "
+                "parsing is a pure function; a malformed payload leaves no chain "
                 f"and no directory.\n\n```\n{exc}\n```"
             )
             return
