@@ -163,6 +163,32 @@ def test_non_empty_addresses_always_accepted_regardless_of_type():
         assert d.designated_addresses == _VALID["designated_addresses"]
 
 
+def test_territory_designation_permits_empty_addresses_on_its_own_branch():
+    """Part III (Q1): a TERRITORY designation is a geography with no on-chain
+    addresses, so an empty list is permitted — but on its OWN branch, never by
+    slipping through the national_ct+signal path. Negative BOTH ways: a territory
+    qualifies regardless of obligation_vs_signal; a non-territory empty list still
+    needs national_ct+signal."""
+    territory = {**_VALID, "designated_addresses": [], "entity_type": "territory",
+                 "list_type": "territory", "obligation_vs_signal": "signal",
+                 "source_regime": "SYN-TERRITORY"}
+    d = parse_designation(territory)
+    assert d.list_type == "territory" and d.entity_type == "territory"
+    assert d.designated_addresses == []
+
+    # A territory qualifies on the territory branch, not the national_ct path —
+    # so it holds even with obligation standing (it is never national_ct).
+    d2 = parse_designation({**territory, "obligation_vs_signal": "obligation"})
+    assert d2.designated_addresses == []
+
+    # And the territory branch does not leak: a national_ct entity_type=territory
+    # with an obligation still fails (it is not a territory list_type, and not
+    # national_ct+signal).
+    with pytest.raises(DesignationParseError):
+        parse_designation({**territory, "list_type": "national_ct",
+                           "obligation_vs_signal": "obligation"})
+
+
 def test_name_match_threshold_mirrors_screener():
     """One separation argument, two pinned constants: intentional divergence
     must be argued through a SWEEP_VERSION bump, never drift in silently."""

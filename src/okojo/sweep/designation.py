@@ -49,16 +49,20 @@ class Designation(BaseModel):
     designation_id: str = Field(pattern=DESIGNATION_ID_PATTERN)
     designated_name: str = Field(min_length=1)
     program: str = Field(min_length=1)
-    entity_type: Literal["individual", "company"]
-    # NOTE: no min_length here — the empty-address case is legal for exactly one
-    # combination (national_ct + signal), enforced by _empty_addresses_only_when
-    # below, which needs list_type and obligation_vs_signal in hand.
+    # Phase 8 Part III adds the TERRITORY kind: a designation of a geography, not
+    # a party (no on-chain addresses, no name screen — location signals are
+    # triangulated instead).
+    entity_type: Literal["individual", "company", "territory"]
+    # NOTE: no min_length here — the empty-address case is legal for exactly two
+    # combinations (national_ct + signal, or a territory), enforced by
+    # _empty_addresses_only_when below, which needs list_type and
+    # obligation_vs_signal in hand.
     designated_addresses: list[str]
     designation_date: str
     # Phase 8 Part I-B: which list, and when (see the dataclass in
     # scenario/models.py for the field semantics).
     source_regime: str = Field(min_length=1)
-    list_type: Literal["national_ct", "sdn_style", "un_style"]
+    list_type: Literal["national_ct", "sdn_style", "un_style", "territory"]
     obligation_vs_signal: Literal["obligation", "signal"]
     listed_since: str
 
@@ -83,20 +87,26 @@ class Designation(BaseModel):
 
     @model_validator(mode="after")
     def _empty_addresses_only_when_national_ct_signal(self) -> "Designation":
-        """An empty address list is permitted IFF this is a national_ct entry
-        carrying a signal (never an obligation) — a name-only foreign listing
-        with no on-chain identifiers, surfaced by the name screen for identity
-        review. Every other combination must carry at least one address, so a
-        sdn_style / obligation designation can never arrive addressless and
-        silently sweep nothing.
+        """An empty address list is permitted IFF this is either a name-only
+        foreign listing (national_ct + signal, no on-chain identifiers, surfaced
+        by the name screen for identity review) OR a TERRITORY designation (a
+        geography carries no on-chain addresses — location signals are
+        triangulated instead). Every other combination must carry at least one
+        address, so a sdn_style / obligation designation can never arrive
+        addressless and silently sweep nothing.
+
+        A territory qualifies on its OWN branch — it is never national_ct, so it
+        does not slip through the name-only path (asserted both ways by test).
         """
         if not self.designated_addresses:
-            if not (self.list_type == "national_ct"
-                    and self.obligation_vs_signal == "signal"):
+            name_only_foreign = (self.list_type == "national_ct"
+                                 and self.obligation_vs_signal == "signal")
+            is_territory = self.list_type == "territory"
+            if not (name_only_foreign or is_territory):
                 raise ValueError(
                     "empty designated_addresses permitted only for a "
-                    "national_ct + signal entry (name-only foreign listing); "
-                    f"got list_type={self.list_type!r}, "
+                    "national_ct + signal entry (name-only foreign listing) or a "
+                    f"territory designation; got list_type={self.list_type!r}, "
                     f"obligation_vs_signal={self.obligation_vs_signal!r}"
                 )
         return self

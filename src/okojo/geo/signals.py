@@ -193,14 +193,21 @@ def collect_ip_geolocation(ip_records: list[Record],
     return out
 
 
+def _digits(s: str) -> str:
+    """Digit-only form of a dialling prefix — robust to a leading ``+``, spaces,
+    or dashes, and to the CSV round-trip that reads ``"+99720"`` back as the
+    integer ``99720`` (a leading ``+`` is a valid integer sign)."""
+    return "".join(ch for ch in str(s) if ch.isdigit())
+
+
 def collect_phone_prefix(phone_records: list[Record],
                          territory: TerritoryProfile) -> list[GeoSignal]:
     """(b) Phone prefix: a regional dialling prefix on file."""
-    prefixes = {p.strip() for p in territory.phone_prefixes if p.strip()}
+    prefixes = {_digits(p) for p in territory.phone_prefixes if _digits(p)}
     out: list[GeoSignal] = []
     for r in phone_records:
         pref = _s(r["phone_prefix"])
-        if pref and pref in prefixes:
+        if pref and _digits(pref) in prefixes:
             out.append(GeoSignal(
                 signal_id="phone_prefix", value=pref,
                 detail=f"a registered phone number carries the regional prefix "

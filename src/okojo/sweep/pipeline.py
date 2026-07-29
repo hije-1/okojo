@@ -41,8 +41,10 @@ from .designation import (
     match_designated_name,
     parse_designation,
 )
+from ..geo import GeoDossier, geo_config
 from .escalations import EscalationDraft, SuppressedEscalation, draft_escalations
 from .exposure import ExposureResult, sweep_exposure
+from .geo import run_geo_triangulation
 from .identity_rfi import (
     IdentityReviewRfi,
     SuppressedIdentityRfi,
@@ -67,6 +69,7 @@ class SweepResult:
     suppressed_escalations: list[SuppressedEscalation]
     identity_rfis: list[IdentityReviewRfi]     # Part II T5a: subject-facing, drafted never sent
     suppressed_identity_rfis: list[SuppressedIdentityRfi]
+    geo_dossiers: list[GeoDossier]             # Part III U1b: territory triangulation (surfaced)
     out_dir: Path
     audit_log_path: Path
     audit_records: list[dict] = field(default_factory=list)
@@ -334,6 +337,41 @@ def run_sweep(
                 provenance=[p for m in proximity.members for p in m.provenance],
             )
 
+        # 2c. Geo triangulation (Part III). A TERRITORY designation names a
+        # GEOGRAPHY, not a party — there is no name screen (the party-based stages
+        # above resolve to empty for it). Instead, collect location signals per
+        # account and surface every account the one-signal rule flags, into a
+        # totality dossier a human reads. Record-only, and stamped ONLY for a
+        # territory designation with at least one surfaced dossier — so every
+        # non-territory sweep's chain is byte-unchanged (the same conditional-stamp
+        # discipline as ownership_walk / proximity_ring / identity_review_rfi).
+        geo_dossiers: list[GeoDossier] = []
+        if designation.list_type == "territory":
+            # The versioned geo policy, once per territory run — mirroring the
+            # sweep / identity config stamps (the tenth anti-drift pair). Stamped
+            # only for a territory designation, so non-territory chains never
+            # carry it.
+            audit.append("remediation_sweep", "geo_config", detail=json.dumps(geo_config()))
+            geo_dossiers = run_geo_triangulation(conn, designation)
+            if geo_dossiers:
+                audit.append(
+                    "remediation_sweep", "geo_triangulation",
+                    target=designation.designation_id,
+                    detail=json.dumps({
+                        "territory": designation.designated_name,
+                        "surfaced": [
+                            {"uid": d.uid, "signals": d.signal_ids(),
+                             "vpn_slip": d.has_vpn_slip(),
+                             "counter_evidence": len(d.counter_evidence),
+                             "control_gaps": len(d.control_gaps)}
+                            for d in geo_dossiers],
+                        "note": "location signals indicate possible presence, never "
+                                "prove it; VPN is an obfuscation marker, not evidence; "
+                                "surfaced for human review",
+                    }),
+                    provenance=[p for d in geo_dossiers for p in d.provenance],
+                )
+
         # 3. Two-system hold reconciliation over the full ledger.
         gaps = verify_block_status(conn)
         audit.append(
@@ -443,6 +481,7 @@ def run_sweep(
             suppressed_escalations=suppressed,
             identity_rfis=identity_rfis,
             suppressed_identity_rfis=suppressed_identity_rfis,
+            geo_dossiers=geo_dossiers,
             out_dir=out_dir,
             audit_log_path=audit_path,
             audit_records=audit.read_all(),

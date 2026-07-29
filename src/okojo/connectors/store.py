@@ -44,6 +44,11 @@ TABLES: dict[str, str] = {
     "officer_appointments": "officer_appointments.csv",
     "relationships": "relationships.csv",
     "relationship_assertions": "relationship_assertions.csv",
+    "territory_profile": "territory_profile.csv",
+    "exclusive_carriers": "exclusive_carriers.csv",
+    "phone_registrations": "phone_registrations.csv",
+    "device_timezones": "device_timezones.csv",
+    "kyc_artifact_validity": "kyc_artifact_validity.csv",
 }
 
 

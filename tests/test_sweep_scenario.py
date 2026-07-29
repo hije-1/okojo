@@ -62,8 +62,9 @@ def test_designation_tables_written_with_expected_columns(data_dir):
     ]
     # Two domestic (Part I) + two foreign national-CT plants (Part I-B S2) +
     # two Part-II foreign name-only plants for variant screening (T1) + one
-    # Part-II corroboration name-collision plant (T2).
-    assert len(des) == 7
+    # Part-II corroboration name-collision plant (T2) + one Part-III TERRITORY
+    # designation (U1b geo triangulation).
+    assert len(des) == 8
     for did in des.designation_id:
         assert _DESIGNATION_ID_RE.fullmatch(did), did
 

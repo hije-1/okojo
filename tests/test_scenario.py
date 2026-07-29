@@ -32,6 +32,9 @@ ALL_TABLES = [
     "designation_identifiers.csv", "kyc_identity_attributes.csv",
     "beneficial_ownership.csv", "officer_appointments.csv",
     "relationships.csv", "relationship_assertions.csv",
+    "territory_profile.csv", "exclusive_carriers.csv",
+    "phone_registrations.csv", "device_timezones.csv",
+    "kyc_artifact_validity.csv",
     "ground_truth.json",
 ]
 

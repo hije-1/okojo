@@ -61,12 +61,16 @@ from .models import (
     Designation,
     DesignationIdentifier,
     DeviceLink,
+    DeviceTimezone,
+    ExclusiveCarrier,
     GasFund,
     IpLog,
     KycArtifact,
+    KycArtifactValidity,
     KycDoc,
     KycIdentityAttribute,
     OfficerAppointment,
+    PhoneRegistration,
     PriorRfi,
     RegistryRecord,
     Relationship,
@@ -74,6 +78,7 @@ from .models import (
     Rfi,
     SdnEntry,
     StaffRegister,
+    TerritoryProfile,
     Transaction,
     WarehouseHold,
 )
@@ -475,6 +480,47 @@ _T4_RING = [
     ("REL_DORMANT", "Sofia Zhukovsky", "offboarded", "shared_surname+relationship"),
     ("REL_CROSSHOLD", "Petra Novak", "active", "kyc_document_cross_holding"),
     ("STRANGER", "James Miller", "active", "none"),
+]
+
+# ---- Phase 8 Part III (U1b): geo-triangulation TERRITORY + personas --------- #
+# A TERRITORY designation (DES-2026-0008) names a fictional sanctioned region —
+# NOT a party — so there is no name screen; the sweep collects location signals
+# per account and triangulates. Everything here is SYNTHETIC and PM-eyeballed
+# (2026-07-29): "Qazrun Free Zone" is invented (no real occupied-territory name);
+# the carriers are invented (Veltrix replaced a name that collided with a real
+# provider); and the region/country codes QZ / XV are ISO user-assigned ranges,
+# named by NO advisory (so the shared advisory matcher is provably inert to them
+# — the RU-lesson isolation; PROVEN by the stash-a/b byte-identity check). Every
+# persona name's >=4-char tokens clear fuzz.ratio<88 vs the remark corpus (worst
+# 66.7), so the case tell miner is unpolluted. All RNG-free; personas appended
+# after every per-account loop, so every legacy CSV stays byte-identical.
+_GEO_TERRITORY_DID = "DES-2026-0008"
+_GEO_TERRITORY_CODE = "QZ"
+_GEO_COUNTRY_CODE = "XV"
+_GEO_TERRITORY_LABEL = "Qazrun Free Zone"
+_GEO_IP_TOKENS = ["Qazrun QZ", "Qazrun City"]     # geolocation substrings for the region
+_GEO_PHONE_PREFIXES = ["+99720", "+99721"]        # in-territory dialling prefixes
+_GEO_DECOY_PREFIX = "+99730"                       # look-alike, NOT a territory prefix
+_GEO_TIMEZONE = "Etc/GMT-8"
+_GEO_EXCLUSIVE_CARRIER = "Qazrun Telecom"          # operates ONLY inside the territory
+_GEO_GLOBAL_CARRIER = "Veltrix Cellular"           # a non-exclusive global carrier (never fires)
+# The reference date for expiry comparison is the sweep designation date; the
+# expired card's expiry is fixed well before it, the valid card's well after.
+_GEO_EXPIRED_EXPIRY = "2024-01-01"
+_GEO_VALID_EXPIRY = "2030-01-01"
+
+# The seven planted personas (P8-A exact set). ``role_in_ring`` ends in
+# "_review_subject" so the hold/KYC full-coverage test filters exclude them
+# automatically (they carry no hold rows, like every review-subject persona).
+# Each row: (key, name, residence, nationality, kyc_issuing, expected_surfaced).
+_GEO_PERSONAS = [
+    ("CLEAN",        "Nadia Brenner",    "AE", "AE", "AE", False),
+    ("SINGLE",       "Omar Feldt",       "AE", "AE", "AE", True),
+    ("RESIDENT",     "Yusuf Halden",     "QZ", "XV", "QZ", True),
+    ("VPN_CONFOUND", "Priya Vantol",     "QZ", "XV", "AE", True),
+    ("CARRIER_ONLY", "Tomas Redlin",     "AE", "AE", "AE", True),
+    ("DECOY",        "Greta Solvang",    "AE", "AE", "AE", False),
+    ("TRAVELLER",    "Emil Navarrete",   "AE", "XV", "AE", True),
 ]
 
 
@@ -1005,6 +1051,26 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="signal",
             listed_since=designation_date,
         ),
+        # ---- Part III (U1b): the TERRITORY designation --------------------- #
+        # Designates a fictional GEOGRAPHY (Qazrun Free Zone), not a party — so
+        # it carries NO on-chain addresses (the empty-address path, permitted for
+        # a territory) and there is no name screen. The sweep triangulates
+        # location signals per account instead. source_regime is a free label
+        # (deliberately NOT a LIST_SOURCE_REGISTRY key — adding a regime there
+        # would move sweep_config and force a SWEEP bump, which the rails forbid).
+        # The region's defining data lives in the territory_profile sibling.
+        Designation(
+            designation_id=_GEO_TERRITORY_DID,
+            designated_name=_GEO_TERRITORY_LABEL,
+            program="SYNTHETIC-TERRITORY-STYLE",
+            entity_type="territory",
+            designated_addresses="",
+            designation_date=designation_date,
+            source_regime="SYN-TERRITORY",
+            list_type="territory",
+            obligation_vs_signal="signal",
+            listed_since=designation_date,
+        ),
     ]
 
     # ---- sanctions-hold mock systems (warehouse feed vs. admin record) ---- #
@@ -1509,6 +1575,119 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         if data[4] == "possible_match_needs_human"
     }
 
+    # ---- Part III (U1b): geo-triangulation personas + sibling tables ------- #
+    # The seven planted personas for the TERRITORY designation, appended AFTER
+    # every per-account loop (so holds / KYC-artifacts / staff / exposure keys
+    # stay byte-identical) and carrying role "geo_review_subject" (excluded from
+    # the hold/KYC full-coverage filters, like every review-subject persona).
+    # Their location data lives in NEW sibling tables + additive ip_logs rows;
+    # no legacy CSV row changes. All RNG-free, fixed literals.
+    geo_uid: dict[str, int] = {}
+    phone_registrations: list[PhoneRegistration] = []
+    device_timezones: list[DeviceTimezone] = []
+    kyc_artifact_validity: list[KycArtifactValidity] = []
+    for key, name, residence, nationality, kyc_issuing, _surf in _GEO_PERSONAS:
+        guid = next_uid
+        next_uid += 1
+        gdoc = KycDoc(
+            kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+            holder_name=name, holder_dob="1988-07-11", issuing_country=kyc_issuing,
+        )
+        kyc_docs[gdoc.kyc_doc_id] = gdoc
+        accounts.append(Account(
+            uid=guid, entity_name=name, entity_type="individual",
+            role_in_ring="geo_review_subject", residence_country=residence,
+            nationality_country=nationality, kyc_doc_id=gdoc.kyc_doc_id,
+            registration_date="2023-06-15", vip_level="Regular",
+            prior_review_count=0, account_status="active",
+        ))
+        geo_uid[key] = guid
+
+    # Login IPs (additive ip_logs rows): a non-VPN territory IP is a location
+    # signal; a VPN IP is only an obfuscation marker; a territory IP bracketed by
+    # VPN use is a higher-value VPN-slip. Non-territory geolocations ("AE") never
+    # match the territory tokens.
+    # Timestamps sit WITHIN the simulation window (2024–2025), before every hold
+    # and designation date, so they never move the ledger's last-activity date
+    # (the date-coherence invariant: all activity predates the holds/designation).
+    _QZ_IP = f"{_GEO_TERRITORY_LABEL.split()[0]} City QZ"   # "Qazrun City QZ"
+    ip_logs.append(IpLog(geo_uid["CLEAN"], "203.0.113.11", "AE", False, "2025-06-05T09:00:00"))
+    ip_logs.append(IpLog(geo_uid["SINGLE"], "198.51.100.22", _QZ_IP, False, "2025-06-05T09:00:00"))
+    ip_logs.append(IpLog(geo_uid["RESIDENT"], "198.51.100.23", _QZ_IP, False, "2025-06-05T09:00:00"))
+    # VPN-confounded: every login is VPN (markers only; no location signal).
+    ip_logs.append(IpLog(geo_uid["VPN_CONFOUND"], "10.10.10.10", "VPN/unknown", True, "2025-06-02T08:00:00"))
+    ip_logs.append(IpLog(geo_uid["VPN_CONFOUND"], "10.10.10.11", "VPN/unknown", True, "2025-06-06T08:00:00"))
+    ip_logs.append(IpLog(geo_uid["CARRIER_ONLY"], "203.0.113.55", "AE", False, "2025-06-05T09:00:00"))
+    ip_logs.append(IpLog(geo_uid["DECOY"], "203.0.113.66", "AE", False, "2025-06-05T09:00:00"))
+    # Ambiguous traveller: VPN, then ONE territory IP in the gap (the slip), then
+    # VPN — the only positive signal, otherwise clean.
+    ip_logs.append(IpLog(geo_uid["TRAVELLER"], "10.20.30.40", "VPN/unknown", True, "2025-06-03T08:00:00"))
+    ip_logs.append(IpLog(geo_uid["TRAVELLER"], "198.51.100.77", _QZ_IP, False, "2025-06-05T09:00:00"))
+    ip_logs.append(IpLog(geo_uid["TRAVELLER"], "10.20.30.41", "VPN/unknown", True, "2025-06-07T08:00:00"))
+
+    # Phone data: a territory prefix and/or a region-exclusive carrier are
+    # signals. The carrier-only persona is on the exclusive carrier with a
+    # NON-territory prefix (carrier fires, prefix does not); the decoy shares that
+    # same look-alike prefix but on the non-exclusive carrier (nothing fires).
+    _P = _GEO_PHONE_PREFIXES
+    phone_registrations += [
+        PhoneRegistration(geo_uid["CLEAN"], "+9714", _GEO_GLOBAL_CARRIER),
+        PhoneRegistration(geo_uid["SINGLE"], "+9714", _GEO_GLOBAL_CARRIER),
+        PhoneRegistration(geo_uid["RESIDENT"], _P[0], _GEO_EXCLUSIVE_CARRIER),
+        PhoneRegistration(geo_uid["VPN_CONFOUND"], "+9714", _GEO_GLOBAL_CARRIER),
+        PhoneRegistration(geo_uid["CARRIER_ONLY"], _GEO_DECOY_PREFIX, _GEO_EXCLUSIVE_CARRIER),
+        PhoneRegistration(geo_uid["DECOY"], _GEO_DECOY_PREFIX, _GEO_GLOBAL_CARRIER),
+        PhoneRegistration(geo_uid["TRAVELLER"], "+9714", _GEO_GLOBAL_CARRIER),
+    ]
+
+    # Device timezones (a WEAK signal): the resident's clock is set to the
+    # territory timezone; the clean persona's to a non-territory zone (a
+    # scenario-level miss). Sibling table — no devices.csv row is added.
+    device_timezones += [
+        DeviceTimezone(f"geodev-{geo_uid['RESIDENT']}", geo_uid["RESIDENT"], _GEO_TIMEZONE),
+        DeviceTimezone(f"geodev-{geo_uid['CLEAN']}", geo_uid["CLEAN"], "Europe/London"),
+    ]
+
+    # KYC document validity + issuing geography (counter-evidence + staleness).
+    # The resident holds a residency card issued INSIDE the territory (not
+    # counter-evidence — the discrimination case). The traveller holds a foreign
+    # residency card that has EXPIRED: it argues against presence but with a
+    # degraded weight, and it raises a KYC-refresh control gap (the dual flag).
+    kyc_artifact_validity += [
+        KycArtifactValidity(geo_uid["RESIDENT"], "residency_card",
+                            _GEO_TERRITORY_CODE, _GEO_VALID_EXPIRY),
+        KycArtifactValidity(geo_uid["TRAVELLER"], "residency_card",
+                            "AE", _GEO_EXPIRED_EXPIRY),
+    ]
+
+    # The territory profile (what DES-0008 triangulates against) + the region's
+    # exclusive carrier registry. New sibling tables.
+    territory_profile = [
+        TerritoryProfile(
+            designation_id=_GEO_TERRITORY_DID,
+            territory_code=_GEO_TERRITORY_CODE, territory_label=_GEO_TERRITORY_LABEL,
+            country_code=_GEO_COUNTRY_CODE,
+            ip_tokens=";".join(_GEO_IP_TOKENS),
+            phone_prefixes=";".join(_GEO_PHONE_PREFIXES),
+            timezones=_GEO_TIMEZONE,
+        )
+    ]
+    exclusive_carriers = [
+        ExclusiveCarrier(territory_code=_GEO_TERRITORY_CODE, carrier=_GEO_EXCLUSIVE_CARRIER),
+    ]
+
+    # DEFINITIONAL geo answer keys (by construction). run_sweep + assemble_dossier
+    # recompute the surfaced set from the signals, so the eval is a real check.
+    # The one-signal rule surfaces exactly the personas flagged surfaced above;
+    # the discrimination sub-keys isolate the carrier-only, VPN-slip,
+    # counter-evidence, and decoy-precision cases.
+    geo_surfaced_uids = sorted(
+        geo_uid[k] for k, _n, _r, _nat, _kyc, surf in _GEO_PERSONAS if surf)
+    geo_carrier_only_uids = [geo_uid["CARRIER_ONLY"]]
+    geo_vpn_slip_uids = [geo_uid["TRAVELLER"]]
+    geo_counter_evidence_uids = [geo_uid["TRAVELLER"]]
+    geo_decoy_absent_uids = [geo_uid["DECOY"]]
+
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
         "readme": "Fabricated data. Labels below are the answer key for scoring Okojo's capabilities.",
@@ -1620,6 +1799,21 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         # same-surname decoy; the active stranger is excluded (dormancy is not
         # weighted). build_proximity_ring recomputes it independently.
         "proximity_ring_uids": proximity_ring_uids,
+        # Part III (U1b) geo-triangulation answer keys for the TERRITORY
+        # designation (DES-0008). ``geo_surfaced_uids`` is the exact set the
+        # one-signal rule surfaces (P8-A exact-set P/R/F1); the sub-keys isolate
+        # the discrimination cases: the carrier-only hit (fires on a
+        # region-exclusive carrier with an inconclusive prefix), the VPN-slip hit
+        # (a territory IP in a gap of otherwise-continuous VPN use — the ambiguous
+        # traveller), the counter-evidence holder (an expired foreign residency
+        # card, degraded), and the decoy that must NOT fire (a prefix look-alike
+        # not in the territory registry). Recomputed by assemble_dossier, so the
+        # eval is a real check, never circular.
+        "geo_surfaced_uids": geo_surfaced_uids,
+        "geo_carrier_only_uids": geo_carrier_only_uids,
+        "geo_vpn_slip_uids": geo_vpn_slip_uids,
+        "geo_counter_evidence_uids": geo_counter_evidence_uids,
+        "geo_decoy_absent_uids": geo_decoy_absent_uids,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -1646,6 +1840,11 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("officer_appointments.csv", officer_appointments)
     _write("relationships.csv", relationships)
     _write("relationship_assertions.csv", relationship_assertions)
+    _write("territory_profile.csv", territory_profile)
+    _write("exclusive_carriers.csv", exclusive_carriers)
+    _write("phone_registrations.csv", phone_registrations)
+    _write("device_timezones.csv", device_timezones)
+    _write("kyc_artifact_validity.csv", kyc_artifact_validity)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -1701,5 +1900,10 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "relationships": len(relationships),
         "relationship_assertions": len(relationship_assertions),
         "proximity_ring_total": sum(len(v) for v in proximity_ring_uids.values()),
+        "geo_personas": len(_GEO_PERSONAS),
+        "geo_surfaced_uids": len(geo_surfaced_uids),
+        "phone_registrations": len(phone_registrations),
+        "device_timezones": len(device_timezones),
+        "kyc_artifact_validity": len(kyc_artifact_validity),
     }
     return summary

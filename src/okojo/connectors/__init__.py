@@ -367,6 +367,54 @@ class Connectors:
             lambda r: r["assertion_id"],
         )
 
+    # -- geo triangulation (Phase 8 Part III) ------------------------------- #
+    def territory_profile_for(self, designation_id: str) -> Optional[Record]:
+        """The territory a TERRITORY designation triangulates against (its codes,
+        IP tokens, phone prefixes, and timezones)."""
+        recs = self._records(
+            "territory_profile",
+            "SELECT * FROM territory_profile WHERE designation_id = ?",
+            [designation_id],
+            lambda r: r["designation_id"],
+        )
+        return recs[0] if recs else None
+
+    def exclusive_carriers_for(self, territory_code: str) -> list[Record]:
+        """Carriers that operate ONLY inside a given territory."""
+        return self._records(
+            "exclusive_carriers",
+            "SELECT * FROM exclusive_carriers WHERE territory_code = ? ORDER BY carrier",
+            [territory_code],
+            lambda r: f"{r['territory_code']}:{r['carrier']}",
+        )
+
+    def phone_registrations_for(self, uid: int) -> list[Record]:
+        """The phone data (prefix + carrier) on file for an account."""
+        return self._records(
+            "phone_registrations",
+            "SELECT * FROM phone_registrations WHERE uid = ? ORDER BY phone_prefix, carrier",
+            [uid],
+            lambda r: f"uid:{r['uid']}:{r['phone_prefix']}",
+        )
+
+    def device_timezones_for(self, uid: int) -> list[Record]:
+        """The configured device timezone(s) for an account."""
+        return self._records(
+            "device_timezones",
+            "SELECT * FROM device_timezones WHERE uid = ? ORDER BY device_fingerprint",
+            [uid],
+            lambda r: f"{r['device_fingerprint']}:uid:{r['uid']}",
+        )
+
+    def kyc_artifact_validity_for(self, uid: int) -> list[Record]:
+        """The expiry + issuing geography of an account's KYC documents."""
+        return self._records(
+            "kyc_artifact_validity",
+            "SELECT * FROM kyc_artifact_validity WHERE uid = ? ORDER BY artifact_type",
+            [uid],
+            lambda r: f"uid:{r['uid']}:{r['artifact_type']}",
+        )
+
     # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""

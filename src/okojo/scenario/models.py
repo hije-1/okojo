@@ -252,6 +252,78 @@ class KycIdentityAttribute:
     doc_number: str
 
 
+# --------------------------------------------------------------------------- #
+# Phase 8 Part III (geo triangulation). A TERRITORY designation names a
+# geography, not a party — so there is no name screen; the sweep collects
+# location signals per account and triangulates. Everything below is a NEW
+# sibling table, so every existing CSV stays byte-identical (Q2/Q3 rulings).
+# All fields are fully synthetic (a fictional region, invented carriers, and
+# territory/country codes named by no advisory).
+# --------------------------------------------------------------------------- #
+
+
+@dataclass
+class TerritoryProfile:
+    """What DEFINES a synthetic sanctioned territory — the triangulation target
+    for one TERRITORY designation. Kept in its own sibling table so
+    ``designations.csv`` gains only a row (never a column). ``territory_code`` is
+    the region's own jurisdiction code (also usable as a residence jurisdiction
+    for in-region personas); ``country_code`` is the fictional parent country."""
+
+    designation_id: str
+    territory_code: str       # region jurisdiction code (fictional, advisory-inert)
+    territory_label: str      # invented region name
+    country_code: str         # fictional parent-country code (advisory-inert)
+    ip_tokens: str            # ';'-joined geolocation substrings that indicate the territory
+    phone_prefixes: str       # ';'-joined regional dialling prefixes
+    timezones: str            # ';'-joined IANA timezone(s)
+
+
+@dataclass
+class ExclusiveCarrier:
+    """A telecom carrier that operates ONLY inside a territory (the practitioner
+    addition): its presence on a number is a signal even when the dialling prefix
+    is inconclusive. Invented carrier names — none resembles a real provider."""
+
+    territory_code: str
+    carrier: str
+
+
+@dataclass
+class PhoneRegistration:
+    """The phone data on file for an account — its dialling prefix and carrier.
+    A NEW sibling table; only accounts with phone-relevant data carry a row."""
+
+    uid: int
+    phone_prefix: str
+    carrier: str
+
+
+@dataclass
+class DeviceTimezone:
+    """A device's configured timezone — the substrate for the (weak) device-
+    timezone signal. A NEW sibling table (``devices.csv`` byte-identical, Q3), so
+    the ``device_fingerprint`` here need not appear in ``devices.csv``."""
+
+    device_fingerprint: str
+    uid: int
+    timezone: str             # IANA timezone identifier
+
+
+@dataclass
+class KycArtifactValidity:
+    """Expiry + issuing geography for a KYC document, in a NEW sibling table so
+    ``kyc_artifacts.csv`` stays byte-identical (Q2). A residency/domicile document
+    issued OUTSIDE the territory is counter-evidence to presence; if expired its
+    counter-weight is degraded and a KYC-refresh control gap is raised. Expiry is
+    never read as evidence of presence."""
+
+    uid: int
+    artifact_type: str        # e.g. "residency_card"
+    issuing_geography: str    # ISO code / place of issue
+    expiry_date: str          # ISO date, or "" if none on file
+
+
 @dataclass
 class BeneficialOwnership:
     """A synthetic KYB beneficial-ownership edge (Phase 8 Part II T3).
