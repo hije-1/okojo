@@ -25,9 +25,11 @@ from ..config import REPO_ROOT
 from ..connectors import Connectors
 from ..identity import (
     VARIANT_MATCH_THRESHOLD,
+    OwnershipWalkResult,
     VariantNameMatch,
     identity_config,
     screen_name_variants,
+    walk_ownership,
 )
 from . import NAME_MATCH_THRESHOLD, sweep_config
 from .designation import (
@@ -49,6 +51,7 @@ class SweepResult:
     name_matches: list[DesignationNameMatch]
     variant_name_matches: list[VariantNameMatch]  # Part II: transliteration-variant hits
     corroboration: list[DecisionRecord]           # Part II: per-candidate corroboration decisions
+    ownership: OwnershipWalkResult                 # Part II T3: beneficial-owner + officer walk
     exposure: ExposureResult
     gaps: list[StatusGap]              # full-ledger reconciliation, uid order
     worksheet: list[WorksheetRow]      # triaged; grounded fail-closed
@@ -235,6 +238,46 @@ def run_sweep(
                             conn.designation_identifier_for(designation.designation_id).provenance],
             )
 
+        # 1c. Beneficial-owner + officer walk (Part II T3). Runs from the
+        # RESOLVED designated party/parties — the name/variant candidates the
+        # screen matched and corroboration did NOT dismiss (a same-name collision
+        # seeds no walk). Ownership/officer edges are a DISTINCT edge type: like
+        # gas edges they can never fabricate flow exposure. Record-only, and
+        # stamped ONLY where the walk produces a finding — a designation with no
+        # resolved corporate footprint adds no record and its chain is unchanged.
+        dismissed = {rec.evidence["candidate_uid"] for rec in corroboration
+                     if rec.outcome == "name_only_dismissed"}
+        resolved_parties = sorted(
+            ({m.uid for m in name_matches} | {m.uid for m in variant_matches})
+            - dismissed)
+        ownership = walk_ownership(conn, resolved_parties, designation.designation_date)
+        if not ownership.is_empty():
+            audit.append(
+                "remediation_sweep", "ownership_walk",
+                target=designation.designation_id,
+                detail=json.dumps({
+                    "resolved_parties": resolved_parties,
+                    "propagations": [
+                        {"company_uid": p.company_uid, "owner_uid": p.owner_uid,
+                         "ownership_pct": p.ownership_pct}
+                        for p in ownership.propagations],
+                    "fictitious_executives": [
+                        {"appointment_id": f.appointment_id, "company_uid": f.company_uid,
+                         "officer_name": f.officer_name}
+                        for f in ownership.fictitious_executives],
+                    "post_designation_control_changes": [
+                        {"appointment_id": c.appointment_id, "company_uid": c.company_uid,
+                         "changed_date": c.changed_date}
+                        for c in ownership.control_changes],
+                    "note": "ownership/officer edges are review-only; they carry "
+                            "no flow exposure",
+                }),
+                provenance=[p for f in (list(ownership.propagations)
+                                        + list(ownership.fictitious_executives)
+                                        + list(ownership.control_changes))
+                            for p in f.provenance],
+            )
+
         # 2. Full-ledger exposure walk from the designated address set.
         exposure = sweep_exposure(conn, list(designation.designated_addresses))
         audit.append(
@@ -323,6 +366,7 @@ def run_sweep(
             name_matches=name_matches,
             variant_name_matches=variant_matches,
             corroboration=corroboration,
+            ownership=ownership,
             exposure=exposure,
             gaps=gaps,
             worksheet=worksheet,
