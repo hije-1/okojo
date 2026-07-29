@@ -131,9 +131,10 @@ sanctioned exposure but no flow to the *newly designated* addresses is excluded
 (no replay of an old answer key); a privileged/internal tag is flagged for
 review, never obeyed. Try it from the sidebar **"Designation sweep"** mode.
 
-> **Status:** the flow sweep (Phase 8, Part I) is built and demoed;
-> identity-resolution, geographic-triangulation, and counterparty-lifecycle
-> extensions are the remaining Phase-8 parts before the capstone signs off.
+> **Status:** the flow sweep (Phase 8, Part I), cross-list early warning
+> (Part I-B), and identity resolution (Part II) are built and public;
+> geographic triangulation (Part III) is underway and the counterparty-lifecycle
+> extension (Part IV) is planned before the capstone signs off.
 
 ---
 
@@ -287,8 +288,15 @@ noticed — building the Timeline as an actual chronology surfaced the
 impossibility in seconds. Views that make data *legible* are themselves a
 verification tool, not cosmetics.
 
-**Next (Phase 8):** the Designation-Triggered Remediation Sweep — component 9,
-the v1.0 capstone.
+**Phase 8 (in progress):** the Designation-Triggered Remediation Sweep —
+component 9, the v1.0 capstone — is being built in parts. Parts I (flow sweep),
+I-B (cross-list early warning + calibrated designations), and II (identity
+resolution — variant-aware screening, corroboration, beneficial-owner and
+proximity walks, and an identity-review RFI) are **complete and public**. Part
+III (geographic triangulation) is **underway**: the six-signal triangulation and
+the totality-driven proposal decision are built and evaluated; the plain-language
+UI is still to come. Part IV (counterparty lifecycle) is planned before the
+capstone signs off.
 
 **Roadmap (post-v1.0):** the Audit Narrator (a grounded summarizer over the
 system's own audit log — making the tamper-evident trail *reviewable*, not just
