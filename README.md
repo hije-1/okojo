@@ -8,22 +8,17 @@
 > portfolio-ready. Fully synthetic data, built in the open. Details in
 > [Status & roadmap](#status--roadmap).
 
-## The problem
+## The Problem
 
-Financial-crime investigation at a crypto exchange fails in well-documented
-ways. Investigators write **defensive SARs** — narratives assembled under
-deadline from whatever a dozen disconnected systems would surrender, thin on
-the on-chain story a regulator actually wants. Reviews run **account by
-account** while the risk lives at the **cluster level** — the shell ring, the
-shared device, the wallet whose gas someone else quietly pays. And the record
-of who looked at what, and why a case was closed, lives in systems that the
-documented failure mode — **governance capture**, where "internal account"
-tags shield subjects and records go missing — was able to defeat.
+Financial-crime investigators at crypto exchanges do demanding work well, and largely in spite of the infrastructure around them. The tooling, not the talent, fails in three well-documented ways.
 
-Okojo is a research prototype exploring how an agentic AI co-pilot addresses
-all three, built the way a regulator would want it built: every factual claim
-carries a provenance pointer, every action lands in a tamper-evident audit
-trail, and a human — always — reviews, decides, and files.
+The systems don't talk to each other. The on-chain side is the easy half: the blockchain is public, and any investigator with a proper tracing tool can follow it. The half only the exchange holds is what fragments. KYC files, login and device records, free-text remarks, and internal transfers that never touch the chain sit in a dozen disconnected systems. The narrative a regulator wants is the join between those two halves, and today the internal half gets stitched together by hand under deadline.
+
+The tooling reviews accounts one at a time, while the risk lives at the cluster level: the shell ring, the shared device, the wallet whose gas someone else quietly pays. An investigator who wants the network view has to build it manually, when there's time, from systems that were never designed to show it.
+
+And the record of who looked at what, and why a case was closed, is only as trustworthy as the controls around it. The documented failure mode here is governance capture: "internal account" tags that shield subjects, records that go missing. No amount of investigator diligence can defend against that when the record-keeping itself has no tamper-evident home.
+
+Okojo is a research prototype exploring how an agentic AI co-pilot gives investigators infrastructure that carries its share of the load, built the way a regulator would want it built: every factual claim carries a provenance pointer, every action lands in a tamper-evident audit trail, and a human always reviews, decides, and files.
 
 ## What it does
 
