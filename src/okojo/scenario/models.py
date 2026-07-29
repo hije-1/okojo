@@ -253,6 +253,47 @@ class KycIdentityAttribute:
 
 
 @dataclass
+class BeneficialOwnership:
+    """A synthetic KYB beneficial-ownership edge (Phase 8 Part II T3).
+
+    One row per (owner, company) ownership stake. Kept in its own sibling table
+    so every existing CSV stays byte-identical (Decision R4). ``ownership_pct`` is
+    a fraction in [0, 1]; designation status propagates through this edge to the
+    company only at or above the published ``OWNERSHIP_CONTROL_THRESHOLD``
+    (majority control, principle level). An ownership edge is a DISTINCT edge
+    type: like a gas-funding edge, it can never fabricate on-chain flow exposure
+    — it surfaces control/status for review only. ``as_of_date`` dates the stake
+    (an ownership change dated after a designation is a control-change signal)."""
+
+    owner_uid: int
+    company_uid: int
+    ownership_pct: float       # fraction in [0, 1]
+    as_of_date: str            # ISO date the stake was recorded
+
+
+@dataclass
+class OfficerAppointment:
+    """A synthetic corporate officer appointment (Phase 8 Part II T3).
+
+    A sibling table to ``registry.csv`` (kept byte-identical, R4) carrying the
+    officer/operator structure the ownership walk reads. ``officer_uid`` is the
+    scenario ground-truth join key when the officer resolves to a customer
+    account; a name-only appointment (``officer_uid`` empty, ``officer_name``
+    set) is how a company can name an officer with no resolvable identity
+    footprint — the FICTITIOUS-EXECUTIVE pattern the walk flags. ``appointed_date``
+    dated shortly after a designation is the POST-DESIGNATION CONTROL-CHANGE
+    pattern. Both are surfaced for REVIEW; neither ever moves on-chain exposure."""
+
+    appointment_id: str
+    company_uid: int
+    officer_uid: str           # "" == name-only (no resolvable account)
+    officer_name: str
+    role: str                  # e.g. "director" | "secretary"
+    appointed_date: str        # ISO date
+    resigned_date: str         # "" == currently serving
+
+
+@dataclass
 class PriorRfi:
     """An earlier RFI answer from the same subject.
 

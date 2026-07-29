@@ -73,6 +73,11 @@ class GroundingResolver:
         add(conn.admin_holds())
         add(conn.kyc_artifacts())
         add(conn.staff_register())
+        # Part II T3/T4: the identity-resolution walks cite these sibling tables.
+        # Inert for every case claim (no case claim cites them); a superset for
+        # the sweep's ownership walk and proximity ring.
+        add(conn.beneficial_ownership())
+        add(conn.officer_appointments())
         self._valid = valid
 
     def resolves(self, prov: Provenance) -> bool:

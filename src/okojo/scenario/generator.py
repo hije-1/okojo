@@ -57,6 +57,7 @@ from .models import (
     Account,
     Address,
     AdminHold,
+    BeneficialOwnership,
     Designation,
     DesignationIdentifier,
     DeviceLink,
@@ -65,6 +66,7 @@ from .models import (
     KycArtifact,
     KycDoc,
     KycIdentityAttribute,
+    OfficerAppointment,
     PriorRfi,
     RegistryRecord,
     Rfi,
@@ -423,6 +425,36 @@ _CORROBORATION_CUSTOMER_KYC = {
     "DES-2026-0006": ("PASSPORT", "P-AE-660021"),
     "DES-2026-0007": ("PASSPORT", "P-AE-770033"),
 }
+
+# ---- Phase 8 Part II (T3): beneficial-owner + officer walk plants ----------- #
+# Hung off the DES-2026-0005 resolved true-hit (the corroborated Zhukovsky
+# customer) — the walk runs from a party the screen matched AND corroboration did
+# not dismiss. All accounts here are NEW, non-transacting company/officer
+# personas appended AFTER every per-account loop, so holds / KYC-artifacts /
+# staff tables stay byte-identical. Company names are DISTINCT from every
+# designated name, so the variant screen never spuriously matches them. RNG-free.
+# INVENTED names (no source provenance). The party's uid is resolved at gen time.
+_T3_PARTY_DID = "DES-2026-0005"
+# Two companies the party beneficially owns: one AT/above the 0.50 control
+# threshold (propagates), one below (does NOT — the discrimination trap).
+#   (key, company_name, ownership_pct, as_of_date)
+# Names are INVENTED and deliberately token-distinctive: none of their >=4-char
+# tokens collide with any transaction-remark word, so the case tell miner's
+# distinctive-token set is unpolluted and every case scorecard stays byte-identical
+# (a generic token like "Trade" would match the "trade" remark — the additive-name
+# landmine, verified against the remark corpus before use).
+_T3_COMPANIES = [
+    ("CO_PROP", "Halcyon Nominees Ltd", 0.60, "2024-04-01"),
+    ("CO_BELOW", "Verdanova Estates Ltd", 0.30, "2024-04-01"),
+]
+# The fictitious executive: a name-only officer of record whose INVENTED name
+# matches no account and no KYC holder — no resolvable identity footprint.
+_T3_FICTITIOUS_OFFICER = "Reinhardt Voss"
+# The incoming post-designation director: a NEW footprinted officer persona whose
+# appointment postdates the designation (the control-change trap). Appointed
+# 2026-02-15 — 16 days after the 2026-01-30 designation date.
+_T3_POST_OFFICER = ("POST_DIRECTOR", "Dana Krieg")
+_T3_POST_APPOINTED = "2026-02-15"
 
 
 def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
@@ -1265,6 +1297,93 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     identity_subject_attrs.append(
         (collision_uid, "1984-05-14", col_country, col_doc_type, col_doc_number))
 
+    # ---- Part II (T3): beneficial-owner + officer walk personas + tables --- #
+    # NEW company + officer personas hung off the DES-2026-0005 resolved party,
+    # appended here (after every per-account loop) so holds / KYC-artifacts /
+    # staff tables stay byte-identical. Company names are DISTINCT from every
+    # designated name, so the variant screen never spuriously matches them.
+    # beneficial_ownership.csv + officer_appointments.csv are NEW sibling tables
+    # (registry.csv byte-identical). All RNG-free; INVENTED names.
+    from ..identity import OWNERSHIP_CONTROL_THRESHOLD
+    t3_party_uid = identity_customer_uid[_T3_PARTY_DID]
+    t3_company_uid: dict[str, int] = {}
+    for key, cname, _pct, _asof in _T3_COMPANIES:
+        cuid = next_uid
+        next_uid += 1
+        cdoc = KycDoc(
+            kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="ID_CARD",
+            holder_name=cname, holder_dob="", issuing_country="AE",
+        )
+        kyc_docs[cdoc.kyc_doc_id] = cdoc
+        accounts.append(Account(
+            uid=cuid, entity_name=cname, entity_type="company",
+            role_in_ring="ownership_review_subject", residence_country="AE",
+            nationality_country="AE", kyc_doc_id=cdoc.kyc_doc_id,
+            registration_date="2023-06-15", vip_level="Regular",
+            prior_review_count=0, account_status="active",
+        ))
+        t3_company_uid[key] = cuid
+    # The incoming post-designation director (a NEW footprinted officer persona).
+    _post_key, post_name = _T3_POST_OFFICER
+    post_officer_uid = next_uid
+    next_uid += 1
+    post_doc = KycDoc(
+        kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+        holder_name=post_name, holder_dob="1981-09-30", issuing_country="AE",
+    )
+    kyc_docs[post_doc.kyc_doc_id] = post_doc
+    accounts.append(Account(
+        uid=post_officer_uid, entity_name=post_name, entity_type="individual",
+        role_in_ring="ownership_review_subject", residence_country="AE",
+        nationality_country="AE", kyc_doc_id=post_doc.kyc_doc_id,
+        registration_date="2023-06-15", vip_level="Regular",
+        prior_review_count=0, account_status="active",
+    ))
+
+    co_prop = t3_company_uid["CO_PROP"]
+    party_name = next(a.entity_name for a in accounts if a.uid == t3_party_uid)
+    beneficial_ownership = [
+        BeneficialOwnership(owner_uid=t3_party_uid, company_uid=t3_company_uid[key],
+                            ownership_pct=pct, as_of_date=asof)
+        for key, _cname, pct, asof in _T3_COMPANIES
+    ]
+    # Officer appointments on CO_PROP. Four rows realize the two detectors and
+    # their discrimination cases (dates vs the 2026-01-30 designation date):
+    #  OFF-0001 real footprint, pre-designation      -> neither flag
+    #  OFF-0002 name-only INVENTED, no footprint      -> FICTITIOUS EXECUTIVE
+    #  OFF-0003 footprinted, appointed post-designation -> POST-DESIGNATION CONTROL CHANGE
+    #  OFF-0004 name-only but its name resolves to an account -> has footprint (NOT fictitious)
+    officer_appointments = [
+        OfficerAppointment(
+            appointment_id="OFF-2026-0001", company_uid=co_prop,
+            officer_uid=str(t3_party_uid), officer_name=party_name,
+            role="director", appointed_date="2024-05-10", resigned_date="",
+        ),
+        OfficerAppointment(
+            appointment_id="OFF-2026-0002", company_uid=co_prop,
+            officer_uid="", officer_name=_T3_FICTITIOUS_OFFICER,
+            role="director", appointed_date="2024-08-01", resigned_date="",
+        ),
+        OfficerAppointment(
+            appointment_id="OFF-2026-0003", company_uid=co_prop,
+            officer_uid=str(post_officer_uid), officer_name=post_name,
+            role="director", appointed_date=_T3_POST_APPOINTED, resigned_date="",
+        ),
+        OfficerAppointment(
+            appointment_id="OFF-2026-0004", company_uid=co_prop,
+            officer_uid="", officer_name=party_name,
+            role="secretary", appointed_date="2024-06-01", resigned_date="",
+        ),
+    ]
+    # DEFINITIONAL T3 answer keys — the intended dispositions, recomputed
+    # independently by walk_ownership from the two tables, so the eval is a real
+    # check, never circular. Propagation is gated by OWNERSHIP_CONTROL_THRESHOLD.
+    ownership_propagated_uids = sorted(
+        t3_company_uid[key] for key, _c, pct, _a in _T3_COMPANIES
+        if pct >= OWNERSHIP_CONTROL_THRESHOLD)
+    fictitious_executive_flags = ["OFF-2026-0002"]
+    post_designation_control_changes = ["OFF-2026-0003"]
+
     # ---- Part II (T2): the two new corroboration tables + answer keys ------ #
     # designation_identifiers.csv: what the FOREIGN list published for each
     # identity designation's designated party. kyc_identity_attributes.csv: the
@@ -1390,6 +1509,17 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         # identity tables, so the eval is a real check, never circular.
         "corroboration_outcomes": corroboration_outcomes,
         "corroboration_dismissal_reasons": corroboration_dismissal_reasons,
+        # Part II (T3) beneficial-owner + officer walk answer keys, all hung off
+        # the DES-2026-0005 resolved party. ``ownership_propagated_uids`` are the
+        # companies owned at/above OWNERSHIP_CONTROL_THRESHOLD (review-tier
+        # "owned/controlled by a designated party"; the below-threshold company
+        # is excluded — the discrimination trap). ``fictitious_executive_flags``
+        # is the name-only officer with no resolvable identity footprint;
+        # ``post_designation_control_changes`` is the appointment dated after the
+        # designation. All recomputed independently by walk_ownership.
+        "ownership_propagated_uids": ownership_propagated_uids,
+        "fictitious_executive_flags": fictitious_executive_flags,
+        "post_designation_control_changes": post_designation_control_changes,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -1412,6 +1542,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("staff_register.csv", staff_register)
     _write("designation_identifiers.csv", designation_identifiers)
     _write("kyc_identity_attributes.csv", kyc_identity_attributes)
+    _write("beneficial_ownership.csv", beneficial_ownership)
+    _write("officer_appointments.csv", officer_appointments)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -1461,5 +1593,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "designation_identifiers": len(designation_identifiers),
         "kyc_identity_attributes": len(kyc_identity_attributes),
         "corroboration_dismissals": len(corroboration_dismissal_reasons),
+        "beneficial_ownership": len(beneficial_ownership),
+        "officer_appointments": len(officer_appointments),
+        "ownership_propagated_uids": len(ownership_propagated_uids),
     }
     return summary

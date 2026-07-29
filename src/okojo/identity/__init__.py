@@ -191,6 +191,13 @@ from .variants import (  # noqa: E402
     expand_name_variants,
     screen_name_variants,
 )
+from .ownership import (  # noqa: E402
+    ControlChangeFlag,
+    FictitiousExecutiveFlag,
+    OwnershipPropagation,
+    OwnershipWalkResult,
+    walk_ownership,
+)
 
 __all__ = [
     "IDENTITY_VERSION",
@@ -202,4 +209,9 @@ __all__ = [
     "VariantNameMatch",
     "expand_name_variants",
     "screen_name_variants",
+    "OwnershipWalkResult",
+    "OwnershipPropagation",
+    "FictitiousExecutiveFlag",
+    "ControlChangeFlag",
+    "walk_ownership",
 ]

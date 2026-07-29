@@ -315,6 +315,41 @@ class Connectors:
         )
         return recs[0] if recs else None
 
+    # -- KYB ownership / officers (Phase 8 Part II T3) ---------------------- #
+    def beneficial_ownership(self) -> list[Record]:
+        """Beneficial-ownership edges (owner -> company, with stake)."""
+        return self._records(
+            "beneficial_ownership",
+            "SELECT * FROM beneficial_ownership ORDER BY owner_uid, company_uid", [],
+            lambda r: f"owner:{r['owner_uid']}:company:{r['company_uid']}",
+        )
+
+    def beneficial_ownership_for(self, company_uid: int) -> list[Record]:
+        """Ownership stakes in a given company."""
+        return self._records(
+            "beneficial_ownership",
+            "SELECT * FROM beneficial_ownership WHERE company_uid = ? "
+            "ORDER BY owner_uid", [company_uid],
+            lambda r: f"owner:{r['owner_uid']}:company:{r['company_uid']}",
+        )
+
+    def officer_appointments(self) -> list[Record]:
+        """Corporate officer appointments (the officer/operator structure)."""
+        return self._records(
+            "officer_appointments",
+            "SELECT * FROM officer_appointments ORDER BY appointment_id", [],
+            lambda r: r["appointment_id"],
+        )
+
+    def officers_of(self, company_uid: int) -> list[Record]:
+        """Officer appointments naming a given company."""
+        return self._records(
+            "officer_appointments",
+            "SELECT * FROM officer_appointments WHERE company_uid = ? "
+            "ORDER BY appointment_id", [company_uid],
+            lambda r: r["appointment_id"],
+        )
+
     # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""

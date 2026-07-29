@@ -57,7 +57,7 @@ def test_hold_accessors_cover_every_account(conn):
     # Part-II identity-review subjects are name-screen-only personas with no hold
     # rows by design (additive-only rule), so they are outside this set.
     uids = {a["uid"] for a in conn.all_accounts()
-            if a["role_in_ring"] != "identity_review_subject"}
+            if not str(a["role_in_ring"]).endswith("_review_subject")}
     for rows, source in ((conn.warehouse_holds(), "sanctions_hold_warehouse"),
                          (conn.admin_holds(), "sanctions_hold_admin")):
         assert {r["uid"] for r in rows} == uids

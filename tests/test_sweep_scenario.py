@@ -242,7 +242,7 @@ def test_hold_tables_cover_every_account_exactly_once(data_dir, accounts):
     # track. The Part-II identity-review subjects are name-screen-only personas
     # with no on-chain/hold footprint (they carry no holds by design, per the
     # additive-only rule), so they are outside the reconciliation set.
-    tracked = sorted(accounts[accounts.role_in_ring != "identity_review_subject"].uid)
+    tracked = sorted(accounts[~accounts.role_in_ring.str.endswith("_review_subject")].uid)
     wh = pd.read_csv(data_dir / "sanctions_hold_warehouse.csv")
     adm = pd.read_csv(data_dir / "sanctions_hold_admin.csv")
     for table in (wh, adm):
@@ -317,7 +317,7 @@ def test_kyc_artifacts_full_coverage_with_single_planted_gap(data_dir, accounts,
     # each carry two), so every account appears exactly twice. The Part-II
     # identity-review subjects are name-screen-only personas with no KYC-artifact
     # footprint (additive-only rule), so they are outside this coverage set.
-    tracked = sorted(accounts[accounts.role_in_ring != "identity_review_subject"].uid)
+    tracked = sorted(accounts[~accounts.role_in_ring.str.endswith("_review_subject")].uid)
     counts = kyc.groupby("uid").size()
     assert set(counts.unique()) == {2}
     assert sorted(counts.index) == tracked

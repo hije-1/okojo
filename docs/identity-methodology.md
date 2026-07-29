@@ -99,6 +99,37 @@ own pinned policy parameter, and a tripwire test asserts it equals the sweep's
 bar than the direct screen it sharpens. Intentional divergence must be argued
 through an `IDENTITY_VERSION` bump, never drift in.
 
+## 2.4 Beneficial-owner + officer walk (T3)
+
+Once a designated party is *resolved* to a customer (matched by the screen and
+**not dismissed** by corroboration), the walk follows the synthetic KYB ownership
+and officer structure around it and surfaces three REVIEW-tier findings, each
+grounded in the row it cites:
+
+- **Ownership propagation.** Designation status propagates to a company owned by
+  the resolved party **at or above `ownership_control_threshold` (0.50)** —
+  surfaced as *owned/controlled by a designated party*. A stake **below** the
+  threshold does not propagate. The threshold is a tunable policy parameter
+  stated at **principle level** (majority-ownership control); no statute is
+  cited.
+- **Fictitious executive.** An officer of record with **no resolvable identity
+  footprint** — a name-only appointment whose name matches no customer account
+  and no KYC holder — is flagged. An officer whose uid resolves to an account, or
+  whose name matches a real account, has a footprint and is **not** flagged.
+- **Post-designation control change.** An officer appointment (or ownership
+  record) dated **after** the designation is flagged as a control change that
+  postdates the designation event — the same date-vs-designation discipline the
+  sweep already uses for exposure timing. A change dated **before** the
+  designation is not flagged.
+
+**Ownership and officer edges are a DISTINCT edge type.** Exactly like a
+gas-funding edge, they can never fabricate on-chain flow exposure: the walk
+returns review findings and their provenance only, never a tainted amount, and a
+test asserts the propagation adds **zero USDT**. A party corroboration *dismissed*
+as a same-name collision seeds no walk. The walk is stamped into the sweep's audit
+chain only where it produces a finding, so a designation with no resolved
+corporate footprint leaves its chain byte-unchanged.
+
 ## 3. Production posture (vendor-agnostic)
 
 In a real deployment, the variant-matching layer above is the piece an
