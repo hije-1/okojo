@@ -130,6 +130,36 @@ as a same-name collision seeds no walk. The walk is stamped into the sweep's aud
 chain only where it produces a finding, so a designation with no resolved
 corporate footprint leaves its chain byte-unchanged.
 
+## 2.5 Proximity ring (T4)
+
+Around a *resolved* designated party (an individual the screen matched and
+corroboration did not dismiss), the proximity layer surfaces the ring of
+relatives and close associates for **REVIEW — never exposure, and never asserted
+kinship.** Kinship is a **correlational signal the system surfaces with its
+evidence**; a human decides. Every ring statement stays in calibrated language
+(*candidate* / *possible* / *shares*), never "is the sister of".
+
+- **Primary signals** (surface a candidate into the ring): a shared
+  surname/patronymic token, declared-relationship metadata on file, a
+  relationship-asserting remark, or a KYC-document cross-holding (one party's
+  identity document inside another's account).
+- **Weighting signals** (add evidence to an already-surfaced candidate, never
+  surface one alone — "shared surname *weighted by* shared KYC attributes"): a
+  shared KYC attribute (address / contact) or a shared email-handle pattern.
+  **Non-distinctive placeholder values are ignored**, so a value shared by
+  construction across synthetic subjects can never fabricate a weight.
+
+**Not weighted by activity volume — dormancy is not innocence.** A dormant,
+densely-linked account surfaces exactly as loudly as an active one, while an
+active but unconnected stranger does not surface at all. The **shared-device**
+registry signal is deliberately *not* re-evaluated here: device linkage is
+already surfaced by the sweep's exposure/adjacency walk, so the proximity layer
+adds only the kinship signals that walk does not cover, and accounts already
+surfaced as exposed or adjacent are excluded (the ring is the *otherwise-
+unconnected* associates). The ring carries **zero flow exposure** (asserted), is
+stamped into the sweep chain only where non-empty, and — like the ownership walk
+— never runs for a party corroboration dismissed as a same-name collision.
+
 ## 3. Production posture (vendor-agnostic)
 
 In a real deployment, the variant-matching layer above is the piece an

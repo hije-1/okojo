@@ -69,6 +69,8 @@ from .models import (
     OfficerAppointment,
     PriorRfi,
     RegistryRecord,
+    Relationship,
+    RelationshipAssertion,
     Rfi,
     SdnEntry,
     StaffRegister,
@@ -455,6 +457,25 @@ _T3_FICTITIOUS_OFFICER = "Reinhardt Voss"
 # 2026-02-15 — 16 days after the 2026-01-30 designation date.
 _T3_POST_OFFICER = ("POST_DIRECTOR", "Dana Krieg")
 _T3_POST_APPOINTED = "2026-02-15"
+
+# ---- Phase 8 Part II (T4): proximity-ring plants ---------------------------- #
+# Relatives/associates of the DES-2026-0005 resolved party (Evgenii Zhukovsky),
+# surfaced for REVIEW (never exposure, never asserted kinship). NEW, non-
+# transacting individual personas appended after every per-account loop; INVENTED,
+# token-distinctive names (no remark collision). Each demonstrates a distinct
+# primary signal, plus the two binding traps:
+#   * a DORMANT relative (offboarded) surfaces as loudly as an active one;
+#   * an ACTIVE unrelated stranger is NOT surfaced (dormancy is not weighted).
+# The existing DES-0005 same-surname decoy (Dmitri Zhukovsky) is ALSO surfaced by
+# the shared-surname signal — the T1 variant-decoy (correctly not a name-variant
+# MATCH to the designation) is a legitimate proximity associate under the DISTINCT
+# proximity layer; the two layers do different jobs.
+#   (key, name, account_status, signal)
+_T4_RING = [
+    ("REL_DORMANT", "Sofia Zhukovsky", "offboarded", "shared_surname+relationship"),
+    ("REL_CROSSHOLD", "Petra Novak", "active", "kyc_document_cross_holding"),
+    ("STRANGER", "James Miller", "active", "none"),
+]
 
 
 def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
@@ -1229,6 +1250,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     identity_variant_matches: dict[str, list[int]] = {}
     identity_variant_decoy_uids: list[int] = []
     identity_customer_uid: dict[str, int] = {}   # did -> matched customer uid
+    identity_decoy_uid: dict[str, int] = {}      # did -> same-surname decoy uid (T4)
     # (uid, dob, nationality, doc_type, doc_number) for every identity subject —
     # the substrate for kyc_identity_attributes.csv (Part II T2).
     identity_subject_attrs: list[tuple[int, str, str, str, str]] = []
@@ -1271,6 +1293,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         identity_variant_matches[did] = [cust_uid]
         identity_customer_uid[did] = cust_uid
         identity_variant_decoy_uids.append(decoy_uid)
+        identity_decoy_uid[did] = decoy_uid
     identity_variant_decoy_uids = sorted(identity_variant_decoy_uids)
 
     # ---- Part II (T2): the corroboration name-COLLISION customer ----------- #
@@ -1383,6 +1406,62 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         if pct >= OWNERSHIP_CONTROL_THRESHOLD)
     fictitious_executive_flags = ["OFF-2026-0002"]
     post_designation_control_changes = ["OFF-2026-0003"]
+
+    # ---- Part II (T4): proximity-ring personas + tables + answer key ------- #
+    # Relatives/associates of the DES-2026-0005 resolved party, appended here
+    # (after every per-account loop) so all hold/KYC/staff tables stay byte-
+    # identical. relationships.csv + relationship_assertions.csv are NEW sibling
+    # tables (remark/registry surfaces byte-identical). All RNG-free.
+    t4_party_uid = identity_customer_uid[_T3_PARTY_DID]
+    t4_ring_uid: dict[str, int] = {}
+    for key, name, status, _signal in _T4_RING:
+        ruid = next_uid
+        next_uid += 1
+        rdoc = KycDoc(
+            kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+            holder_name=name, holder_dob="1986-02-20", issuing_country="AE",
+        )
+        kyc_docs[rdoc.kyc_doc_id] = rdoc
+        accounts.append(Account(
+            uid=ruid, entity_name=name, entity_type="individual",
+            role_in_ring="proximity_review_subject", residence_country="AE",
+            nationality_country="AE", kyc_doc_id=rdoc.kyc_doc_id,
+            registration_date="2023-06-15", vip_level="Regular",
+            prior_review_count=0, account_status=status,
+        ))
+        t4_ring_uid[key] = ruid
+    sofia_uid = t4_ring_uid["REL_DORMANT"]
+    petra_uid = t4_ring_uid["REL_CROSSHOLD"]
+    # Declared-relationship metadata + relationship-asserting artifacts. The
+    # dormant relative carries a declared sibling relationship AND a relationship
+    # remark; the cross-holding associate carries a KYC-document cross-holding.
+    relationships = [
+        Relationship(uid_a=t4_party_uid, uid_b=sofia_uid, declared_relationship="sibling"),
+    ]
+    relationship_assertions = [
+        RelationshipAssertion(
+            assertion_id="RA-2026-0001", subject_uid=t4_party_uid, related_uid=sofia_uid,
+            assertion_type="relationship_remark",
+            detail="an account remark refers to the two as family members",
+        ),
+        RelationshipAssertion(
+            assertion_id="RA-2026-0002", subject_uid=t4_party_uid, related_uid=petra_uid,
+            assertion_type="kyc_document_cross_holding",
+            detail="a copy of the designated party's identity document is held in "
+                   "this account's onboarding file",
+        ),
+    ]
+    # DEFINITIONAL proximity answer key, per designation with a resolved
+    # INDIVIDUAL party that has surname/relationship associates. DES-0005: the two
+    # planted relatives PLUS the existing same-surname decoy (Dmitri Zhukovsky);
+    # the active STRANGER (James Miller) is deliberately EXCLUDED. DES-0006: the
+    # El-Sayegh surname decoy (Khalid), surfaced for its resolved needs-human
+    # party. build_proximity_ring recomputes both, so the eval is a real check.
+    proximity_ring_uids = {
+        _T3_PARTY_DID: sorted([sofia_uid, petra_uid,
+                               identity_decoy_uid[_T3_PARTY_DID]]),
+        "DES-2026-0006": [identity_decoy_uid["DES-2026-0006"]],
+    }
 
     # ---- Part II (T2): the two new corroboration tables + answer keys ------ #
     # designation_identifiers.csv: what the FOREIGN list published for each
@@ -1520,6 +1599,12 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "ownership_propagated_uids": ownership_propagated_uids,
         "fictitious_executive_flags": fictitious_executive_flags,
         "post_designation_control_changes": post_designation_control_changes,
+        # Part II (T4) proximity-ring answer key: per designation with a resolved
+        # individual party, the relatives/associates surfaced for REVIEW (never
+        # exposure). DES-0005 carries the two planted relatives plus the existing
+        # same-surname decoy; the active stranger is excluded (dormancy is not
+        # weighted). build_proximity_ring recomputes it independently.
+        "proximity_ring_uids": proximity_ring_uids,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -1544,6 +1629,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("kyc_identity_attributes.csv", kyc_identity_attributes)
     _write("beneficial_ownership.csv", beneficial_ownership)
     _write("officer_appointments.csv", officer_appointments)
+    _write("relationships.csv", relationships)
+    _write("relationship_assertions.csv", relationship_assertions)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -1596,5 +1683,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "beneficial_ownership": len(beneficial_ownership),
         "officer_appointments": len(officer_appointments),
         "ownership_propagated_uids": len(ownership_propagated_uids),
+        "relationships": len(relationships),
+        "relationship_assertions": len(relationship_assertions),
+        "proximity_ring_total": sum(len(v) for v in proximity_ring_uids.values()),
     }
     return summary

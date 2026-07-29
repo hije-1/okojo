@@ -42,6 +42,8 @@ TABLES: dict[str, str] = {
     "kyc_identity_attributes": "kyc_identity_attributes.csv",
     "beneficial_ownership": "beneficial_ownership.csv",
     "officer_appointments": "officer_appointments.csv",
+    "relationships": "relationships.csv",
+    "relationship_assertions": "relationship_assertions.csv",
 }
 
 

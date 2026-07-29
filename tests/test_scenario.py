@@ -31,6 +31,7 @@ ALL_TABLES = [
     "kyc_artifacts.csv", "staff_register.csv",
     "designation_identifiers.csv", "kyc_identity_attributes.csv",
     "beneficial_ownership.csv", "officer_appointments.csv",
+    "relationships.csv", "relationship_assertions.csv",
     "ground_truth.json",
 ]
 

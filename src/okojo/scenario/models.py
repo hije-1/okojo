@@ -294,6 +294,38 @@ class OfficerAppointment:
 
 
 @dataclass
+class Relationship:
+    """A declared relationship between two customers (Phase 8 Part II T4).
+
+    Declared-relationship metadata on file (e.g. next-of-kin, director-family) —
+    a NEW sibling table so every existing surface stays byte-identical (R4). It is
+    a *correlational* signal the proximity layer surfaces WITH its evidence; the
+    system never asserts kinship as fact. Directed pair ``(uid_a, uid_b)``."""
+
+    uid_a: int
+    uid_b: int
+    declared_relationship: str    # e.g. "sibling" | "spouse" | "parent"
+
+
+@dataclass
+class RelationshipAssertion:
+    """A relationship-asserting artifact between two customers (Phase 8 Part II T4).
+
+    A NEW sibling table (keeps the remark/registry surfaces byte-identical, R4)
+    carrying the free-text and document signals the proximity layer reads without
+    ever touching ``transactions.remark``: a relationship-asserting remark, or a
+    KYC-document cross-holding (one party's identity document on file inside
+    another's account). ``assertion_type`` keys which proximity signal it feeds.
+    Surfaced as evidence; never an assertion of kinship as fact."""
+
+    assertion_id: str
+    subject_uid: int              # the resolved/designated party
+    related_uid: int              # the candidate associate
+    assertion_type: str           # "relationship_remark" | "kyc_document_cross_holding"
+    detail: str
+
+
+@dataclass
 class PriorRfi:
     """An earlier RFI answer from the same subject.
 

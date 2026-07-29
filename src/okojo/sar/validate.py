@@ -78,6 +78,8 @@ class GroundingResolver:
         # the sweep's ownership walk and proximity ring.
         add(conn.beneficial_ownership())
         add(conn.officer_appointments())
+        add(conn.relationships())
+        add(conn.relationship_assertions())
         self._valid = valid
 
     def resolves(self, prov: Provenance) -> bool:

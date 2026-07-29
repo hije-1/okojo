@@ -350,6 +350,23 @@ class Connectors:
             lambda r: r["appointment_id"],
         )
 
+    # -- proximity ring (Phase 8 Part II T4) -------------------------------- #
+    def relationships(self) -> list[Record]:
+        """Declared-relationship metadata between customers."""
+        return self._records(
+            "relationships",
+            "SELECT * FROM relationships ORDER BY uid_a, uid_b", [],
+            lambda r: f"{r['uid_a']}:{r['uid_b']}",
+        )
+
+    def relationship_assertions(self) -> list[Record]:
+        """Relationship-asserting remarks / KYC-document cross-holdings."""
+        return self._records(
+            "relationship_assertions",
+            "SELECT * FROM relationship_assertions ORDER BY assertion_id", [],
+            lambda r: r["assertion_id"],
+        )
+
     # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""

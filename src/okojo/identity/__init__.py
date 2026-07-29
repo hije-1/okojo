@@ -198,6 +198,12 @@ from .ownership import (  # noqa: E402
     OwnershipWalkResult,
     walk_ownership,
 )
+from .proximity import (  # noqa: E402
+    ProximityRing,
+    ProximityRingMember,
+    ProximitySignal,
+    build_proximity_ring,
+)
 
 __all__ = [
     "IDENTITY_VERSION",
@@ -214,4 +220,8 @@ __all__ = [
     "FictitiousExecutiveFlag",
     "ControlChangeFlag",
     "walk_ownership",
+    "ProximityRing",
+    "ProximityRingMember",
+    "ProximitySignal",
+    "build_proximity_ring",
 ]
