@@ -56,7 +56,14 @@ from ..sar import CritiqueHistory
 # a designation's published identifiers). It is stamped into the remediation
 # sweep's chain as a recorded decision, not a case-graph routing branch — the
 # sweep stays linear (see docs/identity-methodology.md).
-AGENCY_VERSION = "1.3.0"
+# 1.4.0 — Part III adds the `geo_action` decision point (the seventh): for a
+# TERRITORY designation, a surfaced account's geo totality dossier is scored
+# into a net presence score and mapped to a REVIEW-tier proposal. Like
+# corroboration it is a remediation-sweep decision — recorded, not routed (see
+# docs/geo-methodology.md). The signal weight classes and counter-evidence
+# categories are geo's (geo_config, frozen 1.0.0); the numeric weights, bands,
+# and the mapping rule are decision policy and live here.
+AGENCY_VERSION = "1.4.0"
 
 # --- Tunable policy thresholds (see docs/agency-methodology.md) --------------
 
@@ -78,12 +85,38 @@ RE_RFI_MIN_CONTRADICTED = 1
 # fail-closed drafter needs to attempt a citable narrative.
 SUFFICIENCY_MIN_EVENTS = 1
 
+# --- geo_action policy (Part III): totality dossier -> a proposal ------------
+# The numeric weights the geo signal WEIGHT CLASSES (geo_config, frozen) map to
+# when a geo totality dossier is scored. A distinctive locator (a region-locked
+# carrier, a VPN-slip) outweighs an ordinary IP hit, which outweighs a coarse
+# timezone. Tunable policy, published in docs/geo-methodology.md and here.
+GEO_SIGNAL_WEIGHTS = {"high_value": 3, "standard": 2, "weak": 1}
+
+# The subtraction each COUNTER-EVIDENCE staleness status carries. A residency
+# document issued OUTSIDE the territory argues against presence; a VALID one in
+# full, an EXPIRED one only weakly (degraded), a MISSING one not at all. Staleness
+# ONLY degrades the subtraction — it is never read as evidence of presence, so it
+# never adds to the score. (VPN markers are never scored at all.)
+GEO_COUNTER_WEIGHTS = {"valid": 3, "expired": 1, "missing": 0}
+
+# The net-presence-score bands, weakest proposal first: each entry is the
+# INCLUSIVE upper bound of net score N for that outcome. Above the last bound the
+# score maps to GEO_ACTION_TOP. Single source of truth for both the rule below
+# and the agency_config stamp, so the two cannot drift.
+GEO_ACTION_BANDS: tuple[tuple[int, str], ...] = (
+    (0, "no_action_totality_resolves"),
+    (2, "propose_edd_rfi"),
+    (4, "propose_withdrawal_only_restriction"),
+    (7, "propose_trade_and_withdrawal_block"),
+)
+GEO_ACTION_TOP = "propose_full_block_and_escalate"
+
 # The decision points and their closed outcome sets. For the five case-pipeline
 # points the outcome strings double as LangGraph routing keys, so the branch
-# taken is exactly the outcome recorded in the audit trail. The sixth,
-# `corroboration`, is a REMEDIATION-SWEEP decision (Part II): it is recorded,
-# not routed — the sweep has no branch to take, so the outcome drives review
-# triage, never control flow.
+# taken is exactly the outcome recorded in the audit trail. The sixth and
+# seventh, `corroboration` and `geo_action`, are REMEDIATION-SWEEP decisions
+# (Parts II & III): they are recorded, not routed — the sweep has no branch to
+# take, so the outcome drives review triage, never control flow.
 DECISION_OUTCOMES: dict[str, tuple[str, ...]] = {
     "expand_hop": ("continue", "stop_cap", "stop_frontier_exhausted"),
     "second_advisory": ("pull_second", "single_match", "no_match"),
@@ -93,6 +126,12 @@ DECISION_OUTCOMES: dict[str, tuple[str, ...]] = {
     "corroboration": (
         "corroborated_true_hit", "possible_match_needs_human",
         "name_only_dismissed",
+    ),
+    "geo_action": (
+        "no_action_totality_resolves", "propose_edd_rfi",
+        "propose_withdrawal_only_restriction",
+        "propose_trade_and_withdrawal_block",
+        "propose_full_block_and_escalate",
     ),
 }
 
@@ -187,6 +226,32 @@ def agency_config() -> dict:
             "recorded); otherwise possible_match_needs_human. An absent field on "
             "either side is UNKNOWN, never a mismatch. Recorded into the "
             "remediation-sweep chain; it drives review triage, not control flow"
+        ),
+        "geo_action_rule": (
+            "the seventh decision point, in the remediation sweep, for a "
+            "TERRITORY designation: each surfaced account's geo totality dossier "
+            "is scored into a net presence score N = the sum of its signal "
+            "weights (by weight class) minus the sum of its counter-evidence "
+            "subtractions (by staleness status). Document staleness only degrades "
+            "the subtraction; it never adds to N (expiry is never read as "
+            "presence), and VPN markers are never scored. N is mapped to a "
+            "proposal by band (see geo_action_bands): a rebutted signal "
+            "(N<=0) proposes no action but the account still surfaces for human "
+            "review with its full dossier; a single ordinary signal proposes an "
+            "enhanced-due-diligence RFI (the honest ask when the totality cannot "
+            "resolve); stronger totalities propose a withdrawal-only restriction, "
+            "then a trade-and-withdrawal block, then a full block and escalation. "
+            "Every outcome is a REVIEW-tier PROPOSAL for a human — nothing is "
+            "executed. Like corroboration it is recorded, not routed"
+        ),
+        "geo_action_weights": {
+            "signal_weights": dict(GEO_SIGNAL_WEIGHTS),
+            "counter_weights": dict(GEO_COUNTER_WEIGHTS),
+        },
+        "geo_action_bands": (
+            [{"outcome": outcome, "net_at_most": upper}
+             for upper, outcome in GEO_ACTION_BANDS]
+            + [{"outcome": GEO_ACTION_TOP, "net_at_most": None}]
         ),
         "decision_provenance": (
             "each stamped decision carries row-level citations where its "
@@ -483,6 +548,105 @@ def decide_corroboration(candidate_uid: int, designated_name: str,
                  "details neither confirm nor rule out the designated party; "
                  "routed to an officer to resolve.")
     return DecisionRecord(decision_id="corroboration", outcome=outcome,
+                          rationale=rationale, plain_language=plain,
+                          evidence=evidence, provenance=list(provenance or []))
+
+
+# --- geo_action (Part III): totality dossier -> a REVIEW-tier proposal ---------
+
+
+def _geo_band(net: int) -> str:
+    """Map a net presence score to a proposal — the first band whose inclusive
+    upper bound the score does not exceed, else the top (unbounded) outcome.
+    Shares :data:`GEO_ACTION_BANDS` with the config stamp so the two cannot
+    drift."""
+    for upper, outcome in GEO_ACTION_BANDS:
+        if net <= upper:
+            return outcome
+    return GEO_ACTION_TOP
+
+
+def decide_geo_action(uid: int,
+                      signal_weight_classes: Sequence[str],
+                      counter_statuses: Sequence[str], *,
+                      provenance: Optional[list[str]] = None) -> DecisionRecord:
+    """Propose a remediation action for one surfaced geo dossier — the seventh
+    decision point, in the remediation sweep, for a TERRITORY designation.
+
+    Pure over its inputs. ``signal_weight_classes`` is the weight class of each
+    positive location signal the dossier collected (``high_value`` / ``standard``
+    / ``weak``); ``counter_statuses`` is the staleness status of each piece of
+    counter-evidence (``valid`` / ``expired``; a ``missing`` refresh is a control
+    gap, never counter-evidence, and so never appears here). The caller (the U2b
+    wiring) reads them off the :class:`~okojo.geo.GeoDossier`; this function never
+    touches the store, a row, or a ground-truth label.
+
+    The net presence score ``N`` = sum of signal weights − sum of counter
+    subtractions. Staleness only *degrades* the subtraction (``expired`` → 1 vs
+    ``valid`` → 3); expiry is never read as presence, so it never adds to ``N``,
+    and VPN markers are never scored. ``N`` maps to one of five REVIEW-tier
+    proposals by band (see :data:`GEO_ACTION_BANDS`). A rebutted signal
+    (``no_action_totality_resolves``) proposes nothing, but the account is still
+    surfaced for a human with its full dossier — a resolved review, never a
+    silent dismissal. Every outcome is a proposal; nothing is executed.
+    """
+    signal_score = sum(GEO_SIGNAL_WEIGHTS[c] for c in signal_weight_classes)
+    counter_sub = sum(GEO_COUNTER_WEIGHTS[s] for s in counter_statuses)
+    net = signal_score - counter_sub
+    outcome = _geo_band(net)
+
+    evidence = {
+        "uid": uid,
+        "signal_weight_classes": list(signal_weight_classes),
+        "counter_statuses": list(counter_statuses),
+        "signal_score": signal_score,
+        "counter_subtraction": counter_sub,
+        "net_presence_score": net,
+    }
+
+    n_sig = len(signal_weight_classes)
+    score_expr = (f"net presence score {net} (signals {signal_score} "
+                  f"− counter-evidence {counter_sub})")
+    if outcome == "no_action_totality_resolves":
+        rationale = (f"{score_expr}: the location signal(s) are rebutted by "
+                     "valid counter-evidence; no restriction is proposed, but "
+                     "the account remains surfaced for human review with its "
+                     "full dossier (a resolved review, not a dismissal)")
+        plain = ("A possible-location signal fired but current, valid "
+                 "documentation argues the customer is resident elsewhere, so "
+                 "no restriction is proposed — the account is still shown to a "
+                 "reviewer with everything on file.")
+    elif outcome == "propose_edd_rfi":
+        rationale = (f"{score_expr}: the totality is present but cannot resolve; "
+                     "an enhanced-due-diligence identity/geography RFI is "
+                     "proposed as the honest ask (drafted for a human, never "
+                     "sent)")
+        plain = ("There is a location signal but not enough to act on; the "
+                 "proposal is to ask the customer for enhanced identity and "
+                 "residency details — prepared for an officer, never sent "
+                 "automatically.")
+    elif outcome == "propose_withdrawal_only_restriction":
+        rationale = (f"{score_expr}: a clear location indication; a "
+                     "withdrawal-only restriction is proposed for human action")
+        plain = ("A clear indication of possible presence in the sanctioned "
+                 "territory; the proposal for a reviewer is to restrict the "
+                 "account to withdrawals only while it is investigated.")
+    elif outcome == "propose_trade_and_withdrawal_block":
+        rationale = (f"{score_expr}: a strong, corroborated location totality; a "
+                     "trade-and-withdrawal block is proposed for human action")
+        plain = ("Several independent signals corroborate possible presence; "
+                 "the proposal for a reviewer is to block both trading and "
+                 "withdrawals pending resolution.")
+    else:  # propose_full_block_and_escalate
+        rationale = (f"{score_expr}: an overwhelming, multi-signal resident "
+                     "profile; a full block and escalation is proposed for human "
+                     "action")
+        plain = ("The account matches the territory on many independent "
+                 "signals at once; the proposal for a reviewer is a full block "
+                 "and escalation.")
+    rationale = f"{rationale} [{n_sig} signal(s)]"
+
+    return DecisionRecord(decision_id="geo_action", outcome=outcome,
                           rationale=rationale, plain_language=plain,
                           evidence=evidence, provenance=list(provenance or []))
 

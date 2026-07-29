@@ -1,4 +1,4 @@
-# Agency Methodology (v1.3.0)
+# Agency Methodology (v1.4.0)
 
 **Status:** synthetic-data research prototype. This document explains what
 "agency" means in Okojo, why every agentic decision is deterministic, and what
@@ -21,7 +21,7 @@ Three principles govern everything below:
    disagree.
 3. **The thresholds are tunable policy parameters, not universal truths.** The
    values here are defensible defaults for the synthetic scenario; a deploying
-   institution would calibrate them. They are version-stamped (see §8) so any
+   institution would calibrate them. They are version-stamped (see §9) so any
    historical decision trace is reproducible.
 
 A hard boundary above all of it: the agent **proposes, surfaces, drafts, and
@@ -196,7 +196,60 @@ outcome drives review triage, not control flow — it is a **recorded decision,
 not a routing branch** (see `docs/identity-methodology.md`), so the sweep stays
 a linear pipeline while still stamping each corroboration into its chain.
 
-## 7. Determinism, replay, and the decision-trace eval
+## 7. `geo_action` — what to propose for a surfaced geo dossier? (Part III)
+
+**Question:** *for a **territory** designation, once an account is surfaced by
+the geo triangulation, how strong is the totality — and what is the honest
+proposal?*
+
+This is the second decision point that lives in the **Designation-Triggered
+Remediation Sweep**, and it applies only to the new **territory** designation
+kind (a geography, not a party — see `docs/geo-methodology.md`). The one-signal
+rule surfaces any account with a single positive location signal; `geo_action`
+answers the separate question of *what to do about it*, from the **totality**
+dossier rather than any one signal.
+
+The dossier is scored into a **net presence score** `N`:
+
+- **each positive location signal adds its weight**, by weight class —
+  `high_value` = 3 (a region-locked carrier, or a VPN-slip: a distinctive
+  locator), `standard` = 2 (an ordinary IP hit, a phone prefix, a KYC-issuing
+  geography, a declared residence), `weak` = 1 (a device timezone, a coarse
+  locator many regions share);
+- **counter-evidence subtracts**, by staleness status — a residency document
+  issued *outside* the territory argues against presence: `valid` = −3 (full
+  weight), `expired` = −1 (degraded), `missing` = 0 (a missing refresh is a
+  control gap, never counter-evidence). **Staleness only degrades the
+  subtraction; expiry is never read as presence, so it never *adds* to `N`.**
+  VPN markers are obfuscation records and are never scored.
+
+`N` maps to one of five REVIEW-tier proposals by band:
+
+| net score `N` | proposal |
+|---|---|
+| `N ≤ 0` | `no_action_totality_resolves` — the signal is rebutted by valid counter-evidence; **no restriction is proposed, but the account still surfaces for human review with its full dossier** (a resolved review, never a silent dismissal) |
+| `0 < N ≤ 2` | `propose_edd_rfi` — an enhanced-due-diligence identity/geography RFI: the honest ask when the totality is present but cannot resolve |
+| `2 < N ≤ 4` | `propose_withdrawal_only_restriction` |
+| `4 < N ≤ 7` | `propose_trade_and_withdrawal_block` |
+| `N > 7` | `propose_full_block_and_escalate` |
+
+**Signal quality is the whole point.** A VPN-slip (`high_value`) outweighs an
+ordinary IP hit (`standard`), so a lone slip proposes a restriction where a lone
+ordinary IP proposes only an RFI; a region-exclusive carrier is a **full**
+signal on its own, not a weak hint. And the counterweight is what lets a single
+strong signal *resolve*: a lone VPN-slip (3) rebutted by a **valid** foreign
+residency card (−3) nets 0 → no action; the **same** slip against an **expired**
+card (−1) nets 2 → an EDD RFI (the stale document cannot rebut it, so the honest
+move is to ask). The ambiguous traveller is not special-cased — the rule scores
+his dossier like any other, and flipping his residency card from expired to
+valid moves the proposal off the RFI by arithmetic alone.
+
+**Boundary:** every outcome is a **proposal for a human** — an RFI is *drafted,
+never sent*; a restriction/block/escalation is *proposed, never executed*. Like
+`corroboration`, `geo_action` is **recorded, not routed**: the sweep has no
+branch to take, so the outcome drives review triage, not control flow.
+
+## 8. Determinism, replay, and the decision-trace eval
 
 Every rule takes only explicit evidence values (counts, verdicts, coverage) —
 never a ground-truth label, never a subject or claim id. Each
@@ -211,9 +264,10 @@ expected-decision key (exact match, scored as precision/recall/F1 over
 `(subject, decision, outcome)` triples), the same way every other Okojo
 capability ships with its eval. The `corroboration` decision (Part II) is
 stamped and round-tripped the same way, into the remediation sweep's chain, and
-scored by the identity-resolution corroboration eval.
+scored by the identity-resolution corroboration eval; the `geo_action` decision
+(Part III) likewise, scored by the geo-action eval.
 
-## 8. Reproducibility & versioning
+## 9. Reproducibility & versioning
 
 Every run stamps the versioned decision policy into the audit trail
 (`agency / agency_config`), mirroring the scoring, retrieval, critic, and
@@ -222,12 +276,12 @@ it is the single source of truth (`okojo.agency.agency_config`) and is
 regression-tested against this document, so the doc and the code can never
 silently drift.
 
-**Version 1.3.0 — canonical policy:**
+**Version 1.4.0 — canonical policy:**
 
 <!-- agency-config:begin -->
 ```json
 {
-  "version": "1.3.0",
+  "version": "1.4.0",
   "decision_points": {
     "expand_hop": [
       "continue",
@@ -256,6 +310,13 @@ silently drift.
       "corroborated_true_hit",
       "possible_match_needs_human",
       "name_only_dismissed"
+    ],
+    "geo_action": [
+      "no_action_totality_resolves",
+      "propose_edd_rfi",
+      "propose_withdrawal_only_restriction",
+      "propose_trade_and_withdrawal_block",
+      "propose_full_block_and_escalate"
     ]
   },
   "thresholds": {
@@ -266,6 +327,41 @@ silently drift.
   },
   "sar_bar_rule": "delegates to the Critic: clears_bar iff the bounded revision loop converged (Critique.meets_bar at the critic_config threshold)",
   "corroboration_rule": "compares a name/variant-matched customer's KYC identity attributes against the designation's published identifiers, per hard field (date of birth, nationality, document number): corroborated_true_hit iff the document number matches or both date of birth and nationality match; name_only_dismissed iff two or more hard identifiers actively mismatch (a provably different person, reason recorded); otherwise possible_match_needs_human. An absent field on either side is UNKNOWN, never a mismatch. Recorded into the remediation-sweep chain; it drives review triage, not control flow",
+  "geo_action_rule": "the seventh decision point, in the remediation sweep, for a TERRITORY designation: each surfaced account's geo totality dossier is scored into a net presence score N = the sum of its signal weights (by weight class) minus the sum of its counter-evidence subtractions (by staleness status). Document staleness only degrades the subtraction; it never adds to N (expiry is never read as presence), and VPN markers are never scored. N is mapped to a proposal by band (see geo_action_bands): a rebutted signal (N<=0) proposes no action but the account still surfaces for human review with its full dossier; a single ordinary signal proposes an enhanced-due-diligence RFI (the honest ask when the totality cannot resolve); stronger totalities propose a withdrawal-only restriction, then a trade-and-withdrawal block, then a full block and escalation. Every outcome is a REVIEW-tier PROPOSAL for a human — nothing is executed. Like corroboration it is recorded, not routed",
+  "geo_action_weights": {
+    "signal_weights": {
+      "high_value": 3,
+      "standard": 2,
+      "weak": 1
+    },
+    "counter_weights": {
+      "valid": 3,
+      "expired": 1,
+      "missing": 0
+    }
+  },
+  "geo_action_bands": [
+    {
+      "outcome": "no_action_totality_resolves",
+      "net_at_most": 0
+    },
+    {
+      "outcome": "propose_edd_rfi",
+      "net_at_most": 2
+    },
+    {
+      "outcome": "propose_withdrawal_only_restriction",
+      "net_at_most": 4
+    },
+    {
+      "outcome": "propose_trade_and_withdrawal_block",
+      "net_at_most": 7
+    },
+    {
+      "outcome": "propose_full_block_and_escalate",
+      "net_at_most": null
+    }
+  ],
   "decision_provenance": "each stamped decision carries row-level citations where its inputs are row properties (expand_hop: accounts discovered last hop; second_advisory: the matches' evidence rows; re_rfi: the contradicted claims' assertion+rebuttal rows; sufficiency: the subject account row); aggregate-input decisions (sar_bar, and cap/frontier stops) carry none and are covered by the aggregates' own audit stamps",
   "boundaries": {
     "second_advisory": "surfaced to the analyst only; the SAR drafter consumes the primary match alone",
