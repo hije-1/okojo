@@ -198,6 +198,26 @@ and flags; a human resolves), and the **tamper-evident audit chain** that record
 every screen, decision, and citation. No vendor is named or implied; this is an
 in-house reference implementation over fully synthetic data.
 
+### 3.1 Guard-surface map
+
+Every text surface identity resolution produces is governed by a specific,
+fail-closed guard. Which guard applies is a function of **who could read the
+text**, never of the surface's name:
+
+| Surface | Who reads it | Guard | On failure |
+|---|---|---|---|
+| Identity-review RFI (§2.6) | the **customer** (subject-facing) | `assert_no_tipping_off` | suppressed & surfaced for human authoring; never sent |
+| Sweep worksheet / escalation drafts | internal (compliance) | `SIGNAL_BANNED_TERMS` (foreign-list signals) + grounding/resolvability | suppressed & surfaced with reason |
+| Any internal narrative that could over-claim | internal (compliance) | `BANNED_TERMS` calibration | flagged; calibrated language required |
+
+The single rule behind the table: **only subject-facing text passes through
+`assert_no_tipping_off`.** The RFI is the sole subject-facing surface identity
+resolution produces; everything else is internal analyst material, which uses
+the calibrated-language guards but legitimately names methods and evidence a
+customer must never see. The guard is chosen by the audience, so a future
+subject-facing surface inherits the tipping-off guard by construction, and no
+internal artifact is ever weakened to satisfy a subject-facing rule.
+
 ## 4. The versioned policy (canonical block)
 
 The block below is the single source of truth, stamped into every sweep's audit

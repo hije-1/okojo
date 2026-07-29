@@ -34,6 +34,7 @@ from okojo.remarks import SCREEN_THRESHOLD
 from okojo.remarks.miner import _ALIAS_THRESHOLD, _PHRASE_THRESHOLD
 from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
+from okojo.identity import IDENTITY_VERSION, OWNERSHIP_CONTROL_THRESHOLD
 from okojo.sweep import (
     GAP_TAXONOMY,
     SWEEP_VERSION,
@@ -531,6 +532,42 @@ _ARTIFACT_LABEL = {
     "beneficial_ownership": "Beneficial ownership",
 }
 
+# --- Part II identity-resolution plain-language maps (machine ids stay in
+# provenance/citations; only the on-screen wording changes). -----------------
+
+# Corroboration outcome -> compliance-officer wording (the dismissal is a
+# feature: a same-name collision resolved to a different person).
+_CORROBORATION_LABEL = {
+    "corroborated_true_hit": "Corroborated — identity confirmed",
+    "possible_match_needs_human": "Possible match — needs human review",
+    "name_only_dismissed": "Dismissed — same-name collision (a different person)",
+}
+
+# Proximity signal id -> plain language. Calibrated throughout: these are
+# CORRELATIONAL signals the ring surfaces, never assertions of kinship.
+_PROXIMITY_SIGNAL_LABEL = {
+    "shared_surname": "shares a surname/patronymic",
+    "shared_kyc_attribute": "shares a KYC attribute (address/contact)",
+    "declared_relationship": "declared relationship on file",
+    "relationship_remark": "relationship-asserting remark",
+    "shared_device": "shares a device",
+    "email_handle_pattern": "shares an email-handle pattern",
+    "kyc_document_cross_holding": "KYC-document cross-holding",
+}
+
+# Identity-review RFI status -> plain language (the only representable status).
+_RFI_STATUS_LABEL = {
+    "drafted_pending_human_review": "Drafted — pending human review (not sent)",
+}
+
+
+def _corroboration_label(outcome: str) -> str:
+    return _CORROBORATION_LABEL.get(outcome, outcome)
+
+
+def _proximity_signal_label(signal_id: str) -> str:
+    return _PROXIMITY_SIGNAL_LABEL.get(signal_id, signal_id)
+
 
 def _timing_label(timing) -> str:
     if not timing:
@@ -558,6 +595,117 @@ def _gap_sentence(gap_type) -> str:
     if not gap_type:
         return "—"
     return GAP_TAXONOMY.get(gap_type, gap_type)
+
+
+def _render_identity_resolution(res, names) -> None:
+    """Render the four Part-II identity-resolution capabilities that otherwise
+    live only in the sweep result + audit chain: corroboration, the ownership/
+    officer walk, the proximity ring, and the identity-review RFI. Two-register
+    throughout — compliance-officer wording on screen, real table names in the
+    provenance. Rendered only when a designation actually resolves an identity."""
+    has_any = (res.corroboration or not res.ownership.is_empty()
+               or not res.proximity.is_empty()
+               or res.identity_rfis or res.suppressed_identity_rfis)
+    if not has_any:
+        return
+
+    st.markdown("#### Identity resolution")
+    st.caption(
+        "Who might this designated party BE among our customers — resolved across "
+        "name variants, corroborated against identity attributes, walked through "
+        "corporate ownership, and ringed with relatives/associates. Everything "
+        "here is **review-tier**: the sweep *surfaces* and *proposes*; a human "
+        "resolves. No identity or kinship is asserted as fact."
+    )
+
+    # -- corroboration ------------------------------------------------------ #
+    if res.corroboration:
+        st.markdown("**Corroboration — name match vs. published identity details**")
+        for c in res.corroboration:
+            uid = c.evidence["candidate_uid"]
+            st.markdown(
+                f"- **uid {uid}** ({names.get(uid, uid)}): "
+                f"**{_corroboration_label(c.outcome)}**. {c.plain_language}"
+            )
+            mism = c.evidence.get("mismatched_fields") or []
+            if mism:
+                st.caption("dismissed because these identifiers actively differ: "
+                           + ", ".join(mism) + " (the dismissal reason, recorded)")
+            if c.provenance:
+                st.caption("source: " + "; ".join(c.provenance))
+
+    # -- ownership + officer walk ------------------------------------------- #
+    if not res.ownership.is_empty():
+        own = res.ownership
+        st.markdown(
+            f"**Ownership & officer walk** — propagates designated status through "
+            f"ownership at or above **{OWNERSHIP_CONTROL_THRESHOLD:.0%} control**; "
+            "ownership/officer links carry **no flow exposure** (a distinct edge type)."
+        )
+        for p in own.propagations:
+            st.markdown(
+                f"- Company **uid {p.company_uid}** ({names.get(p.company_uid, p.company_uid)}) "
+                f"is **{p.ownership_pct:.0%} owned/controlled** by resolved party "
+                f"uid {p.owner_uid} ({names.get(p.owner_uid, p.owner_uid)}) — "
+                "owned/controlled by a designated party (review)."
+            )
+            _source_caption(p.provenance)
+        for f in own.fictitious_executives:
+            st.markdown(
+                f"- **Fictitious-executive flag**: officer of record "
+                f"“{f.officer_name}” on company uid {f.company_uid} has no "
+                "resolvable identity footprint (matches no account or KYC holder)."
+            )
+            _source_caption(f.provenance)
+        for ch in own.control_changes:
+            st.markdown(
+                f"- **Post-designation control change**: appointment "
+                f"{ch.appointment_id} on company uid {ch.company_uid} is dated "
+                f"{ch.changed_date}, **after** the designation."
+            )
+            _source_caption(ch.provenance)
+
+    # -- proximity ring ----------------------------------------------------- #
+    if not res.proximity.is_empty():
+        st.markdown(
+            "**Proximity ring** — candidate relatives/associates of the resolved "
+            "party, surfaced for **review with their signals**. Calibrated: a "
+            "*possible* associate on a *correlational* signal, never asserted "
+            "kinship; **not weighted by account activity** (dormancy is not innocence)."
+        )
+        for m in res.proximity.members:
+            primary = ", ".join(_proximity_signal_label(s.signal_id)
+                                for s in m.primary_signals)
+            line = (f"- **uid {m.uid}** ({m.entity_name}) — candidate associate; "
+                    f"signals: {primary}")
+            if m.weighting_signals:
+                line += (" · weighted by: "
+                         + ", ".join(_proximity_signal_label(s.signal_id)
+                                     for s in m.weighting_signals))
+            line += f" · account status: {m.account_status}"
+            st.markdown(line)
+            _source_caption(m.provenance)
+
+    # -- identity-review RFI ------------------------------------------------ #
+    if res.identity_rfis or res.suppressed_identity_rfis:
+        st.markdown("**Identity-review RFI — subject-facing, drafted never sent**")
+        st.caption(
+            "A routine identity/document-verification request to a customer the "
+            "review could not resolve either way. Anti-tipping-off is enforced "
+            "**fail-closed**: it reveals no match, method, list, or interest; a "
+            "draft that trips the guard is suppressed and surfaced, never sent."
+        )
+        for r in res.identity_rfis:
+            status = _RFI_STATUS_LABEL.get(r.status, r.status)
+            with st.expander(f"{r.rfi_id} · uid {r.uid} ({r.subject_name}) · **{status}**"):
+                st.write(r.text)
+                st.caption("citations: " + "; ".join(r.citations))
+        if res.suppressed_identity_rfis:
+            st.warning(
+                "**Suppressed identity-review drafts (surfaced, not sent):** "
+                + "; ".join(f"uid {s.uid} — {s.reason}"
+                            for s in res.suppressed_identity_rfis)
+            )
 
 
 def _render_sweep_mode(conn: Connectors) -> None:
@@ -677,6 +825,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
     else:
         st.info("No accounts surfaced for this designation.")
 
+    # -- identity resolution (Part II) -------------------------------------- #
+    _render_identity_resolution(res, names)
+
     # -- hold-status reconciliation ----------------------------------------- #
     st.markdown("#### Hold-status reconciliation")
     st.caption(
@@ -745,9 +896,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
         ])
         st.dataframe(audit_df, use_container_width=True, hide_index=True)
     st.caption(
-        f"Sweep methodology v{SWEEP_VERSION} · money-flow edges: control links "
-        "and value transfers · name-match threshold "
-        f"{sweep_config()['name_match_threshold']}."
+        f"Sweep methodology v{SWEEP_VERSION} · identity resolution "
+        f"v{IDENTITY_VERSION} · money-flow edges: control links and value "
+        f"transfers · name-match threshold {sweep_config()['name_match_threshold']}."
     )
 
 

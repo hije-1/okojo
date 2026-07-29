@@ -135,3 +135,114 @@ def test_provenance_source_column_keeps_real_table_names(sweep_app):
 
 def test_sweep_view_no_uncaught_exception(sweep_app):
     assert not sweep_app.exception
+
+
+# --- Part II identity-resolution panels (T5b) -------------------------------
+#
+# The identity panels render only when a designation actually resolves an
+# identity, so these drive the sweep to the identity designations (DES-0005
+# has corroboration + ownership + proximity; DES-0006 has the possible-match
+# corroboration + the identity-review RFI). Module-scoped app, driven per test.
+
+
+@pytest.fixture(scope="module")
+def sweep_app_identity(data_dir):
+    """A second AppTest in sweep mode, driven to the identity designations.
+
+    A distinct module-scoped instance (not the domestic ``sweep_app``) so the
+    domestic tests never depend on which designation an identity test last
+    selected; spun up once and shared across the identity checks."""
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+
+    import streamlit as st
+    import okojo.connectors.store as store_mod
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(store_mod, "SYNTHETIC_DIR", data_dir)
+    st.cache_resource.clear()
+
+    at = AppTest.from_file(str(_APP), default_timeout=60)
+    at.run()
+    at.radio(key="app_mode").set_value("Designation sweep").run()
+    yield at
+
+    mp.undo()
+    st.cache_resource.clear()
+
+
+def _select(at, did):
+    at.selectbox(key="sweep_designation_id").set_value(did).run()
+    return at
+
+
+def _all_text(at):
+    """Every rendered text surface (markdown/write/caption/warning + expander
+    labels and their children), flattened."""
+    parts = []
+    for coll in (at.markdown, at.caption, at.warning):
+        parts.extend(el.value for el in coll)
+    for exp in at.expander:
+        parts.append(exp.label)
+        for child in (exp.markdown, exp.caption):
+            parts.extend(el.value for el in child)
+    return "\n".join(parts)
+
+
+def test_identity_corroboration_and_ownership_render(sweep_app_identity):
+    from app.streamlit_app import _CORROBORATION_LABEL
+
+    at = _select(sweep_app_identity, "DES-2026-0005")
+    assert not at.exception
+    text = _all_text(at)
+
+    assert "Identity resolution" in text
+    # Corroboration renders through the plain-language label, not the machine slug.
+    assert _CORROBORATION_LABEL["corroborated_true_hit"] in text
+    assert "corroborated_true_hit" not in text
+
+    # Ownership walk: propagation, the stated control threshold, and both flags.
+    assert "owned/controlled" in text
+    assert "50%" in text  # OWNERSHIP_CONTROL_THRESHOLD stated on screen
+    assert "Fictitious-executive flag" in text
+    assert "Post-designation control change" in text
+    # Two-register: the citations keep the real table names.
+    assert "beneficial_ownership" in text or "officer_appointments" in text
+
+
+def test_identity_proximity_renders_calibrated(sweep_app_identity):
+    from app.streamlit_app import _PROXIMITY_SIGNAL_LABEL
+
+    at = _select(sweep_app_identity, "DES-2026-0005")
+    assert not at.exception
+    text = _all_text(at)
+
+    assert "Proximity ring" in text
+    assert "candidate associate" in text
+    assert "correlational" in text.lower()
+    # Signal ids render through their plain-language labels, never the raw id.
+    assert _PROXIMITY_SIGNAL_LABEL["shared_surname"] in text
+    assert "shared_surname" not in text
+    # Never asserts kinship as fact.
+    for banned in ("is the sister", "is the brother", "is the spouse"):
+        assert banned not in text.lower()
+
+
+def test_identity_review_rfi_renders_with_status(sweep_app_identity):
+    from app.streamlit_app import _CORROBORATION_LABEL, _RFI_STATUS_LABEL
+
+    at = _select(sweep_app_identity, "DES-2026-0006")
+    assert not at.exception
+    text = _all_text(at)
+
+    # The possible-match candidate is labelled for human review...
+    assert _CORROBORATION_LABEL["possible_match_needs_human"] in text
+    assert "possible_match_needs_human" not in text
+    # ...and its identity-review RFI is drafted (never sent), with its status.
+    assert "IDR-DES-2026-0006-0001" in text
+    assert _RFI_STATUS_LABEL["drafted_pending_human_review"] in text
+    assert "drafted_pending_human_review" not in text
+    # The drafted RFI's own text is present (its anti-tipping-off cleanliness is
+    # asserted directly on the draft in tests/test_identity_rfi.py).
+    assert "identity" in text.lower()
+    # Two-register: the RFI citation keeps the real KYC table name.
+    assert "kyc_identity_attributes" in text
