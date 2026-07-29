@@ -223,6 +223,7 @@ from .escalations import (  # noqa: E402
     SuppressedEscalation,
     draft_escalations,
 )
+from .geo_proposal import GeoProposal, build_geo_proposals  # noqa: E402
 from .pipeline import (  # noqa: E402
     BatchResult,
     SweepResult,
@@ -267,6 +268,8 @@ __all__ = [
     "EscalationDraft",
     "SuppressedEscalation",
     "draft_escalations",
+    "GeoProposal",
+    "build_geo_proposals",
     "SweepResult",
     "BatchResult",
     "default_sweep_dir",

@@ -45,6 +45,7 @@ from ..geo import GeoDossier, geo_config
 from .escalations import EscalationDraft, SuppressedEscalation, draft_escalations
 from .exposure import ExposureResult, sweep_exposure
 from .geo import run_geo_triangulation
+from .geo_proposal import GeoProposal, build_geo_proposals
 from .identity_rfi import (
     IdentityReviewRfi,
     SuppressedIdentityRfi,
@@ -70,6 +71,7 @@ class SweepResult:
     identity_rfis: list[IdentityReviewRfi]     # Part II T5a: subject-facing, drafted never sent
     suppressed_identity_rfis: list[SuppressedIdentityRfi]
     geo_dossiers: list[GeoDossier]             # Part III U1b: territory triangulation (surfaced)
+    geo_proposals: list[GeoProposal]           # Part III U2b: one REVIEW-tier proposal per surfaced dossier
     out_dir: Path
     audit_log_path: Path
     audit_records: list[dict] = field(default_factory=list)
@@ -346,6 +348,7 @@ def run_sweep(
         # non-territory sweep's chain is byte-unchanged (the same conditional-stamp
         # discipline as ownership_walk / proximity_ring / identity_review_rfi).
         geo_dossiers: list[GeoDossier] = []
+        geo_proposals: list[GeoProposal] = []
         if designation.list_type == "territory":
             # The versioned geo policy, once per territory run — mirroring the
             # sweep / identity config stamps (the tenth anti-drift pair). Stamped
@@ -370,6 +373,35 @@ def run_sweep(
                                 "surfaced for human review",
                     }),
                     provenance=[p for d in geo_dossiers for p in d.provenance],
+                )
+
+                # 2d. Geo-action proposals (Part III U2b). Score each surfaced
+                # dossier's totality into ONE REVIEW-tier proposal via the seventh
+                # agency decision (decide_geo_action). Every surfaced account gets
+                # a proposal — including no_action_totality_resolves, which
+                # proposes nothing but stays surfaced with its full dossier (never
+                # a silent dismissal). Any subject-facing EDD-RFI text is grounded
+                # + anti-tipping-off-validated inside build_geo_proposals;
+                # drafted_pending_human_review is the only status, and there is no
+                # execution path. Stamped only when surfaced dossiers exist, so a
+                # non-territory (or empty) sweep's chain is byte-unchanged.
+                geo_proposals = build_geo_proposals(conn, designation, geo_dossiers)
+                audit.append(
+                    "remediation_sweep", "geo_proposal",
+                    target=designation.designation_id,
+                    detail=json.dumps({
+                        "proposals": [
+                            {"uid": p.uid, "outcome": p.outcome,
+                             "net_presence_score": p.net_presence_score,
+                             "status": p.status,
+                             "rfi_drafted": p.rfi_text is not None,
+                             "rfi_suppressed": p.rfi_suppressed_reason is not None}
+                            for p in geo_proposals],
+                        "note": "each proposal is a REVIEW-tier recommendation for a "
+                                "human; a restriction/block/escalation is proposed and "
+                                "an RFI is drafted, never executed or sent",
+                    }),
+                    provenance=[p for prop in geo_proposals for p in prop.provenance],
                 )
 
         # 3. Two-system hold reconciliation over the full ledger.
@@ -482,6 +514,7 @@ def run_sweep(
             identity_rfis=identity_rfis,
             suppressed_identity_rfis=suppressed_identity_rfis,
             geo_dossiers=geo_dossiers,
+            geo_proposals=geo_proposals,
             out_dir=out_dir,
             audit_log_path=audit_path,
             audit_records=audit.read_all(),
