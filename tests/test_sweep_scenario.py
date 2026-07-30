@@ -63,8 +63,9 @@ def test_designation_tables_written_with_expected_columns(data_dir):
     # Two domestic (Part I) + two foreign national-CT plants (Part I-B S2) +
     # two Part-II foreign name-only plants for variant screening (T1) + one
     # Part-II corroboration name-collision plant (T2) + one Part-III TERRITORY
-    # designation (U1b geo triangulation).
-    assert len(des) == 8
+    # designation (U1b geo triangulation) + one Part-IV COUNTERPARTY_SERVICE
+    # designation (V1b lifecycle).
+    assert len(des) == 9
     for did in des.designation_id:
         assert _DESIGNATION_ID_RE.fullmatch(did), did
 
@@ -287,22 +288,54 @@ def test_new_dates_postdate_activity_and_holds_predate_designation(data_dir, gro
     after the last observed account activity (so the registration-coherence
     guard is untouched), and BOTH planted hold actions predate the designation
     — they are legacy screening actions; the gaps are pre-existing sync
-    failures the sweep surfaces, not effects of the designation."""
+    failures the sweep surfaces, not effects of the designation.
+
+    Part IV EXEMPTS the ``counterparty_service`` kind from the "postdate all
+    activity" clause BY CONSTRUCTION: a designated counterparty is designated
+    MID-WINDOW so its customers deal both before AND after — the pre/post split
+    is the whole point of the lifecycle. Its own coherence (customers deal within
+    the window; acknowledgments postdate the designation) is asserted by
+    test_counterparty_dates_coherent below. Every LEGACY party/territory
+    designation still postdates all activity, and the hold-predates-designation
+    check bases its threshold on the legacy designations (whose gap holds are
+    legacy screening actions)."""
     last_activity = max(
         str(pd.read_csv(data_dir / "transactions.csv").timestamp.max())[:10],
         str(pd.read_csv(data_dir / "ip_logs.csv").timestamp.max())[:10],
     )
     des = pd.read_csv(data_dir / "designations.csv")
+    legacy_des = des[des.list_type != "counterparty_service"]
     wh = pd.read_csv(data_dir / "sanctions_hold_warehouse.csv")
     adm = pd.read_csv(data_dir / "sanctions_hold_admin.csv")
 
-    for col, table in (("designation_date", des), ("as_of_date", wh), ("status_date", adm)):
+    for col, table in (("designation_date", legacy_des), ("as_of_date", wh), ("status_date", adm)):
         assert (table[col] > last_activity).all(), col
 
-    designation_date = des.designation_date.min()
+    designation_date = legacy_des.designation_date.min()
     gap_uids = [g["uid"] for g in ground_truth["block_status_gaps"]]
     assert (wh[wh.uid.isin(gap_uids)].as_of_date < designation_date).all()
     assert (adm[adm.uid.isin(gap_uids)].status_date < designation_date).all()
+
+
+def test_counterparty_dates_coherent(data_dir, ground_truth):
+    """Part IV coherence for the counterparty_service designation: it is
+    designated inside the simulation window (so customers can deal both before
+    AND after), every dealing stays within the window (last activity is unmoved),
+    and every acknowledgment postdates the designation it acknowledges."""
+    des = pd.read_csv(data_dir / "designations.csv")
+    cp = des[des.list_type == "counterparty_service"]
+    assert len(cp) == 1
+    cp_date = cp.iloc[0].designation_date
+    sim_end = "2025-12-31"
+    assert cp_date <= sim_end                      # designated mid-window
+    # Every counterparty transaction stays within the window (last activity is
+    # unmoved by Part IV — the hold-coherence guard is byte-identical).
+    txs = pd.read_csv(data_dir / "transactions.csv")
+    assert str(txs.timestamp.max())[:10] <= sim_end
+    # Acknowledgments of THIS counterparty postdate its designation date.
+    acks = pd.read_csv(data_dir / "acknowledgments.csv")
+    this_cp = acks[acks.counterparty_designation_id == cp.iloc[0].designation_id]
+    assert (this_cp.acknowledged_date > cp_date).all()
 
 
 # --------------------------------------------------------------------------- #

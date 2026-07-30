@@ -224,6 +224,17 @@ from .escalations import (  # noqa: E402
     draft_escalations,
 )
 from .geo_proposal import GeoProposal, build_geo_proposals  # noqa: E402
+from .lifecycle import (  # noqa: E402
+    CounterpartyNotification,
+    LifecycleDisposition,
+    SuppressedNotification,
+    counterparty_dealings,
+    derive_counterparty_lifecycle_state,
+    draft_counterparty_notifications,
+    has_post_designation_dealing,
+    is_stop_verified,
+    render_counterparty_notification,
+)
 from .pipeline import (  # noqa: E402
     BatchResult,
     SweepResult,
@@ -270,6 +281,15 @@ __all__ = [
     "draft_escalations",
     "GeoProposal",
     "build_geo_proposals",
+    "CounterpartyNotification",
+    "SuppressedNotification",
+    "LifecycleDisposition",
+    "counterparty_dealings",
+    "derive_counterparty_lifecycle_state",
+    "draft_counterparty_notifications",
+    "has_post_designation_dealing",
+    "is_stop_verified",
+    "render_counterparty_notification",
     "SweepResult",
     "BatchResult",
     "default_sweep_dir",

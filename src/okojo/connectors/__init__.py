@@ -281,6 +281,25 @@ class Connectors:
             lambda r: r["staff_id"],
         )
 
+    # -- counterparty-lifecycle acknowledgments (Phase 8 Part IV) ------------ #
+    def acknowledgments(self) -> list[Record]:
+        """Customer acknowledgments of designated counterparties (read-only
+        evidence, human-entered). Deterministic order (uid, then designation)."""
+        return self._records(
+            "acknowledgments",
+            "SELECT * FROM acknowledgments ORDER BY uid, counterparty_designation_id", [],
+            lambda r: f"uid:{r['uid']}:{r['counterparty_designation_id']}",
+        )
+
+    def acknowledgments_for(self, uid: int) -> list[Record]:
+        """This customer's acknowledgments, in designation order."""
+        return self._records(
+            "acknowledgments",
+            "SELECT * FROM acknowledgments WHERE uid = ? ORDER BY counterparty_designation_id",
+            [uid],
+            lambda r: f"uid:{r['uid']}:{r['counterparty_designation_id']}",
+        )
+
     # -- identity resolution (Phase 8 Part II) ------------------------------- #
     def designation_identifiers(self) -> list[Record]:
         """Identifying data a sanctions list published per designation (T2)."""

@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional, Union
 
-from ..agency import DecisionRecord, decide_corroboration
+from ..agency import DecisionRecord, decide_corroboration, decide_counterparty_lifecycle
 from ..audit import AuditLog
 from ..config import REPO_ROOT
 from ..connectors import Connectors
@@ -46,6 +46,16 @@ from .escalations import EscalationDraft, SuppressedEscalation, draft_escalation
 from .exposure import ExposureResult, sweep_exposure
 from .geo import run_geo_triangulation
 from .geo_proposal import GeoProposal, build_geo_proposals
+from .lifecycle import (
+    CounterpartyNotification,
+    LifecycleDisposition,
+    SuppressedNotification,
+    counterparty_dealings,
+    derive_counterparty_lifecycle_state,
+    draft_counterparty_notifications,
+    has_post_designation_dealing,
+    is_stop_verified,
+)
 from .identity_rfi import (
     IdentityReviewRfi,
     SuppressedIdentityRfi,
@@ -72,6 +82,9 @@ class SweepResult:
     suppressed_identity_rfis: list[SuppressedIdentityRfi]
     geo_dossiers: list[GeoDossier]             # Part III U1b: territory triangulation (surfaced)
     geo_proposals: list[GeoProposal]           # Part III U2b: one REVIEW-tier proposal per surfaced dossier
+    counterparty_notifications: list[CounterpartyNotification]  # Part IV: subject-facing, drafted never sent
+    suppressed_counterparty_notifications: list[SuppressedNotification]
+    lifecycle_dispositions: list[LifecycleDisposition]          # Part IV: relationship dispositions (proposals)
     out_dir: Path
     audit_log_path: Path
     audit_records: list[dict] = field(default_factory=list)
@@ -404,6 +417,103 @@ def run_sweep(
                     provenance=[p for prop in geo_proposals for p in prop.provenance],
                 )
 
+        # 2e. Counterparty-designation lifecycle (Part IV). For a
+        # counterparty_service designation — a designated VASP/exchange — each
+        # customer with POST-designation dealing is (a) drafted a subject-facing
+        # T&C notification and (b) given a relationship disposition via the eighth
+        # agency decision (propose_unblock / propose_offboard / hold_pending), with
+        # its reached lifecycle state. Record-only, and stamped ONLY for a
+        # counterparty_service designation with a post-designation-exposed customer
+        # — so every other sweep chain is byte-unchanged (the ownership_walk /
+        # geo_proposal conditional-stamp discipline). THE HARD RULE: no hold status
+        # is ever mutated; unblock exists only as a proposal record.
+        counterparty_notifications: list[CounterpartyNotification] = []
+        suppressed_counterparty_notifications: list[SuppressedNotification] = []
+        lifecycle_dispositions: list[LifecycleDisposition] = []
+        if designation.list_type == "counterparty_service":
+            dealings_by_uid = {
+                uid: counterparty_dealings(conn, designation, uid)
+                for uid in exposure.exposed_uids()
+            }
+            post_uids = [
+                uid for uid in exposure.exposed_uids()
+                if has_post_designation_dealing(
+                    dealings_by_uid[uid], designation.designation_date)
+            ]
+            counterparty_notifications, suppressed_counterparty_notifications = (
+                draft_counterparty_notifications(conn, designation, post_uids))
+            drafted_uids = {n.uid for n in counterparty_notifications}
+
+            for uid in post_uids:
+                acks = conn.acknowledgments_for(uid)
+                current = next(
+                    (a for a in acks
+                     if str(a["counterparty_designation_id"]) == designation.designation_id),
+                    None)
+                prior = [a for a in acks
+                         if str(a["counterparty_designation_id"]) != designation.designation_id]
+                acknowledged = current is not None
+                repeat_offender = len(prior) > 0
+                stop_verified = acknowledged and is_stop_verified(
+                    dealings_by_uid[uid], str(current["acknowledged_date"]))
+
+                prov: list[Provenance] = []
+                acct = conn.get_account(uid)
+                if acct is not None:
+                    prov.append(acct.provenance)
+                if current is not None:
+                    prov.append(current.provenance)
+                prov += [a.provenance for a in prior]
+
+                decision = decide_counterparty_lifecycle(
+                    uid, acknowledged=acknowledged, stop_verified=stop_verified,
+                    repeat_offender=repeat_offender,
+                    provenance=[p.cite() for p in prov])
+                state = derive_counterparty_lifecycle_state(
+                    notification_drafted=uid in drafted_uids,
+                    acknowledged=acknowledged, stop_verified=stop_verified,
+                    outcome=decision.outcome)
+                lifecycle_dispositions.append(LifecycleDisposition(
+                    uid=uid, state=state, outcome=decision.outcome,
+                    acknowledged=acknowledged, stop_verified=stop_verified,
+                    repeat_offender=repeat_offender,
+                    prior_acknowledged_counterparties=sorted(
+                        {str(a["counterparty_designation_id"]) for a in prior}),
+                    decision=decision, provenance=prov))
+
+            if counterparty_notifications or suppressed_counterparty_notifications:
+                audit.append(
+                    "remediation_sweep", "counterparty_notification",
+                    target=designation.designation_id,
+                    detail=json.dumps({
+                        "counterparty": designation.designated_name,
+                        "drafted": [{"id": n.notification_id, "uid": n.uid, "status": n.status}
+                                    for n in counterparty_notifications],
+                        "suppressed": [{"uid": s.uid, "reason": s.reason}
+                                       for s in suppressed_counterparty_notifications],
+                        "note": "subject-facing Terms-and-Conditions notifications for "
+                                "post-designation dealers; anti-tipping-off enforced; drafted "
+                                "for human review, nothing sent",
+                    }),
+                    provenance=[p for n in counterparty_notifications for p in n.provenance],
+                )
+            if lifecycle_dispositions:
+                audit.append(
+                    "remediation_sweep", "counterparty_lifecycle",
+                    target=designation.designation_id,
+                    detail=json.dumps({
+                        "dispositions": [
+                            {"uid": d.uid, "state": d.state, "outcome": d.outcome,
+                             "acknowledged": d.acknowledged, "stop_verified": d.stop_verified,
+                             "repeat_offender": d.repeat_offender}
+                            for d in lifecycle_dispositions],
+                        "note": "relationship dispositions are REVIEW-tier proposals for a "
+                                "human; no hold status is mutated — unblock exists only as a "
+                                "proposal record, gated on a verified acknowledgment and stop",
+                    }),
+                    provenance=[p for d in lifecycle_dispositions for p in d.provenance],
+                )
+
         # 3. Two-system hold reconciliation over the full ledger.
         gaps = verify_block_status(conn)
         audit.append(
@@ -515,6 +625,9 @@ def run_sweep(
             suppressed_identity_rfis=suppressed_identity_rfis,
             geo_dossiers=geo_dossiers,
             geo_proposals=geo_proposals,
+            counterparty_notifications=counterparty_notifications,
+            suppressed_counterparty_notifications=suppressed_counterparty_notifications,
+            lifecycle_dispositions=lifecycle_dispositions,
             out_dir=out_dir,
             audit_log_path=audit_path,
             audit_records=audit.read_all(),

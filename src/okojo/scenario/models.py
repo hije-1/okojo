@@ -150,7 +150,7 @@ class Designation:
     # the source list first carried the entry (== designation_date for domestic
     # sdn_style entries; earlier than it for a foreign lead-time plant).
     source_regime: str
-    list_type: str            # "national_ct" | "sdn_style" | "un_style"
+    list_type: str            # national_ct | sdn_style | un_style | territory | counterparty_service
     obligation_vs_signal: str  # "obligation" | "signal"
     listed_since: str          # ISO date the source list first carried this entry
 
@@ -395,6 +395,22 @@ class RelationshipAssertion:
     related_uid: int              # the candidate associate
     assertion_type: str           # "relationship_remark" | "kyc_document_cross_holding"
     detail: str
+
+
+@dataclass
+class Acknowledgment:
+    """A customer's acknowledgment of a designated counterparty (Phase 8 Part IV).
+
+    Read-only EVIDENCE, human-entered: the agent NEVER writes this — a human
+    records that a customer acknowledged a counterparty's designation. Its
+    presence (and date) gates the lifecycle disposition — an acknowledgment of
+    THIS counterparty plus a verified stop can propose lifting the relationship
+    hold; an acknowledgment of a PRIOR counterparty makes a new exposure a
+    repeat. A NEW sibling table, so every existing CSV stays byte-identical."""
+
+    uid: int
+    counterparty_designation_id: str   # the designation the customer acknowledged
+    acknowledged_date: str             # ISO date of the acknowledgment
 
 
 @dataclass

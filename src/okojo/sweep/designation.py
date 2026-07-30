@@ -62,7 +62,8 @@ class Designation(BaseModel):
     # Phase 8 Part I-B: which list, and when (see the dataclass in
     # scenario/models.py for the field semantics).
     source_regime: str = Field(min_length=1)
-    list_type: Literal["national_ct", "sdn_style", "un_style", "territory"]
+    list_type: Literal["national_ct", "sdn_style", "un_style", "territory",
+                       "counterparty_service"]
     obligation_vs_signal: Literal["obligation", "signal"]
     listed_since: str
 

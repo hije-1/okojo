@@ -55,6 +55,7 @@ from ..config import (
 )
 from .models import (
     Account,
+    Acknowledgment,
     Address,
     AdminHold,
     BeneficialOwnership,
@@ -521,6 +522,47 @@ _GEO_PERSONAS = [
     ("CARRIER_ONLY", "Tomas Redlin",     "AE", "AE", "AE", True),
     ("DECOY",        "Greta Solvang",    "AE", "AE", "AE", False),
     ("TRAVELLER",    "Emil Navarrete",   "AE", "XV", "AE", True),
+]
+
+# ---- Phase 8 Part IV: counterparty-designation lifecycle ------------------- #
+# A COUNTERPARTY-SERVICE designation (DES-2026-0009) names a designated VASP /
+# exchange ("Kavelith Digital Exchange"), a company WITH on-chain service
+# addresses — customers who dealt with its hosted wallets are surfaced by the
+# flow sweep, and the lifecycle dispositions the relationship AFTER detection.
+# PM-dictated names (2026-07-29); every >=4-char token clears fuzz.ratio<88 vs
+# the remark corpus (worst 54.5, measured 2026-07-30). Designated MID-WINDOW
+# (2025-06-01) so customers deal both BEFORE and AFTER the designation — the
+# pre/post split is the whole point — while ALL dealing stays inside the
+# simulation window (last activity is unmoved, so the hold-coherence guards are
+# byte-identical; only the "designations postdate all activity" clause carves
+# out this kind, by construction). Personas carry role
+# "counterparty_review_subject" (excluded from the hold/KYC full-coverage
+# filters, like every review subject). The two service addresses are FIXED
+# synthetic literals (no rng draw — the geo precedent); is_sanctioned_synthetic
+# is False (the on-chain risk scorer's set is untouched). Aron's PRIOR
+# acknowledged counterparty (DES-2025-0007) is a recorded PAST relationship in
+# the acknowledgments ledger only — never a swept designation.
+_CP_DID = "DES-2026-0009"
+_CP_NAME = "Kavelith Digital Exchange"
+_CP_DESIGNATION_DATE = "2025-06-01"
+_CP_ADDRS = ["TKavelithService0000000000000001", "TKavelithService0000000000000002"]
+_CP_PRIOR_DID = "DES-2025-0007"          # Aron's prior acknowledged counterparty (ledger-only)
+_CP_PRE_TX_DATE = "2025-03-15"           # pre-designation dealing
+_CP_POST_TX_DATE = "2025-07-10"          # post-designation dealing (earns a notification)
+_CP_ACK_DATE = "2025-08-01"              # Marta acknowledged; no dealing after -> stopped
+_CP_PRIOR_ACK_DATE = "2024-11-01"        # Aron's prior acknowledgment (recidivism seed)
+
+# The four planted personas (P8-A exact set). Each row:
+# (key, name, dealing_dates, acknowledges_current, has_prior_ack).
+#   Marta Kovanen  pre+post dealing, acks current, stopped -> propose_unblock
+#   Denis Rojek    post dealing, NO acknowledgment          -> hold_pending
+#   Aron Velitz    post dealing + a PRIOR acknowledged cp    -> propose_offboard
+#   Hana Sorven    NO dealing with the counterparty          -> absent (clean control)
+_CP_PERSONAS = [
+    ("UNBLOCK",  "Marta Kovanen", [_CP_PRE_TX_DATE, _CP_POST_TX_DATE], True,  False),
+    ("HOLD",     "Denis Rojek",   [_CP_POST_TX_DATE],                  False, False),
+    ("OFFBOARD", "Aron Velitz",   [_CP_POST_TX_DATE],                  False, True),
+    ("CLEAN",    "Hana Sorven",   [],                                  False, False),
 ]
 
 
@@ -1070,6 +1112,31 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             list_type="territory",
             obligation_vs_signal="signal",
             listed_since=designation_date,
+        ),
+        # ---- Part IV: the COUNTERPARTY-SERVICE designation ----------------- #
+        # Designates a synthetic VASP/exchange (Kavelith Digital Exchange), a
+        # company WITH on-chain service addresses — customers who dealt with them
+        # are surfaced by the flow sweep. A NEW list_type ("counterparty_service")
+        # structurally isolates it from the domestic/foreign/identity fixtures
+        # (no LIST_SOURCE_REGISTRY entry -> sweep_config byte-identical -> SWEEP
+        # frozen; source_regime is a free label, not a registry key). Designated
+        # MID-WINDOW so pre- AND post-designation dealing both exist (obligation-
+        # type, so exposure carries a real hold obligation). Its personas +
+        # transactions + true exposure keys are built in the Part IV late block
+        # below; this row makes it present in designations.csv (and its per-
+        # designation loop entries start empty until the late block overwrites
+        # them with the real, post-transaction exposure).
+        Designation(
+            designation_id=_CP_DID,
+            designated_name=_CP_NAME,
+            program="SYNTHETIC-COUNTERPARTY-STYLE",
+            entity_type="company",
+            designated_addresses=";".join(_CP_ADDRS),
+            designation_date=_CP_DESIGNATION_DATE,
+            source_regime="SYN-COUNTERPARTY",
+            list_type="counterparty_service",
+            obligation_vs_signal="obligation",
+            listed_since=_CP_DESIGNATION_DATE,
         ),
     ]
 
@@ -1688,6 +1755,85 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     geo_counter_evidence_uids = [geo_uid["TRAVELLER"]]
     geo_decoy_absent_uids = [geo_uid["DECOY"]]
 
+    # ---- Part IV: counterparty-lifecycle personas + ledger + exposure ------ #
+    # Appended AFTER the geo block (and after the per-designation loops), so every
+    # legacy CSV stays byte-identical. Unlike the review-subject personas above,
+    # these customers have FLOW exposure to the counterparty, so DES-0009's
+    # exposure keys are computed HERE from the appended transactions and OVERWRITE
+    # the (empty) entries the per-designation loops produced before the
+    # transactions existed. Personas carry no hold rows (review-subject role); the
+    # worksheet reads an absent hold row as no_hold.
+    cp_uid: dict[str, int] = {}
+    acknowledgments: list[Acknowledgment] = []
+    for key, name, _dealings, ack_current, has_prior in _CP_PERSONAS:
+        cuid = next_uid
+        next_uid += 1
+        cdoc = KycDoc(
+            kyc_doc_id=f"KYC-{len(kyc_docs) + 1:04d}", doc_type="PASSPORT",
+            holder_name=name, holder_dob="1985-04-22", issuing_country="AE",
+        )
+        kyc_docs[cdoc.kyc_doc_id] = cdoc
+        accounts.append(Account(
+            uid=cuid, entity_name=name, entity_type="individual",
+            role_in_ring="counterparty_review_subject", residence_country="AE",
+            nationality_country="AE", kyc_doc_id=cdoc.kyc_doc_id,
+            registration_date="2023-01-10", vip_level="Regular",
+            prior_review_count=0, account_status="active",
+        ))
+        cp_uid[key] = cuid
+        # The acknowledgments ledger (human-entered EVIDENCE): an acknowledgment
+        # of THIS counterparty gates the stop/unblock path; an acknowledgment of a
+        # PRIOR counterparty makes the new exposure a repeat (Aron).
+        if ack_current:
+            acknowledgments.append(Acknowledgment(cuid, _CP_DID, _CP_ACK_DATE))
+        if has_prior:
+            acknowledgments.append(Acknowledgment(cuid, _CP_PRIOR_DID, _CP_PRIOR_ACK_DATE))
+
+    # The counterparty's two hosted service addresses (fixed literals; external —
+    # no controller uid; NOT flagged is_sanctioned_synthetic, so the on-chain
+    # scorer's sanctioned set is untouched).
+    for a in _CP_ADDRS:
+        addresses.append(Address(a, "TRX", None, "counterparty-service-wallet", False))
+
+    # Deposits to the counterparty's first service address (the dealings) — fixed
+    # timestamps: a pre- and a post-designation deal for Marta; one post-
+    # designation deal for Denis and Aron; none for Hana. Empty remarks (no tell-
+    # miner interaction). tx_ids continue the sequence; legacy tx rows unchanged.
+    for key, _name, dealings, _ac, _pa in _CP_PERSONAS:
+        for i, dt in enumerate(dealings):
+            tx_counter += 1
+            txs.append(Transaction(
+                tx_id=f"SIMTX{tx_counter:06d}",
+                from_ref=f"uid:{cp_uid[key]}", to_ref=_CP_ADDRS[0],
+                amount_usdt=round(25_000.0 + i, 2), network="TRX",
+                timestamp=f"{dt}T10:00:00", remark="",
+                is_structured_round_number=False, direction="deposit",
+            ))
+
+    # True DES-0009 exposure, recomputed now that the counterparty transactions
+    # exist, OVERWRITING the empty entries the loops produced. Flow-edge semantics
+    # only (the same _designation_exposure helper); the exposed set is exactly the
+    # customers who dealt with the service addresses. Every exposed customer has a
+    # post-designation deal, so their exposure timing is post_designation.
+    cp_all_uids = [a.uid for a in accounts]
+    cp_exposed, cp_hops, cp_direct = _designation_exposure(
+        txs, address_controllers, _CP_ADDRS, cp_all_uids)
+    des_exposed[_CP_DID] = cp_exposed
+    des_hops[_CP_DID] = {str(u): cp_hops[u] for u in sorted(cp_hops)}
+    des_direct[_CP_DID] = cp_direct
+    des_adjacent[_CP_DID] = []
+    designation_exposure_timing[_CP_DID] = {
+        str(u): "post_designation" for u in cp_exposed
+    }
+
+    # Part IV answer keys. The DISPOSITIONS are POLICY-authored in the eval (not
+    # here) — the generator emits the FACTS: the designation, the persona map, the
+    # post-designation-exposed customers (== the notification set), and the clean
+    # control. The acknowledgments ledger is a table the sweep reads.
+    counterparty_personas = {k: cp_uid[k] for k in cp_uid}
+    counterparty_exposed_uids = sorted(cp_exposed)
+    counterparty_clean_uid = cp_uid["CLEAN"]
+
     # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
         "readme": "Fabricated data. Labels below are the answer key for scoring Okojo's capabilities.",
@@ -1814,6 +1960,17 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "geo_vpn_slip_uids": geo_vpn_slip_uids,
         "geo_counter_evidence_uids": geo_counter_evidence_uids,
         "geo_decoy_absent_uids": geo_decoy_absent_uids,
+        # Part IV (V1b) counterparty-lifecycle FACTS for the COUNTERPARTY_SERVICE
+        # designation (DES-0009). The dispositions themselves are POLICY-authored
+        # in test_lifecycle_eval (the generator emits facts; the eval owns policy).
+        # ``counterparty_exposed_uids`` is the post-designation-dealing set (== the
+        # notification set); ``counterparty_clean_uid`` is the unexposed control
+        # (must be ABSENT from every disposition). run_sweep recomputes exposure +
+        # every disposition, so the eval is a real check, never circular.
+        "counterparty_service_designation": _CP_DID,
+        "counterparty_personas": counterparty_personas,
+        "counterparty_exposed_uids": counterparty_exposed_uids,
+        "counterparty_clean_uid": counterparty_clean_uid,
     }
 
     # ---- write outputs ---------------------------------------------------- #
@@ -1845,6 +2002,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("phone_registrations.csv", phone_registrations)
     _write("device_timezones.csv", device_timezones)
     _write("kyc_artifact_validity.csv", kyc_artifact_validity)
+    _write("acknowledgments.csv", acknowledgments)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -1905,5 +2063,8 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "phone_registrations": len(phone_registrations),
         "device_timezones": len(device_timezones),
         "kyc_artifact_validity": len(kyc_artifact_validity),
+        "counterparty_personas": len(_CP_PERSONAS),
+        "counterparty_exposed_uids": len(counterparty_exposed_uids),
+        "acknowledgments": len(acknowledgments),
     }
     return summary

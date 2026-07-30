@@ -266,12 +266,24 @@ def build_worksheet(
              hops: Optional[int], direct: bool, exposure_usdt: float,
              base_provenance: list[Provenance],
              link_types: Optional[list[str]] = None) -> None:
-        w, a = wh[uid], adm[uid]
+        # Ring accounts always carry a hold row in both systems (unchanged). A
+        # Part-IV counterparty-review-subject can be flow-exposed yet carry no
+        # hold row (review subjects are outside the hold tables' coverage set):
+        # an absent row reads as "no_hold" and cites nothing, so the row still
+        # grounds on its exposure provenance. Byte-identical for every legacy
+        # account, which always resolves both rows.
+        w, a = wh.get(uid), adm.get(uid)
+        wh_status = str(w["hold_status"]) if w is not None else "no_hold"
+        adm_status = str(a["hold_status"]) if a is not None else "no_hold"
         gap = gap_by_uid.get(uid)
         acct = accounts[uid]
         tag_flag = acct.get("internal_tag") is not None
         is_staff = uid in staff_recs
-        prov = list(base_provenance) + [w.provenance, a.provenance]
+        prov = list(base_provenance)
+        if w is not None:
+            prov.append(w.provenance)
+        if a is not None:
+            prov.append(a.provenance)
         if tag_flag:
             prov.append(Provenance(
                 source=acct.provenance.source, row_key=acct.provenance.row_key,
@@ -289,7 +301,7 @@ def build_worksheet(
         # overlap into the exposed network. The register row is cited.
         action = _action_for(
             row_kind, is_signal, gap.gap_type if gap else None,
-            str(w["hold_status"]), str(a["hold_status"]), tag_flag,
+            wh_status, adm_status, tag_flag,
             is_staff=is_staff, link_types=link_types,
         )
         insider = action == "flags_insider_staff_device_overlap"
@@ -302,8 +314,8 @@ def build_worksheet(
             exposure_usdt=exposure_usdt,
             hops=hops,
             direct=direct,
-            warehouse_status=str(w["hold_status"]),
-            admin_status=str(a["hold_status"]),
+            warehouse_status=wh_status,
+            admin_status=adm_status,
             gap_type=gap.gap_type if gap else None,
             internal_tag_flag=tag_flag,
             exposure_timing=timing,
@@ -312,7 +324,7 @@ def build_worksheet(
             recommended_action=action,
             statement=_statement(
                 row_kind, entity_name, designation, hops, direct, exposure_usdt,
-                str(w["hold_status"]), str(a["hold_status"]),
+                wh_status, adm_status,
                 gap.gap_type if gap else None, tag_flag, link_types,
                 exposure_timing=timing, kyc_missing=kyc_missing,
                 is_staff_device_overlap=insider,

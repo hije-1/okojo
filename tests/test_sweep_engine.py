@@ -189,6 +189,27 @@ def test_territory_designation_permits_empty_addresses_on_its_own_branch():
                            "obligation_vs_signal": "obligation"})
 
 
+def test_counterparty_service_requires_addresses_negative_both_ways():
+    """Part IV (Q1 rider): a counterparty_service designation is a designated
+    VASP/exchange WITH on-chain service addresses, so it is obligation-type and
+    addresses are REQUIRED — an empty list is rejected (it does not qualify for
+    the name-only or territory empty-address branches), while a well-formed
+    address list is accepted."""
+    cp = {**_VALID, "entity_type": "company",
+          "list_type": "counterparty_service", "obligation_vs_signal": "obligation",
+          "source_regime": "SYN-COUNTERPARTY"}
+    # With addresses: accepted.
+    d = parse_designation({**cp, "designated_addresses": ["TCp0000000000000000000000000001"]})
+    assert d.list_type == "counterparty_service" and d.designated_addresses
+
+    # Empty addresses: rejected on BOTH standings (it is neither national_ct+signal
+    # nor territory), so a counterparty designation can never sweep nothing.
+    for ov in ("obligation", "signal"):
+        with pytest.raises(DesignationParseError):
+            parse_designation({**cp, "obligation_vs_signal": ov,
+                               "designated_addresses": []})
+
+
 def test_name_match_threshold_mirrors_screener():
     """One separation argument, two pinned constants: intentional divergence
     must be argued through a SWEEP_VERSION bump, never drift in silently."""
