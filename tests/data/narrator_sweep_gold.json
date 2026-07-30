@@ -1,0 +1,78 @@
+{
+  "readme": "Domain-authored gold for the Audit Narrator over planted SWEEP chains. Each record is built into a real hash chain (fixed clock) and narrated with family='sweep'; expected[i] is the independently-authored expectation for records[i] (seq i+1): its register and substrings its plain sentence must contain. The two planted chains between them exercise the full 19-action sweep vocabulary across both actors (remediation_sweep, sweep_packager), including the conditional Part-II/III/IV templates (corroboration, ownership, proximity, geo, counterparty) that no single real sweep hits at once.",
+  "narrator_version": "1.0.0",
+  "chains": [
+    {
+      "name": "foreign_identity_sweep",
+      "subject": "DES-2026-9001",
+      "records": [
+        {"actor": "remediation_sweep", "action": "sweep_open", "target": "DES-2026-9001", "detail_obj": {"designated_name": "Planted Foreign Party", "program": "FOREIGN-CT", "designated_addresses": 2, "designation_date": "2026-01-10", "source_regime": "national_ct", "list_type": "national_ct", "obligation_vs_signal": "signal", "listed_since": "2025-12-01"}},
+        {"actor": "remediation_sweep", "action": "sweep_config", "detail_obj": {"version": "1.1.0"}},
+        {"actor": "remediation_sweep", "action": "identity_config", "detail_obj": {"version": "1.0.0"}},
+        {"actor": "remediation_sweep", "action": "name_screen", "target": "DES-2026-9001", "detail_obj": {"threshold": 88.0, "matches": [{"uid": 1, "score": 91.0}], "variant_threshold": 90.0, "variant_matches": [{"uid": 2, "score": 93.0, "rule_path": "translit"}]}},
+        {"actor": "remediation_sweep", "action": "corroboration_decision", "target": "DES-2026-9001:uid:2", "detail_obj": {"decision_id": "corroborate_identity", "outcome": "possible_match_needs_human", "rationale": "one strong identifier, one weak", "plain_language": "The customer's documents partly line up; surfaced for an officer to confirm.", "evidence": {}, "provenance": []}},
+        {"actor": "remediation_sweep", "action": "ownership_walk", "target": "DES-2026-9001", "detail_obj": {"resolved_parties": [2], "propagations": [{"company_uid": 10, "owner_uid": 2, "ownership_pct": 60}], "fictitious_executives": [{"appointment_id": "A1", "company_uid": 10, "officer_name": "Planted Officer"}], "post_designation_control_changes": [{"appointment_id": "A2", "company_uid": 10, "changed_date": "2026-02-01"}], "note": "review-only"}},
+        {"actor": "remediation_sweep", "action": "exposure_sweep", "target": "DES-2026-9001", "detail_obj": {"addresses_in_ledger": 2, "addresses_not_in_ledger": 0, "exposed_hops_by_uid": {"3": 1}, "direct_uids": [3], "adjacent_review_only_uids": [4, 5]}},
+        {"actor": "remediation_sweep", "action": "proximity_ring", "target": "DES-2026-9001", "detail_obj": {"resolved_parties": [2], "members": [{"uid": 6, "related_party_uid": 2}, {"uid": 7, "related_party_uid": 2}], "note": "review-tier"}},
+        {"actor": "remediation_sweep", "action": "block_verify", "detail_obj": {"accounts_reconciled": 46, "gaps": [{"uid": 1, "gap_type": "held_not_flagged"}]}},
+        {"actor": "remediation_sweep", "action": "worksheet_build", "target": "DES-2026-9001", "detail_obj": {"rows": 3, "actions": {"review": 3}, "grounding": {"grounded": true}}},
+        {"actor": "remediation_sweep", "action": "escalations_draft", "target": "DES-2026-9001", "detail_obj": {"drafted": [{"id": "E1", "kind": "internal_referral", "uid": 3}], "suppressed": [], "note": "nothing sent"}},
+        {"actor": "remediation_sweep", "action": "identity_review_rfi", "target": "DES-2026-9001", "detail_obj": {"drafted": [{"id": "R1", "uid": 2, "status": "drafted_pending_human_review"}], "suppressed": [], "note": "nothing sent"}},
+        {"actor": "remediation_sweep", "action": "sweep_complete", "target": "DES-2026-9001", "detail_obj": {"exposed_accounts": 1, "adjacent_review_only": 2, "name_matches": 1, "variant_name_matches": 1, "block_status_gaps": 1, "worksheet_rows": 3, "escalations_drafted": 1, "escalations_suppressed": 0, "note": "results surfaced"}},
+        {"actor": "sweep_packager", "action": "packaged", "target": "data/sweeps/DES-2026-9001/sweep_package.json", "detail_obj": {"package": "sweep_package.json", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", "designation_id": "DES-2026-9001", "exposed_accounts": 1, "note": "human review required"}}
+      ],
+      "expected": [
+        {"register": "action", "must_include": ["Opened the remediation sweep", "Planted Foreign Party", "DES-2026-9001", "national_ct"]},
+        {"register": "setup", "must_include": ["sweep policy", "v1.1.0"]},
+        {"register": "setup", "must_include": ["identity-resolution policy", "v1.0.0"]},
+        {"register": "action", "must_include": ["Screened registered account names", "1 direct match(es)", "1 variant match(es)"]},
+        {"register": "action", "must_include": ["Recorded a corroboration decision for DES-2026-9001:uid:2", "surfaced for an officer to confirm"]},
+        {"register": "action", "must_include": ["Walked beneficial ownership", "1 ownership propagation(s)", "1 fictitious officer(s)", "1 post-designation control change(s)"]},
+        {"register": "action", "must_include": ["Swept the ledger for exposure", "1 directly exposed account(s)", "2 adjacent review-only account(s)"]},
+        {"register": "action", "must_include": ["Surfaced a proximity ring of 2 review-tier associate(s)", "no kinship asserted"]},
+        {"register": "action", "must_include": ["Reconciled hold status across two systems", "46 account(s) reconciled", "1 gap(s) found"]},
+        {"register": "action", "must_include": ["Built the grounded remediation worksheet", "3 row(s)"]},
+        {"register": "action", "must_include": ["Drafted 1 internal escalation(s)", "0 suppressed"]},
+        {"register": "action", "must_include": ["Drafted 1 subject-facing identity-review RFI(s)", "0 suppressed"]},
+        {"register": "action", "must_include": ["Completed the sweep", "1 exposed account(s)", "1 name match(es)", "3 worksheet row(s)"]},
+        {"register": "action", "must_include": ["Assembled the decision-ready remediation package", "1 exposed account(s)", "SHA-256"]}
+      ]
+    },
+    {
+      "name": "territory_and_counterparty",
+      "subject": "DES-2026-9002",
+      "records": [
+        {"actor": "remediation_sweep", "action": "sweep_open", "target": "DES-2026-9002", "detail_obj": {"designated_name": "Planted Territory", "program": "GEO", "designated_addresses": 1, "designation_date": "2026-01-15", "source_regime": "territory", "list_type": "territory", "obligation_vs_signal": "obligation", "listed_since": "2026-01-15"}},
+        {"actor": "remediation_sweep", "action": "sweep_config", "detail_obj": {"version": "1.1.0"}},
+        {"actor": "remediation_sweep", "action": "identity_config", "detail_obj": {"version": "1.0.0"}},
+        {"actor": "remediation_sweep", "action": "geo_config", "detail_obj": {"version": "1.0.0"}},
+        {"actor": "remediation_sweep", "action": "geo_triangulation", "target": "DES-2026-9002", "detail_obj": {"territory": "Planted Territory", "surfaced": [{"uid": 7, "signals": ["ip"], "vpn_slip": false}, {"uid": 8, "signals": ["kyc_addr"], "vpn_slip": true}], "note": "possible presence, never proven"}},
+        {"actor": "remediation_sweep", "action": "geo_proposal", "target": "DES-2026-9002", "detail_obj": {"proposals": [{"uid": 7, "outcome": "propose_restriction", "net_presence_score": 3, "status": "drafted_pending_human_review", "rfi_drafted": true, "rfi_suppressed": false}], "note": "proposed, never executed"}},
+        {"actor": "remediation_sweep", "action": "counterparty_notification", "target": "DES-2026-9002", "detail_obj": {"counterparty": "Planted VASP", "drafted": [{"id": "N1", "uid": 9, "status": "drafted_pending_human_review"}], "suppressed": [], "note": "anti-tipping-off enforced; nothing sent"}},
+        {"actor": "remediation_sweep", "action": "counterparty_lifecycle", "target": "DES-2026-9002", "detail_obj": {"dispositions": [{"uid": 9, "state": "hold_pending", "outcome": "hold_pending", "acknowledged": false, "stop_verified": false, "repeat_offender": false}], "note": "no hold status is mutated"}},
+        {"actor": "remediation_sweep", "action": "exposure_sweep", "target": "DES-2026-9002", "detail_obj": {"addresses_in_ledger": 1, "addresses_not_in_ledger": 0, "exposed_hops_by_uid": {"9": 1}, "direct_uids": [9], "adjacent_review_only_uids": []}},
+        {"actor": "remediation_sweep", "action": "block_verify", "detail_obj": {"accounts_reconciled": 46, "gaps": []}},
+        {"actor": "remediation_sweep", "action": "worksheet_build", "target": "DES-2026-9002", "detail_obj": {"rows": 1, "actions": {"review": 1}, "grounding": {"grounded": true}}},
+        {"actor": "remediation_sweep", "action": "escalations_draft", "target": "DES-2026-9002", "detail_obj": {"drafted": [], "suppressed": [{"kind": "internal_referral", "uid": 9, "reason": "insufficient_grounding"}], "note": "nothing sent"}},
+        {"actor": "remediation_sweep", "action": "sweep_complete", "target": "DES-2026-9002", "detail_obj": {"exposed_accounts": 1, "adjacent_review_only": 0, "name_matches": 0, "variant_name_matches": 0, "block_status_gaps": 0, "worksheet_rows": 1, "escalations_drafted": 0, "escalations_suppressed": 1, "note": "results surfaced"}},
+        {"actor": "sweep_packager", "action": "packaged", "target": "data/sweeps/DES-2026-9002/sweep_package.json", "detail_obj": {"package": "sweep_package.json", "sha256": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef", "designation_id": "DES-2026-9002", "exposed_accounts": 1, "note": "human review required"}}
+      ],
+      "expected": [
+        {"register": "action", "must_include": ["Opened the remediation sweep", "Planted Territory", "DES-2026-9002", "territory"]},
+        {"register": "setup", "must_include": ["sweep policy", "v1.1.0"]},
+        {"register": "setup", "must_include": ["identity-resolution policy", "v1.0.0"]},
+        {"register": "setup", "must_include": ["geo-triangulation policy", "v1.0.0"]},
+        {"register": "action", "must_include": ["Triangulated location signals over Planted Territory", "2 account(s) surfaced for review", "never prove it"]},
+        {"register": "action", "must_include": ["Proposed 1 review-tier geo action(s)", "never executed"]},
+        {"register": "action", "must_include": ["Drafted 1 subject-facing counterparty notification(s)", "never sent", "0 suppressed"]},
+        {"register": "action", "must_include": ["Recorded 1 counterparty relationship disposition(s)", "no hold status mutated", "unblock exists only as a proposal"]},
+        {"register": "action", "must_include": ["Swept the ledger for exposure", "1 directly exposed account(s)", "0 adjacent review-only account(s)"]},
+        {"register": "action", "must_include": ["Reconciled hold status across two systems", "46 account(s) reconciled", "0 gap(s) found"]},
+        {"register": "action", "must_include": ["Built the grounded remediation worksheet", "1 row(s)"]},
+        {"register": "action", "must_include": ["Drafted 0 internal escalation(s)", "1 suppressed"]},
+        {"register": "action", "must_include": ["Completed the sweep", "1 exposed account(s)", "0 name match(es)", "1 worksheet row(s)"]},
+        {"register": "action", "must_include": ["Assembled the decision-ready remediation package", "1 exposed account(s)", "SHA-256"]}
+      ]
+    }
+  ]
+}

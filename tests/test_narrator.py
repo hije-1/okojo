@@ -20,6 +20,7 @@ from okojo.narrator import (
     RecordRef,
     assert_calibrated,
     assert_narrative_grounded,
+    narrate_chain_batch,
     narrate_chain,
 )
 from okojo.sar.schema import CalibrationViolationError
@@ -113,3 +114,46 @@ def test_calibration_guard_rejects_banned_terms():
     )
     with pytest.raises(CalibrationViolationError):
         assert_calibrated(bad)
+
+
+# --- sweep + batch (Slice 2) ----------------------------------------------- #
+def _sweep_chain(tmp_path, name, did):
+    return _chain(tmp_path, [
+        ("remediation_sweep", "sweep_open", did,
+         json.dumps({"designated_name": f"Party {name}", "list_type": "national_ct"})),
+        ("remediation_sweep", "sweep_config", None, json.dumps({"version": "1.1.0"})),
+        ("remediation_sweep", "exposure_sweep", did,
+         json.dumps({"direct_uids": [1, 2], "adjacent_review_only_uids": [3]})),
+        ("remediation_sweep", "sweep_complete", did,
+         json.dumps({"exposed_accounts": 2, "name_matches": 1, "worksheet_rows": 4})),
+    ], name=name).read_all()
+
+
+def test_narrate_sweep_chain_two_register_grounded(tmp_path):
+    records = _sweep_chain(tmp_path, "s1", "DES-2026-0001")
+    nar = narrate_chain(records, family="sweep", subject="DES-2026-0001")
+    assert nar.verified and [s.register for s in nar.sentences] == \
+        ["action", "setup", "action", "action"]
+    assert all(s.templated for s in nar.sentences)
+    assert "Opened the remediation sweep for Party s1" in nar.sentences[0].text
+    assert "2 directly exposed account(s)" in nar.sentences[2].text
+    assert_narrative_grounded(nar, records)
+    assert_calibrated(nar)
+
+
+def test_narrate_chain_batch_rolls_up_constituents(tmp_path):
+    a = _sweep_chain(tmp_path, "a", "DES-2026-0001")
+    b = _sweep_chain(tmp_path, "b", "DES-2026-0002")
+    bn = narrate_chain_batch([("DES-2026-0001", a), ("DES-2026-0002", b)])
+
+    assert bn.designation_count == 2
+    assert bn.narrator_version == NARRATOR_VERSION
+    assert len(bn.rollup.sentences) == 2
+    assert all("verified across 4 record(s)" in s.text for s in bn.rollup.sentences)
+    # the roll-up grounds ONLY to real constituent records (never the rollup view)
+    all_records = a + b
+    assert_narrative_grounded(bn.rollup, all_records)
+    resolver = NarrativeGroundingResolver(all_records)
+    assert all(resolver.resolves(s.ref) for s in bn.rollup.sentences)
+    # the batch plain rendering leads with the roll-up, then each chain
+    assert bn.plain().startswith("Batch roll-up over 2 designation(s):")

@@ -12,12 +12,14 @@ from __future__ import annotations
 from .narrator import (
     NARRATOR_VERSION,
     AuditChainNarrative,
+    AuditBatchNarrative,
     NarrativeGroundingError,
     NarrativeGroundingResolver,
     NarrativeSentence,
     RecordRef,
     assert_calibrated,
     assert_narrative_grounded,
+    narrate_chain_batch,
     narrate_chain,
     narrator_config,
 )
@@ -25,12 +27,14 @@ from .narrator import (
 __all__ = [
     "NARRATOR_VERSION",
     "AuditChainNarrative",
+    "AuditBatchNarrative",
     "NarrativeGroundingError",
     "NarrativeGroundingResolver",
     "NarrativeSentence",
     "RecordRef",
     "assert_calibrated",
     "assert_narrative_grounded",
+    "narrate_chain_batch",
     "narrate_chain",
     "narrator_config",
 ]

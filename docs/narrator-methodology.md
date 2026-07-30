@@ -83,10 +83,29 @@ sweep and batch families does not itself move the version.
 
 ## Scope
 
-v1.0.0 ships the case-family templates and the shared machinery
-(`verify_chain_located`, the grounding resolver, the calibration guard, the two-register
-artifact). The sweep and batch families follow; because unknown records already
-narrate faithfully via the generic reading, that extension is additive.
+v1.0.0 covers all three chain families over one set of shared machinery
+(`verify_chain_located`, the grounding resolver, the calibration guard, the
+two-register artifact):
+
+* **Case** — the 13-actor case chain the compiled pipeline writes.
+* **Sweep** — the Designation-Triggered Remediation Sweep's own chain, over two
+  actors (`remediation_sweep`, `sweep_packager`) and 19 actions. Each template is
+  a faithful 1:1 reading of the record's own detail — it reports the counts and
+  identifiers the record carries and nothing more — with the three versioned
+  policy stamps (`sweep_config`, `identity_config`, `geo_config`) in the setup
+  register and every consequential step in the action register.
+* **Batch** — a whole list drop. A batch owns **no chain of its own**: it is N
+  independent sweep chains plus a derived, non-chained `rollup` dict. So its
+  narrative is exactly that — each constituent sweep chain narrated on its own
+  terms (break-report-only where one fails verification), plus a **roll-up whose
+  every sentence is grounded to a real record in a constituent chain** (the
+  terminal `sweep_complete` of a verified chain, read for its own counts, or the
+  break-position record of a broken one). The `rollup` dict is a view, **never a
+  grounding source**; a broken constituent is reported and excluded from the
+  roll-up, never summarized past its break.
+
+Template coverage is additive by construction: an unknown record still narrates
+faithfully via the generic reading, so extending the map never moves the version.
 
 ## Versioned policy (canonical)
 

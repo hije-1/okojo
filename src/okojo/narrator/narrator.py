@@ -105,6 +105,40 @@ class AuditChainNarrative:
         return "\n".join(s.cited() for s in self.sentences)
 
 
+@dataclass(frozen=True)
+class AuditBatchNarrative:
+    """A narrative over a whole list drop: N constituent sweep-chain narratives
+    plus a roll-up.
+
+    A batch owns no chain of its own — it is N independent sweep chains plus a
+    derived, non-chained ``rollup`` dict (a view, never a grounding source). So
+    the batch narrative is exactly: each constituent chain narrated on its own
+    terms (``chain_narratives``, break-report-only where one fails verification),
+    and a ``rollup`` narrative whose every sentence is grounded to a REAL record
+    in a constituent chain — the terminal ``sweep_complete`` of a verified chain,
+    or the break-position record of a broken one. Nothing is read from the
+    non-chained ``rollup`` dict; nothing past a break is summarized.
+    """
+
+    designation_count: int
+    chain_narratives: list[AuditChainNarrative]
+    rollup: AuditChainNarrative           # family="batch"; grounded to constituent records
+    narrator_version: str = NARRATOR_VERSION
+
+    def plain(self) -> str:
+        """The roll-up first, then each constituent chain in order."""
+        blocks = [f"Batch roll-up over {self.designation_count} designation(s):",
+                  self.rollup.plain(), "", "Per-designation chains:"]
+        for nar in self.chain_narratives:
+            blocks.append(f"[{nar.subject or 'sweep'}]")
+            blocks.append(nar.plain())
+        return "\n".join(blocks)
+
+    def provenance(self) -> list[str]:
+        """The record citations behind each roll-up sentence, in order."""
+        return self.rollup.provenance()
+
+
 # --------------------------------------------------------------------------- #
 # Grounding + calibration (fail-closed, over narrator output)
 # --------------------------------------------------------------------------- #
@@ -168,6 +202,17 @@ def _json_dict(detail) -> Optional[dict]:
 def _json_get(detail, key):
     d = _json_dict(detail)
     return d.get(key) if d else None
+
+
+def _json_len(detail, key) -> int:
+    """Count the members of a list/dict field in a JSON detail (0 if absent).
+
+    A faithful reading of a record whose detail carries collections (matches,
+    dispositions, gaps): the narrative reports *how many*, from the record's own
+    payload — never from a derived view.
+    """
+    v = _json_get(detail, key)
+    return len(v) if isinstance(v, (list, dict)) else 0
 
 
 def _compact(detail) -> str:
@@ -327,7 +372,179 @@ CASE_TEMPLATES: dict[tuple, _Template] = {
     ("case_packager", "packaged"): _Template("action", _packaged_render),
 }
 
-_TEMPLATES: dict[str, dict[tuple, _Template]] = {"case": CASE_TEMPLATES}
+# --------------------------------------------------------------------------- #
+# SWEEP-family template registry
+#
+# The Designation-Triggered Remediation Sweep writes its own hash-chained trail
+# over two actors — ``remediation_sweep`` (the sweep engine) and
+# ``sweep_packager`` — with 19 actions. Each template is a faithful 1:1 reading
+# of the record's own detail: it reports the counts and identifiers the record
+# actually carries, and nothing more. Setup register for the three versioned
+# policy stamps (``sweep_config`` / ``identity_config`` / ``geo_config``); the
+# action register for every consequential step.
+# --------------------------------------------------------------------------- #
+def _sweep_open_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    name = d.get("designated_name") or "the designated party"
+    out = f"Opened the remediation sweep for {_one_line(name)} ({rec.get('target')})"
+    lt = d.get("list_type")
+    if lt:
+        out = f"{out}; list type {lt}"
+    return _period(out)
+
+
+def _name_screen_render(rec: dict) -> str:
+    nd = _json_len(rec.get("detail"), "matches")
+    nv = _json_len(rec.get("detail"), "variant_matches")
+    return _period(
+        f"Screened registered account names against the designated name: "
+        f"{nd} direct match(es), {nv} variant match(es)")
+
+
+def _corroboration_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    tgt = rec.get("target") or "the candidate"
+    plain = d.get("plain_language")
+    if plain:
+        return _period(f"Recorded a corroboration decision for {tgt}: {_one_line(plain)}")
+    outcome = d.get("outcome")
+    if outcome:
+        return _period(f"Recorded a corroboration decision for {tgt}: {outcome}")
+    return _period(f"Recorded a corroboration decision for {tgt}")
+
+
+def _ownership_render(rec: dict) -> str:
+    d = rec.get("detail")
+    return _period(
+        f"Walked beneficial ownership from the resolved parties: "
+        f"{_json_len(d, 'propagations')} ownership propagation(s), "
+        f"{_json_len(d, 'fictitious_executives')} fictitious officer(s), "
+        f"{_json_len(d, 'post_designation_control_changes')} post-designation "
+        f"control change(s) (review-only, no flow exposure)")
+
+
+def _exposure_render(rec: dict) -> str:
+    d = rec.get("detail")
+    return _period(
+        f"Swept the ledger for exposure from the designated addresses: "
+        f"{_json_len(d, 'direct_uids')} directly exposed account(s), "
+        f"{_json_len(d, 'adjacent_review_only_uids')} adjacent review-only account(s)")
+
+
+def _proximity_render(rec: dict) -> str:
+    return _period(
+        f"Surfaced a proximity ring of {_json_len(rec.get('detail'), 'members')} "
+        f"review-tier associate(s) (correlational signals, no kinship asserted, "
+        f"no exposure)")
+
+
+def _geo_triangulation_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    terr = d.get("territory") or "the territory"
+    ns = _json_len(rec.get("detail"), "surfaced")
+    return _period(
+        f"Triangulated location signals over {_one_line(terr)}: {ns} account(s) "
+        f"surfaced for review (signals indicate possible presence, never prove it)")
+
+
+def _geo_proposal_render(rec: dict) -> str:
+    return _period(
+        f"Proposed {_json_len(rec.get('detail'), 'proposals')} review-tier geo "
+        f"action(s) for a human (proposed, never executed; any RFI drafted, never sent)")
+
+
+def _cp_notification_render(rec: dict) -> str:
+    d = rec.get("detail")
+    return _period(
+        f"Drafted {_json_len(d, 'drafted')} subject-facing counterparty "
+        f"notification(s) (never sent), {_json_len(d, 'suppressed')} suppressed")
+
+
+def _cp_lifecycle_render(rec: dict) -> str:
+    return _period(
+        f"Recorded {_json_len(rec.get('detail'), 'dispositions')} counterparty "
+        f"relationship disposition(s) for human review (no hold status mutated; "
+        f"unblock exists only as a proposal)")
+
+
+def _block_verify_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    nr = d.get("accounts_reconciled") or 0
+    return _period(
+        f"Reconciled hold status across two systems: {nr} account(s) reconciled, "
+        f"{_json_len(rec.get('detail'), 'gaps')} gap(s) found")
+
+
+def _worksheet_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    nr = d.get("rows") or 0
+    return _period(f"Built the grounded remediation worksheet: {nr} row(s)")
+
+
+def _escalations_render(rec: dict) -> str:
+    d = rec.get("detail")
+    return _period(
+        f"Drafted {_json_len(d, 'drafted')} internal escalation(s) (never sent), "
+        f"{_json_len(d, 'suppressed')} suppressed")
+
+
+def _identity_rfi_render(rec: dict) -> str:
+    d = rec.get("detail")
+    return _period(
+        f"Drafted {_json_len(d, 'drafted')} subject-facing identity-review RFI(s) "
+        f"(never sent), {_json_len(d, 'suppressed')} suppressed")
+
+
+def _sweep_complete_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    ex = d.get("exposed_accounts") or 0
+    nm = d.get("name_matches") or 0
+    wr = d.get("worksheet_rows") or 0
+    return _period(
+        f"Completed the sweep: {ex} exposed account(s), {nm} name match(es), "
+        f"{wr} worksheet row(s); results surfaced for human remediation, no status changed")
+
+
+def _sweep_packaged_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    tgt = rec.get("target") or d.get("package") or "the package"
+    ex = d.get("exposed_accounts")
+    sha = d.get("sha256") or ""
+    out = f"Assembled the decision-ready remediation package ({tgt}) for human review"
+    if ex is not None:
+        out = f"{out}; {ex} exposed account(s)"
+    out = _period(out)
+    if sha:
+        out = f"{out} The chain stamps its SHA-256 ({sha[:12]}…)."
+    return out
+
+
+SWEEP_TEMPLATES: dict[tuple, _Template] = {
+    ("remediation_sweep", "sweep_open"): _Template("action", _sweep_open_render),
+    ("remediation_sweep", "sweep_config"): _config("sweep policy"),
+    ("remediation_sweep", "identity_config"): _config("identity-resolution policy"),
+    ("remediation_sweep", "name_screen"): _Template("action", _name_screen_render),
+    ("remediation_sweep", "corroboration_decision"): _Template("action", _corroboration_render),
+    ("remediation_sweep", "ownership_walk"): _Template("action", _ownership_render),
+    ("remediation_sweep", "exposure_sweep"): _Template("action", _exposure_render),
+    ("remediation_sweep", "proximity_ring"): _Template("action", _proximity_render),
+    ("remediation_sweep", "geo_config"): _config("geo-triangulation policy"),
+    ("remediation_sweep", "geo_triangulation"): _Template("action", _geo_triangulation_render),
+    ("remediation_sweep", "geo_proposal"): _Template("action", _geo_proposal_render),
+    ("remediation_sweep", "counterparty_notification"): _Template("action", _cp_notification_render),
+    ("remediation_sweep", "counterparty_lifecycle"): _Template("action", _cp_lifecycle_render),
+    ("remediation_sweep", "block_verify"): _Template("action", _block_verify_render),
+    ("remediation_sweep", "worksheet_build"): _Template("action", _worksheet_render),
+    ("remediation_sweep", "escalations_draft"): _Template("action", _escalations_render),
+    ("remediation_sweep", "identity_review_rfi"): _Template("action", _identity_rfi_render),
+    ("remediation_sweep", "sweep_complete"): _Template("action", _sweep_complete_render),
+    ("sweep_packager", "packaged"): _Template("action", _sweep_packaged_render),
+}
+
+_TEMPLATES: dict[str, dict[tuple, _Template]] = {
+    "case": CASE_TEMPLATES,
+    "sweep": SWEEP_TEMPLATES,
+}
 
 
 def _is_setup(action: str) -> bool:
@@ -415,6 +632,72 @@ def narrate_chain(source: RecordSource, *, family: str = "case",
     assert_narrative_grounded(narrative, records)
     assert_calibrated(narrative)
     return narrative
+
+
+def _find_record(records: list[dict], key: tuple) -> Optional[dict]:
+    for r in records:
+        if (r.get("actor"), r.get("action")) == key:
+            return r
+    return None
+
+
+def _rollup_sentence(subject: Optional[str], records: list[dict],
+                     nar: AuditChainNarrative) -> NarrativeSentence:
+    """One roll-up line for a constituent sweep, grounded to a real record of it.
+
+    A verified chain is summarized from the record it cites — the terminal
+    ``sweep_complete`` (or ``packaged``) of that very chain, read for its own
+    counts. A broken chain is NOT summarized: the line is a break report citing
+    the break-position record, and it is excluded from the roll-up totals (Q2 —
+    content past a break cannot be trusted).
+    """
+    label = subject or "the designation"
+    if not nar.verified:
+        ref = nar.sentences[0].ref
+        return NarrativeSentence(
+            ref=ref, register="break",
+            text=_period(
+                f"{label}: chain verification FAILED at record #{ref.seq}; excluded "
+                f"from the roll-up — a human must inspect the record"))
+    rec = (_find_record(records, ("remediation_sweep", "sweep_complete"))
+           or _find_record(records, ("sweep_packager", "packaged"))
+           or records[-1])
+    d = _json_dict(rec.get("detail")) or {}
+    parts = [f"{label}: sweep chain verified across {len(records)} record(s)"]
+    if d.get("exposed_accounts") is not None:
+        parts.append(f"{d['exposed_accounts']} exposed account(s)")
+    if d.get("name_matches") is not None:
+        parts.append(f"{d['name_matches']} name match(es)")
+    ref = RecordRef(seq=int(rec["seq"]), hash=str(rec["hash"]))
+    return NarrativeSentence(ref=ref, register="action", text=_period("; ".join(parts)))
+
+
+def narrate_chain_batch(chains: Iterable[tuple[Optional[str], RecordSource]]) -> AuditBatchNarrative:
+    """Narrate a whole list drop: each constituent sweep chain + a grounded roll-up.
+
+    ``chains`` is an iterable of ``(subject, source)`` — one per swept
+    designation, where ``source`` is a path or an already-read record list. Each
+    constituent is narrated with :func:`narrate_chain` (family ``"sweep"``,
+    break-report-only on a failed chain). The roll-up is one line per constituent,
+    each grounded to a REAL record in that constituent's chain (never the derived
+    ``rollup`` dict), then validated fail-closed (grounding + calibration) over the
+    union of all constituent records before return.
+    """
+    items = [(subject, _load_records(source)) for subject, source in chains]
+    chain_narratives = [narrate_chain(records, family="sweep", subject=subject)
+                        for subject, records in items]
+    rollup_sentences = [_rollup_sentence(subject, records, nar)
+                        for (subject, records), nar in zip(items, chain_narratives)]
+    all_records = [r for _, records in items for r in records]
+    rollup = AuditChainNarrative(
+        family="batch", subject=None,
+        verified=all(nar.verified for nar in chain_narratives),
+        record_count=len(all_records), sentences=rollup_sentences)
+    # The roll-up grounds ONLY to constituent chain records (never the rollup view).
+    assert_narrative_grounded(rollup, all_records)
+    assert_calibrated(rollup)
+    return AuditBatchNarrative(designation_count=len(items),
+                          chain_narratives=chain_narratives, rollup=rollup)
 
 
 # --------------------------------------------------------------------------- #
