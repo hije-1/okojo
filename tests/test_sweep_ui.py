@@ -327,6 +327,70 @@ def test_geo_traveller_counter_evidence_and_edd_rfi_render(sweep_app_identity):
     assert "kyc_artifact_validity" in text
 
 
+# --- Part IV counterparty-designation lifecycle panel (V2) ------------------
+#
+# The counterparty-lifecycle panel renders only for a counterparty_service
+# designation, so these drive the shared sweep-mode app to DES-2026-0009
+# (Kavelith Digital Exchange, the synthetic designated VASP). Reuses the
+# module-scoped ``sweep_app_identity`` fixture (a sweep-mode app selected per
+# test) rather than spinning a FOURTH AppTest — AppTest is the most expensive
+# tenant, and the fixture is just "sweep mode, pick a designation", which is
+# exactly what this needs. The three exposed personas map to three DIFFERENT
+# dispositions (unblock / offboard / hold).
+
+_COUNTERPARTY = "DES-2026-0009"
+
+
+def test_counterparty_lifecycle_renders_dispositions_plain(sweep_app_identity):
+    from app.streamlit_app import _CP_DISPOSITION_LABEL, _CP_STATE_LABEL
+
+    at = _select(sweep_app_identity, _COUNTERPARTY)
+    assert not at.exception
+    text = _all_text(at)
+
+    assert "Counterparty-designation lifecycle" in text
+    # The three exposed customers render three DIFFERENT dispositions, each through
+    # its plain proposal label — never the raw outcome slug (two-register boundary).
+    for outcome in ("propose_unblock", "propose_offboard", "hold_pending"):
+        assert _CP_DISPOSITION_LABEL[outcome] in text
+        assert outcome not in text, f"raw outcome slug leaked to screen: {outcome}"
+    # Lifecycle states render through their plain labels; no raw state slug reaches
+    # the screen. The two proposal-terminal states (Marta's unblock, Aron's
+    # offboard) are present in plain form.
+    assert _CP_STATE_LABEL["unblock_proposed"] in text
+    assert _CP_STATE_LABEL["offboard_proposed"] in text
+    for state in ("exposure_detected", "notification_drafted",
+                  "acknowledgment_recorded", "stop_dealing_verified",
+                  "unblock_proposed", "offboard_proposed"):
+        assert state not in text, f"raw lifecycle state slug leaked to screen: {state}"
+
+
+def test_counterparty_lifecycle_rider_phrasing_and_notification(sweep_app_identity):
+    from app.streamlit_app import _RFI_STATUS_LABEL
+
+    at = _select(sweep_app_identity, _COUNTERPARTY)
+    assert not at.exception
+    text = _all_text(at)
+
+    # PHRASING RIDER (PM ruling, binding): propose_unblock renders as "Propose
+    # lifting the sweep-proposed restriction (pending human review)" — NEVER bare
+    # "propose unblock" (these review-subject personas carry no visible hold row).
+    assert ("Propose lifting the sweep-proposed restriction (pending human review)"
+            in text)
+    # The no-auto-unblock posture is stated plainly on the surface itself.
+    assert "No hold is ever lifted here" in text
+
+    # The drafted (never sent) customer notification renders with its plain status,
+    # and names the counterparty's PUBLIC designation (the sayable scope).
+    assert _RFI_STATUS_LABEL["drafted_pending_human_review"] in text
+    assert "drafted_pending_human_review" not in text
+    assert "Kavelith Digital Exchange" in text
+    # Two-register: the disposition/notification provenance keeps real table names
+    # (the acknowledgments ledger and the accounts row the notification grounds to).
+    assert "acknowledgments" in text
+    assert "accounts[" in text
+
+
 # --- Simulated list-feed update (DEMO FIX 2) --------------------------------
 #
 # The "Simulate list-feed update (advanced)" source is a manual stand-in for an

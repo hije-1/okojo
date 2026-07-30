@@ -34,6 +34,7 @@ from okojo.remarks import SCREEN_THRESHOLD
 from okojo.remarks.miner import _ALIAS_THRESHOLD, _PHRASE_THRESHOLD
 from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
+from okojo.agency import AGENCY_VERSION
 from okojo.geo import GEO_VERSION
 from okojo.identity import IDENTITY_VERSION, OWNERSHIP_CONTROL_THRESHOLD
 from okojo.sweep import (
@@ -603,6 +604,34 @@ _GEO_STALENESS_LABEL = {
     "expired": "expired — still argues against presence, but its weight is degraded",
 }
 
+# Counterparty-designation lifecycle plain language (Part IV V2). Two-register:
+# these render on screen; real table names stay in the provenance/citations.
+#
+# The reached lifecycle milestone -> plain wording. Calibrated: even the unblock
+# terminal reads as a *proposal to lift*, never a done unblock (the register the
+# PhRASING RIDER protects — see _CP_DISPOSITION_LABEL).
+_CP_STATE_LABEL = {
+    "exposure_detected": "exposure detected",
+    "notification_drafted": "customer notification drafted",
+    "acknowledgment_recorded": "acknowledgment recorded",
+    "stop_dealing_verified": "stop-dealing verified",
+    "unblock_proposed": "lifting the restriction proposed",
+    "offboard_proposed": "offboarding proposed",
+}
+
+# The three decide_counterparty_lifecycle outcomes -> plain proposal wording.
+# PHRASING RIDER (PM ruling, binding): propose_unblock renders as "Propose
+# lifting the sweep-proposed restriction (pending human review)" — NEVER bare
+# "propose unblock". These review-subject personas carry no visible hold row, so
+# a bare "unblock" would leave a viewer asking what is being unblocked; naming it
+# as the sweep-proposed restriction answers that on the surface itself. Every one
+# is a REVIEW-tier proposal drafted for a human; no hold is ever mutated.
+_CP_DISPOSITION_LABEL = {
+    "propose_unblock": "Propose lifting the sweep-proposed restriction (pending human review)",
+    "propose_offboard": "Propose offboarding the relationship (pending human review)",
+    "hold_pending": "Hold retained pending review",
+}
+
 
 def _corroboration_label(outcome: str) -> str:
     return _CORROBORATION_LABEL.get(outcome, outcome)
@@ -878,6 +907,101 @@ def _render_geo_triangulation(res, names) -> None:
     )
 
 
+def _render_counterparty_lifecycle(res, names) -> None:
+    """Render the Part-IV counterparty-designation lifecycle that otherwise lives
+    only in the sweep result + audit chain: per customer who dealt with the
+    designated counterparty AFTER it was designated, the reached lifecycle state,
+    the drafted (never sent) customer notification, and the relationship
+    disposition (propose lifting the restriction / offboard / hold). Two-register
+    throughout: compliance-officer wording on screen, real table names in the
+    provenance. Rendered ONLY for a ``counterparty_service`` designation (a
+    designated VASP/exchange whose hosted wallets our customers dealt with) — the
+    only designation kind that runs a relationship lifecycle.
+
+    THE HARD RULE is stated on the surface itself: no hold is ever mutated; an
+    unblock is a PROPOSAL to lift the sweep-proposed restriction, drafted for a
+    human, never executed."""
+    if res.designation.list_type != "counterparty_service":
+        return
+    if not (res.lifecycle_dispositions or res.counterparty_notifications
+            or res.suppressed_counterparty_notifications):
+        return
+
+    st.markdown("#### Counterparty-designation lifecycle")
+    st.caption(
+        "This designation names a **counterparty service** — a designated "
+        "exchange/VASP whose hosted wallets our customers dealt with. Detection "
+        "is already done above; this is what happens **after**: the relationship "
+        "lifecycle for each customer who dealt with the counterparty **after it "
+        "was designated**. Everything here is **review-tier** — the sweep drafts "
+        "a customer notification and *proposes* a relationship disposition; a "
+        "person decides and acts. **No hold is ever lifted here:** an unblock "
+        "exists only as a proposal for a reviewer to apply, never an automatic "
+        "action."
+    )
+
+    notes = {n.uid: n for n in res.counterparty_notifications}
+    for d in sorted(res.lifecycle_dispositions, key=lambda x: x.uid):
+        disposition = _CP_DISPOSITION_LABEL.get(d.outcome, d.outcome)
+        with st.expander(f"uid {d.uid} ({names.get(d.uid, d.uid)}) · **{disposition}**"):
+            # -- the reached lifecycle state, plain ------------------------- #
+            st.markdown(
+                f"**Lifecycle state:** {_CP_STATE_LABEL.get(d.state, d.state)}"
+            )
+
+            # -- the disposition + its plain rationale ---------------------- #
+            # The screen shows the plain proposal label + the decision's
+            # plain_language gloss; the raw outcome slug never reaches the screen.
+            st.markdown(f"**Proposed disposition — {disposition}**")
+            st.caption(d.decision.plain_language)
+            st.markdown(
+                "- acknowledgment on file: "
+                f"**{'yes' if d.acknowledged else 'no'}**\n"
+                "- stopped dealing since acknowledging: "
+                f"**{'verified' if d.stop_verified else 'not verified'}**\n"
+                "- prior acknowledged designated counterparty (repeat): "
+                f"**{'yes' if d.repeat_offender else 'no'}**"
+            )
+            if d.prior_acknowledged_counterparties:
+                st.caption(
+                    "prior acknowledged counterparty designation(s): "
+                    + ", ".join(d.prior_acknowledged_counterparties)
+                )
+            _source_caption(d.provenance)
+
+            # -- the drafted (never sent) customer notification ------------- #
+            n = notes.get(d.uid)
+            if n is not None:
+                st.markdown(
+                    "**Customer notification — subject-facing, "
+                    f"{_RFI_STATUS_LABEL.get(n.status, n.status)}**"
+                )
+                st.caption(
+                    "A Terms-and-Conditions notification, authored **guard-safe** "
+                    "and validated fail-closed on the rendered text: it names the "
+                    "counterparty's public designation and the customer's "
+                    "contractual obligation, and reveals no evidence method, no "
+                    "investigation, and no law-enforcement interest. Drafted for a "
+                    "human — there is no send path."
+                )
+                st.write(n.text)
+                st.caption("citations: " + "; ".join(n.citations))
+
+    # Suppressed notifications — surfaced with the reason, never silently dropped.
+    for s in res.suppressed_counterparty_notifications:
+        st.warning(
+            "**Customer notification suppressed (surfaced, not drafted)** for uid "
+            f"{s.uid} ({names.get(s.uid, s.uid)}): {s.reason}"
+        )
+
+    st.caption(
+        f"Counterparty-lifecycle policy · agency methodology v{AGENCY_VERSION} · "
+        "dispositions are REVIEW-tier proposals drafted for a human · no hold is "
+        "mutated — an unblock proposes lifting the sweep-proposed restriction, "
+        "never applies it."
+    )
+
+
 def _example_designation_payloads() -> tuple[str, str]:
     """The two one-click example payloads for the simulated list-feed box.
 
@@ -1047,6 +1171,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
 
     # -- geo triangulation (Part III) --------------------------------------- #
     _render_geo_triangulation(res, names)
+
+    # -- counterparty-designation lifecycle (Part IV) ----------------------- #
+    _render_counterparty_lifecycle(res, names)
 
     # -- hold-status reconciliation ----------------------------------------- #
     st.markdown("#### Hold-status reconciliation")
