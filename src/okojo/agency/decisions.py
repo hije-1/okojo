@@ -63,7 +63,15 @@ from ..sar import CritiqueHistory
 # docs/geo-methodology.md). The signal weight classes and counter-evidence
 # categories are geo's (geo_config, frozen 1.0.0); the numeric weights, bands,
 # and the mapping rule are decision policy and live here.
-AGENCY_VERSION = "1.4.0"
+# 1.5.0 — Part IV adds the `counterparty_lifecycle` decision point (the eighth):
+# after a counterparty SERVICE is designated, the relationship a
+# post-designation-exposed customer holds with it is dispositioned — propose
+# lifting the relationship hold, propose offboarding a repeat offender, or hold
+# pending. Like corroboration and geo_action it is a remediation-sweep decision —
+# recorded, not routed (see §8 of docs/agency-methodology.md). The precedence
+# (recidivism dominates an acknowledged-and-stopped relationship) is decision
+# policy and lives here; it never mutates a hold, only proposes.
+AGENCY_VERSION = "1.5.0"
 
 # --- Tunable policy thresholds (see docs/agency-methodology.md) --------------
 
@@ -132,6 +140,9 @@ DECISION_OUTCOMES: dict[str, tuple[str, ...]] = {
         "propose_withdrawal_only_restriction",
         "propose_trade_and_withdrawal_block",
         "propose_full_block_and_escalate",
+    ),
+    "counterparty_lifecycle": (
+        "propose_unblock", "propose_offboard", "hold_pending",
     ),
 }
 
@@ -252,6 +263,23 @@ def agency_config() -> dict:
             [{"outcome": outcome, "net_at_most": upper}
              for upper, outcome in GEO_ACTION_BANDS]
             + [{"outcome": GEO_ACTION_TOP, "net_at_most": None}]
+        ),
+        "counterparty_lifecycle_rule": (
+            "the eighth decision point, in the remediation sweep, after a "
+            "counterparty SERVICE is designated: a post-designation-exposed "
+            "customer's relationship with the designated counterparty is "
+            "dispositioned by strict precedence — propose_offboard iff the "
+            "customer is a repeat offender (a prior acknowledged designated-"
+            "counterparty relationship plus this new post-designation exposure: "
+            "recidivism dominates and an acknowledgment does not reset it); else "
+            "propose_unblock iff the customer both acknowledged this counterparty's "
+            "designation AND a verified stop holds (no dealing with the "
+            "counterparty's addresses is recorded after the acknowledgment date); "
+            "else hold_pending (acknowledgment and a verified stop are both "
+            "required to propose lifting the hold, and at least one is absent). "
+            "Every outcome is a REVIEW-tier PROPOSAL for a human — no hold status "
+            "is ever mutated; unblock exists only as a proposal record. Like "
+            "corroboration and geo_action it is recorded, not routed"
         ),
         "decision_provenance": (
             "each stamped decision carries row-level citations where its "
@@ -647,6 +675,87 @@ def decide_geo_action(uid: int,
     rationale = f"{rationale} [{n_sig} signal(s)]"
 
     return DecisionRecord(decision_id="geo_action", outcome=outcome,
+                          rationale=rationale, plain_language=plain,
+                          evidence=evidence, provenance=list(provenance or []))
+
+
+# --- counterparty_lifecycle (Part IV): relationship disposition --------------
+
+
+def decide_counterparty_lifecycle(uid: int, *,
+                                  acknowledged: bool,
+                                  stop_verified: bool,
+                                  repeat_offender: bool,
+                                  provenance: Optional[list[str]] = None) -> DecisionRecord:
+    """Disposition one post-designation-exposed customer's relationship with a
+    designated counterparty service — the eighth decision point, in the
+    remediation sweep, for a ``counterparty_service`` designation.
+
+    Pure over its inputs. The caller (the V1b wiring) computes the three booleans
+    from evidence in hand — ``acknowledged`` (a human-entered acknowledgment of
+    THIS counterparty's designation is on file), ``stop_verified`` (no dealing
+    with the counterparty's addresses is recorded after the acknowledgment date),
+    ``repeat_offender`` (a PRIOR acknowledged designated-counterparty relationship
+    exists, so this new exposure is a repeat) — and this function never touches
+    the store, a row, or a ground-truth label.
+
+    Strict precedence: ``repeat_offender`` dominates (recidivism outranks an
+    acknowledged-and-stopped relationship — an acknowledgment does not reset a
+    repeat), then acknowledged-AND-stopped proposes lifting the hold, else the
+    hold is retained. **The HARD rule of this part:** every outcome is a
+    REVIEW-tier PROPOSAL for a human — no hold status is ever mutated here or
+    anywhere downstream; ``propose_unblock`` exists ONLY as a proposal record.
+    Like ``corroboration`` and ``geo_action`` it is recorded, not routed.
+    """
+    evidence = {
+        "uid": uid,
+        "acknowledged": acknowledged,
+        "stop_verified": stop_verified,
+        "repeat_offender": repeat_offender,
+    }
+    if repeat_offender:
+        outcome = "propose_offboard"
+        rationale = (
+            "the customer previously acknowledged a designated-counterparty "
+            "relationship and is exposed to a designated counterparty again; "
+            "offboarding the relationship is proposed for human action "
+            "(recidivism dominates — a fresh acknowledgment does not reset it). "
+            "Proposed, never executed")
+        plain = (
+            "This customer has been through this before — they acknowledged a "
+            "designated counterparty in the past and are now dealing with another "
+            "one. The recommendation for a reviewer is to offboard the "
+            "relationship; nothing is actioned automatically.")
+    elif acknowledged and stop_verified:
+        outcome = "propose_unblock"
+        rationale = (
+            "the customer acknowledged this counterparty's designation and no "
+            "dealing with the counterparty's addresses is recorded after the "
+            "acknowledgment date (a verified stop); lifting the relationship hold "
+            "is proposed for human action. Proposed, never executed — no hold "
+            "status is mutated")
+        plain = (
+            "The customer confirmed they are aware the counterparty was "
+            "designated and has not dealt with it since. The recommendation for a "
+            "reviewer is to lift the relationship hold — but this is only a "
+            "proposal; a person makes and applies that call.")
+    else:
+        outcome = "hold_pending"
+        missing = []
+        if not acknowledged:
+            missing.append("no acknowledgment on file")
+        if not stop_verified:
+            missing.append("no verified stop (dealing continued after any "
+                           "acknowledgment)")
+        rationale = (
+            "the relationship hold is retained: acknowledgment AND a verified "
+            f"stop are both required to propose lifting it — {'; '.join(missing)}. "
+            "No proposal to lift is made, and no status is mutated")
+        plain = (
+            "The relationship hold stays in place: lifting it would require both "
+            "the customer's acknowledgment and confirmation they stopped dealing, "
+            f"and at least one is missing ({'; '.join(missing)}).")
+    return DecisionRecord(decision_id="counterparty_lifecycle", outcome=outcome,
                           rationale=rationale, plain_language=plain,
                           evidence=evidence, provenance=list(provenance or []))
 

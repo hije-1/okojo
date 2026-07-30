@@ -7,8 +7,9 @@
     "VERSION PIN. agency_version below tracks okojo.agency.AGENCY_VERSION so a",
     "policy bump re-opens this key (mirroring the methodology anti-drift guard).",
     "Later bumps that add REMEDIATION-SWEEP decisions -- corroboration (1.3.0),",
-    "geo_action (1.4.0) -- do not touch the case pipeline, so all 25 case triples",
-    "(5 subjects x 5 case decisions) below are UNCHANGED; only the pin moves.",
+    "geo_action (1.4.0), counterparty_lifecycle (1.5.0) -- do not touch the case",
+    "pipeline, so all 25 case triples (5 subjects x 5 case decisions) below are",
+    "UNCHANGED; only the pin moves.",
     "",
     "AUTHORSHIP. This key is DOMAIN-AUTHORED: every expected outcome below is",
     "derived from (a) the scenario facts the generator plants and (b) the",
@@ -34,7 +35,7 @@
     "",
     "Subjects are keyed by role_in_ring (seed-stable), never by uid."
   ],
-  "agency_version": "1.4.0",
+  "agency_version": "1.5.0",
   "hop_cap": 2,
   "subjects": [
     {

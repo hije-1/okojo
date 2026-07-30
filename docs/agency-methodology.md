@@ -1,4 +1,4 @@
-# Agency Methodology (v1.4.0)
+# Agency Methodology (v1.5.0)
 
 **Status:** synthetic-data research prototype. This document explains what
 "agency" means in Okojo, why every agentic decision is deterministic, and what
@@ -21,7 +21,7 @@ Three principles govern everything below:
    disagree.
 3. **The thresholds are tunable policy parameters, not universal truths.** The
    values here are defensible defaults for the synthetic scenario; a deploying
-   institution would calibrate them. They are version-stamped (see §9) so any
+   institution would calibrate them. They are version-stamped (see §10) so any
    historical decision trace is reproducible.
 
 A hard boundary above all of it: the agent **proposes, surfaces, drafts, and
@@ -249,7 +249,57 @@ never sent*; a restriction/block/escalation is *proposed, never executed*. Like
 `corroboration`, `geo_action` is **recorded, not routed**: the sweep has no
 branch to take, so the outcome drives review triage, not control flow.
 
-## 8. Determinism, replay, and the decision-trace eval
+## 8. `counterparty_lifecycle` — what to propose for a designated-counterparty relationship? (Part IV)
+
+**Question:** *after a counterparty **service** is designated, once the flow
+sweep surfaces a customer who dealt with it **after** the designation, what
+should happen to that relationship?*
+
+This is the third decision point that lives in the **Designation-Triggered
+Remediation Sweep**, and it applies only to the new **counterparty_service**
+designation kind (a designated VASP/exchange, not a party or a geography). The
+flow sweep already surfaces exposed customers and the S3 `exposure_timing` flag
+already splits pre- from post-designation dealing; `counterparty_lifecycle`
+answers the separate question of *what to do about the relationship* for a
+post-designation dealer.
+
+The disposition follows **strict precedence** over three booleans the wiring
+computes from evidence in hand:
+
+| precedence | condition | outcome |
+|---|---|---|
+| 1 (highest) | `repeat_offender` — a **prior** acknowledged designated-counterparty relationship exists, so this new exposure is a repeat | `propose_offboard` |
+| 2 | `acknowledged AND stop_verified` — the customer acknowledged **this** counterparty's designation, and no dealing with its addresses is recorded **after the acknowledgment date** | `propose_unblock` |
+| 3 (default) | otherwise (acknowledgment and/or a verified stop is absent) | `hold_pending` |
+
+**Recidivism dominates.** A repeat offender who *also* acknowledged this
+counterparty and stopped dealing still gets `propose_offboard` — an
+acknowledgment does not reset a prior acknowledged relationship. The precedence
+is proven by a constructed fixture, exactly this case.
+
+**The hard rule of this part — no auto-unblock.** Every outcome is a
+**proposal for a human**. No code path in the sweep or the lifecycle module
+mutates a hold: `propose_unblock` exists ONLY as a proposal record, gated on a
+verified acknowledgment **and** a verified stop, and a test proves the pipeline
+cannot write to either sanctions-hold table. This is deliberate — the
+real-world failure mode is an auto-unblock that investigators had to override
+per case; Okojo builds the opposite. Like `corroboration` and `geo_action`,
+`counterparty_lifecycle` is **recorded, not routed**.
+
+**Subject-facing surface.** A post-designation dealer is also drafted a
+customer notification (a Terms-and-Conditions matter). Its sayable scope is
+**widened but bounded**: the counterparty's *public designation* and the
+customer's *contractual obligation* are sayable (a designated counterparty is a
+public fact and the T&C give a legitimate reason to write); the evidence
+methods, the existence of any investigation, and any law-enforcement interest
+are **not**. The notification is authored guard-safe — "designated / listed
+counterparty", "under the Terms", never "sanctioned / blocked / reported" — and
+is still validated fail-closed by `assert_no_tipping_off` on the rendered text
+(defense in depth). It is `drafted_pending_human_review`, never sent; a failing
+draft is suppressed and surfaced. (The full guard-surface map lands with the
+Part IV posture doc.)
+
+## 9. Determinism, replay, and the decision-trace eval
 
 Every rule takes only explicit evidence values (counts, verdicts, coverage) —
 never a ground-truth label, never a subject or claim id. Each
@@ -265,9 +315,11 @@ expected-decision key (exact match, scored as precision/recall/F1 over
 capability ships with its eval. The `corroboration` decision (Part II) is
 stamped and round-tripped the same way, into the remediation sweep's chain, and
 scored by the identity-resolution corroboration eval; the `geo_action` decision
-(Part III) likewise, scored by the geo-action eval.
+(Part III) likewise, scored by the geo-action eval; and the
+`counterparty_lifecycle` decision (Part IV) likewise, scored by the
+counterparty-lifecycle eval.
 
-## 9. Reproducibility & versioning
+## 10. Reproducibility & versioning
 
 Every run stamps the versioned decision policy into the audit trail
 (`agency / agency_config`), mirroring the scoring, retrieval, critic, and
@@ -276,12 +328,12 @@ it is the single source of truth (`okojo.agency.agency_config`) and is
 regression-tested against this document, so the doc and the code can never
 silently drift.
 
-**Version 1.4.0 — canonical policy:**
+**Version 1.5.0 — canonical policy:**
 
 <!-- agency-config:begin -->
 ```json
 {
-  "version": "1.4.0",
+  "version": "1.5.0",
   "decision_points": {
     "expand_hop": [
       "continue",
@@ -317,6 +369,11 @@ silently drift.
       "propose_withdrawal_only_restriction",
       "propose_trade_and_withdrawal_block",
       "propose_full_block_and_escalate"
+    ],
+    "counterparty_lifecycle": [
+      "propose_unblock",
+      "propose_offboard",
+      "hold_pending"
     ]
   },
   "thresholds": {
@@ -362,6 +419,7 @@ silently drift.
       "net_at_most": null
     }
   ],
+  "counterparty_lifecycle_rule": "the eighth decision point, in the remediation sweep, after a counterparty SERVICE is designated: a post-designation-exposed customer's relationship with the designated counterparty is dispositioned by strict precedence — propose_offboard iff the customer is a repeat offender (a prior acknowledged designated-counterparty relationship plus this new post-designation exposure: recidivism dominates and an acknowledgment does not reset it); else propose_unblock iff the customer both acknowledged this counterparty's designation AND a verified stop holds (no dealing with the counterparty's addresses is recorded after the acknowledgment date); else hold_pending (acknowledgment and a verified stop are both required to propose lifting the hold, and at least one is absent). Every outcome is a REVIEW-tier PROPOSAL for a human — no hold status is ever mutated; unblock exists only as a proposal record. Like corroboration and geo_action it is recorded, not routed",
   "decision_provenance": "each stamped decision carries row-level citations where its inputs are row properties (expand_hop: accounts discovered last hop; second_advisory: the matches' evidence rows; re_rfi: the contradicted claims' assertion+rebuttal rows; sufficiency: the subject account row); aggregate-input decisions (sar_bar, and cap/frontier stops) carry none and are covered by the aggregates' own audit stamps",
   "boundaries": {
     "second_advisory": "surfaced to the analyst only; the SAR drafter consumes the primary match alone",
