@@ -27,7 +27,7 @@ from ..remarks import RemarkTell
 from ..rfi import ContradictionTable
 from .critic import Critique, critique
 from .drafter import build_sar, gap_fill_claims
-from .schema import SarDraft, assert_grounded
+from .schema import SarDraft, assert_calibrated, assert_grounded
 from .validate import assert_resolvable
 
 # Hard cap on revision passes. The loop reaches a fixpoint well inside this on the
@@ -100,9 +100,11 @@ def draft_with_critic(
         if not new_claims:
             break  # no fillable gap remains -> stop (fixpoint); residue is flagged below
         draft = _extend(draft, new_claims)
-        # Every revised draft re-passes the full grounding contract, fail-closed.
+        # Every revised draft re-passes the full SAR-validation contract,
+        # fail-closed: grounding, resolvability, and calibration.
         assert_grounded(draft)
         assert_resolvable(conn, draft)
+        assert_calibrated(draft)
         crit = critique(draft)
         revisions.append([c.element for c in new_claims])
         critiques.append(crit)

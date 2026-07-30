@@ -23,7 +23,7 @@ from ..network import NetworkExpansion
 from ..provenance import Provenance
 from ..remarks import RemarkTell
 from ..rfi import ContradictionTable
-from .schema import SarClaim, SarDraft, assert_grounded
+from .schema import SarClaim, SarDraft, assert_calibrated, assert_grounded
 from .validate import assert_resolvable
 
 _DISCLAIMER = (
@@ -328,10 +328,13 @@ def build_sar(
         claims=claims,
     )
 
-    # Grounding contract, fail closed in two steps: (1) no claim without a
-    # provenance pointer; (2) no pointer to a row that does not exist.
+    # SAR-validation contract, fail closed: (1) no claim without a provenance
+    # pointer; (2) no pointer to a row that does not exist; (3) no over-claiming
+    # (uncalibrated) language — a miscalibrated draft is rejected and surfaced,
+    # never silently passed.
     assert_grounded(draft)
     assert_resolvable(conn, draft)
+    assert_calibrated(draft)
     return draft
 
 

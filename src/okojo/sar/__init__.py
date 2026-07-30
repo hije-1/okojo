@@ -16,9 +16,11 @@ from .drafter import build_sar, gap_fill_claims
 from .loop import MAX_REVISION_ITERATIONS, CritiqueHistory, draft_with_critic
 from .schema import (
     BANNED_TERMS,
+    CalibrationViolationError,
     SarClaim,
     SarDraft,
     UngroundedClaimError,
+    assert_calibrated,
     assert_grounded,
     calibration_violations,
 )
@@ -32,7 +34,8 @@ from .validate import (
 
 __all__ = [
     "build_sar", "SarClaim", "SarDraft", "UngroundedClaimError",
-    "assert_grounded", "calibration_violations", "BANNED_TERMS",
+    "assert_grounded", "calibration_violations", "assert_calibrated",
+    "CalibrationViolationError", "BANNED_TERMS",
     "GroundingResolver", "GroundingReport", "UnresolvableCitationError",
     "assert_resolvable", "validate_grounding",
     "FINCEN_RUBRIC", "RubricElement", "ElementGrade", "Critique",

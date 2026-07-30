@@ -26,6 +26,18 @@ class UngroundedClaimError(ValueError):
     """Raised when a SAR draft contains a claim with no provenance."""
 
 
+class CalibrationViolationError(ValueError):
+    """Raised when a SAR draft contains over-claiming (uncalibrated) language.
+
+    The calibration half of the SAR-validation contract: the outputs *propose /
+    surface / draft / flag*; a draft that asserts "instantly", "autonomously",
+    "guaranteed", "proven fact", "definitely", or "certainly" is **rejected** at
+    draft-validation time and the offending statements are surfaced (never
+    silently passed). Parallels :class:`UngroundedClaimError` so a caller failing
+    closed on SAR validation catches the miscalibration failure mode too.
+    """
+
+
 class SarClaim(BaseModel):
     # who | what | when | where | why/predicate | how | network | tell |
     # advisory | rfi | contradiction
@@ -78,3 +90,21 @@ def calibration_violations(draft: SarDraft) -> list[str]:
         if any(term in low for term in BANNED_TERMS):
             hits.append(c.statement)
     return hits
+
+
+def assert_calibrated(draft: SarDraft) -> None:
+    """Fail closed if any claim uses over-claiming (uncalibrated) language.
+
+    The live enforcement point for the calibration check: called at SAR
+    draft-validation time (in :func:`~okojo.sar.drafter.build_sar` and on every
+    revised draft in the drafter-critic loop), alongside the grounding contract.
+    A violating draft is **rejected** and the offending statements are surfaced in
+    the error — the suppress-and-surface pattern; a miscalibrated draft never
+    passes silently.
+    """
+    bad = calibration_violations(draft)
+    if bad:
+        raise CalibrationViolationError(
+            f"{len(bad)} SAR claim(s) use over-claiming language "
+            f"(banned: {', '.join(BANNED_TERMS)}): " + " | ".join(bad)
+        )
