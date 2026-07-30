@@ -1,7 +1,7 @@
 # Okojo — project guide for Claude Code
 
 Okojo is an **agentic AI co-pilot for financial-crime investigations at a crypto
-exchange**, built as a public portfolio project on **fully synthetic data**.
+exchange**, built as a public research project on **fully synthetic data**.
 This file is your standing context. Read `docs/Build-Plan.md` before coding and
 `docs/DECISIONS.md` before changing scope or architecture.
 
@@ -103,7 +103,7 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   9-tab demo (Decisions tab, recidivism banner, package download).
   211 green tests (1 skipped: the ST backend).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
-- **Phase 7 (UI & portfolio polish, reliability hardening): COMPLETE.**
+- **Phase 7 (UI polish & reliability hardening): COMPLETE.**
   The reliability tail as **executable properties**: a graph-render guard
   (failure degrades + audit-stamped, never aborts; happy path proven
   byte-identical) and `tests/test_reliability.py` — full pipeline over every
@@ -209,6 +209,6 @@ outputs: **pydantic** · UI: **Streamlit** · tests: **pytest**.
   Clean, efficient code is mandatory: small, tested, deterministic changes over
   clever ones; every capability ships with its eval.
 - Build **phase by phase** per `docs/Build-Plan.md`. Keep commits small and green.
-- Keep a steady public commit cadence (the visible history is itself a portfolio signal).
+- Keep a steady public commit cadence.
 - Use **plan mode** (Shift+Tab) when standing up a new subsystem.
 - Each new capability ships with an eval against `ground_truth.json`.

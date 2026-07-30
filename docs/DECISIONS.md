@@ -10,10 +10,10 @@ _Last updated at handoff from the planning phase (Phase 0 complete)._
 ---
 
 ## 1. Goal & audience
-A public GitHub portfolio project for a **senior crypto-compliance executive who
-is AI-forward**. It must read as sophisticated to a compliance hiring manager
-*and* show genuine hands-on agentic-AI engineering ("balance of both"). Built
-from scratch, solo, ~20 hrs/week.
+A public GitHub research project by a senior crypto-compliance executive exploring
+what agentic AI can do for financial-crime investigations — deep domain expertise
+and hands-on agentic engineering in one build ("balance of both"). Built from
+scratch, solo, ~20 hrs/week.
 
 ## 2. Scope decision — one flagship, not a suite
 A single, deliberately-scoped flagship with a documented roadmap beats a
@@ -132,13 +132,12 @@ the generator changes.
   to GitHub.** Details in `Build-Plan.md`.
 - Decide the LLM provider/model for the reasoning components (kept provider-agnostic
   so far).
-- Set up the public GitHub repo + a steady commit cadence (the public history is
-  itself a portfolio signal).
+- Set up the public GitHub repo + a steady public commit cadence.
 
 ## 12. Licensing & contribution policy
 _Added Day 3 (Phase 2 complete)._
 
-- **MIT retained through the portfolio phase — deliberate.** It maximizes the
+- **MIT retained through the public research phase — deliberate.** It maximizes the
   repo's job-search value and costs nothing long-term: the author remains the sole
   copyright holder and can relicense future versions at any time (already-published
   versions remain MIT regardless). **Revisit at the v1.0 launch** — the natural
@@ -183,7 +182,7 @@ _Added Day 4 (Phase 4 complete; pre-Phase-5)._
   clear, and no vendor holds a rights stake (Anthropic assigns output rights to
   the user). The `Co-Authored-By: Claude` commit trailer is attribution metadata,
   NOT a legal assignment of any right.
-- **Sole-authorship posture (preserved).** MIT-licensed for the portfolio phase,
+- **Sole-authorship posture (preserved).** MIT-licensed for the public research phase,
   but no external PRs are merged — so the author holds copyright to all
   human-authored expression and retains the right to relicense or sell. (See §12.)
 - **Lifting risk is addressed, not assumed away.** Verbatim reproduction of

@@ -10,7 +10,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 ## Guiding principles
 
 - **Walking skeleton first, then thicken.** Get one synthetic case flowing end-to-end through a thin version of every stage before making any single stage good. This de-risks integration early and gives you something to show fast.
-- **Publish early and build in public.** The moment the skeleton works (~Aug 8), push it to a public GitHub repo — rough is fine. A visible, steady commit history while you're job-hunting is itself a portfolio signal, and you can reference the repo in applications weeks before it's "done."
+- **Publish early and build in public.** The moment the skeleton works (~Aug 8), push it to a public GitHub repo — rough is fine. A visible, steady commit history documents the build as it happens and lets the public repo be referenced weeks before it's "done."
 - **Patterns, never PII.** Everything is synthetic. The demo scenario replicates the *behavior* of real oil/sanctions-evasion networks (shell-entity rings, reused KYC docs, gas-funded token deployers, false RFI narratives, `device_fingerprint` device matches, structured round-number flows, a red-herring "internal account" tag) — no real identities, addresses, or documents ever enter the repo.
 - **Reserve the last stretch for reliability.** The tail — no hallucinated SAR facts, the graph always renders, the Critic and RFI-checker loops always converge — is where agentic systems overrun. The plan holds ~3 weeks of buffer at the end for exactly this.
 
@@ -31,7 +31,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 - One FinCEN advisory ingested; simple keyword+semantic match triggered by an RFI string ("oil").
 - A bare, grounded SAR draft (structured output, no Critic yet).
 - Minimal Streamlit page: timeline + graph + matched advisory + draft.
-- **Milestone (~Aug 8): demoable walking skeleton. Publish to GitHub. Record a first rough demo GIF.** This is the artifact you can start citing in applications.
+- **Milestone (~Aug 8): demoable walking skeleton. Publish to GitHub. Record a first rough demo GIF.** This is the first publicly referenceable build.
 
 ### Phase 2 — Graph, gas-funding & tells (Weeks 4–5: Aug 11–22, ~40 hrs)
 - Full Network Expander: 1–7-hop expansion, risk-weighted nodes, interactive graph, shared-attribute linking (`device_fingerprint`/device + reused-KYC-doc edges), and a **gas-funding linkage** tool (who funded whose gas) — a move that repeatedly unmasks "non-custodial" controllers in documented cases.
@@ -67,11 +67,11 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 - Full tamper-evident audit trail + Case Packager producing the decision-ready package; the "internal account" red-herring tag is *flagged for review, not obeyed*.
 - **Milestone:** genuinely agentic over an auditable, recidivism-aware backbone.
 
-### Phase 7 — UI, portfolio polish & the last 20% (Weeks 14–15: Oct 20–31, ~40 hrs)
+### Phase 7 — UI polish & the last 20% (Weeks 14–15: Oct 20–31, ~40 hrs)
 - Streamlit UX: case selector, timeline, interactive graph, tell hits, advisory panel with cited red flags, RFI contradiction table, SAR view with provenance highlights, audit-trail viewer.
 - Reliability hardening (the tail), as executable properties over every subject: every SAR claim resolves to a real evidence row, the graph render is content-verified (and a render failure degrades the case rather than aborting it), and every loop terminates within its declared bound — with non-convergence producing a flagged human fallback, never a fabricated claim.
-- README in your executive voice (board-brief framing), architecture diagram, a prominent **"Responsible AI & Tamper-Evident Audit Trail"** section (foregrounding the governance-capture lesson), a calibrated-language pass, and a polished demo GIF/screencast.
-- **Milestone:** portfolio-ready v1.0.
+- README in a board-brief voice, architecture diagram, a prominent **"Responsible AI & Tamper-Evident Audit Trail"** section (foregrounding the governance-capture lesson), a calibrated-language pass, and a polished demo GIF/screencast.
+- **Milestone:** public v1.0.
 
 ### Phase 8 — Designation-triggered remediation sweep (v1.0 capstone) (Weeks 16–17: Nov 3–14, ~40 hrs)
 - A second orchestration entry point over the finished core: input a new OFAC designation (SDN entity and/or crypto addresses) and sweep the full synthetic ledger for directly and indirectly exposed accounts.

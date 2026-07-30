@@ -4,8 +4,9 @@
 
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
-> **Status:** Phases 0–7 complete — the core is reliability-hardened and
-> portfolio-ready. Fully synthetic data, built in the open. Details in
+> **Status:** Phase 8 complete — the v1.0 capstone (the designation-triggered
+> remediation sweep) is shipped and the core is reliability-hardened. Fully
+> synthetic data, built in the open. Details in
 > [Status & roadmap](#status--roadmap).
 
 ## The Problem
@@ -355,7 +356,7 @@ regulated financial-crime investigations. Connect on
 
 Issues, feedback, and discussion are very welcome — please open an issue if
 something's unclear, broken, or worth debating. The project is **not accepting
-pull requests at this time** (it's a solo portfolio build), but that may change
+pull requests at this time** (it's a solo research build), but that may change
 down the road. Thanks for taking a look!
 
 ## License
