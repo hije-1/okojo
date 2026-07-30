@@ -127,9 +127,9 @@ sanctioned exposure but no flow to the *newly designated* addresses is excluded
 review, never obeyed. Try it from the sidebar **"Designation sweep"** mode.
 
 > **Status:** the flow sweep (Phase 8, Part I), cross-list early warning
-> (Part I-B), and identity resolution (Part II) are built and public;
-> geographic triangulation (Part III) is underway and the counterparty-lifecycle
-> extension (Part IV) is planned before the capstone signs off.
+> (Part I-B), identity resolution (Part II), and geographic triangulation
+> (Part III) are built and public; the counterparty-designation lifecycle
+> (Part IV) is underway before the capstone signs off.
 
 ---
 
@@ -285,13 +285,16 @@ verification tool, not cosmetics.
 
 **Phase 8 (in progress):** the Designation-Triggered Remediation Sweep —
 component 9, the v1.0 capstone — is being built in parts. Parts I (flow sweep),
-I-B (cross-list early warning + calibrated designations), and II (identity
+I-B (cross-list early warning + calibrated designations), II (identity
 resolution — variant-aware screening, corroboration, beneficial-owner and
-proximity walks, and an identity-review RFI) are **complete and public**. Part
-III (geographic triangulation) is **underway**: the six-signal triangulation and
-the totality-driven proposal decision are built and evaluated; the plain-language
-UI is still to come. Part IV (counterparty lifecycle) is planned before the
-capstone signs off.
+proximity walks, and an identity-review RFI), and III (geographic triangulation —
+a six-signal totality, a totality-driven proposal decision, and a plain-language
+UI) are **complete and public**. Part IV (counterparty-designation lifecycle) is
+**underway**: after a counterparty service is designated, the relationship is
+dispositioned by an eighth bounded decision (propose unblock / offboard / hold),
+a subject-facing customer notification is drafted (fail-closed against
+tipping-off, never sent), and a guard proves the pipeline can never auto-unblock;
+the plain-language UI and posture doc are still to come.
 
 **Roadmap (post-v1.0):** the Audit Narrator (a grounded summarizer over the
 system's own audit log — making the tamper-evident trail *reviewable*, not just

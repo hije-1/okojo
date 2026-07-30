@@ -132,13 +132,15 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   update all three at every sign-off.
 - **Phase 8 (Designation-Triggered Remediation Sweep — component 9, the v1.0
   capstone): IN PROGRESS.** Built in parts. Parts I (flow sweep), I-B
-  (cross-list early warning + calibrated designations), and II (identity
-  resolution — variant-aware screening, corroboration, beneficial-owner /
-  proximity walks, identity-review RFI) are **complete and public**. Part III
-  (geographic triangulation) is **underway**: the six-signal triangulation and
-  the totality-driven proposal decision (the 7th bounded agency decision) are
-  built and evaluated; the plain-language UI is still to come. Part IV
-  (counterparty lifecycle) is planned. Full details in `docs/Build-Plan.md`.
+  (cross-list early warning + calibrated designations), II (identity resolution —
+  variant-aware screening, corroboration, beneficial-owner / proximity walks,
+  identity-review RFI), and III (geographic triangulation — six-signal totality,
+  the 7th bounded agency decision, plain-language UI) are **complete and
+  public**. Part IV (counterparty-designation lifecycle) is **underway**: the
+  8th bounded agency decision (propose_unblock / propose_offboard / hold_pending),
+  the subject-facing customer notification, and the no-auto-unblock guard are
+  built and evaluated; the plain-language UI and posture doc are still to come.
+  Full details in `docs/Build-Plan.md`.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.
