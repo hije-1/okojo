@@ -55,7 +55,7 @@ _LOGO_PATH = str(Path(__file__).resolve().parents[1] / "okojo-logo.png")
 # ONE of the three hand-maintained status surfaces (README status block,
 # CLAUDE.md status block, and this on-screen caption) — update all three at
 # every phase sign-off.
-_PHASE = "Phase 8 (in progress)"
+_PHASE = "Phase 8"
 
 st.set_page_config(
     page_title="Okojo — Crypto-Investigations Co-Pilot",

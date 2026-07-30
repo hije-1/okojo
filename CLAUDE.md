@@ -131,16 +131,32 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   this block, the README status block, and the app's `_PHASE` caption —
   update all three at every sign-off.
 - **Phase 8 (Designation-Triggered Remediation Sweep — component 9, the v1.0
-  capstone): IN PROGRESS.** Built in parts. Parts I (flow sweep), I-B
-  (cross-list early warning + calibrated designations), II (identity resolution —
-  variant-aware screening, corroboration, beneficial-owner / proximity walks,
-  identity-review RFI), and III (geographic triangulation — six-signal totality,
-  the 7th bounded agency decision, plain-language UI) are **complete and
-  public**. Part IV (counterparty-designation lifecycle) is **underway**: the
-  8th bounded agency decision (propose_unblock / propose_offboard / hold_pending),
-  the subject-facing customer notification, and the no-auto-unblock guard are
-  built and evaluated; the plain-language UI and posture doc are still to come.
+  capstone): COMPLETE and public.** A second entry point runs over the whole
+  ledger and writes its own hash-chained audit trail, reusing the read-only core
+  through the one `GroundingResolver` membership definition. All parts shipped:
+  - **Part I** — flow sweep: exposed accounts by flow + hop distance, two-system
+    hold reconciliation, a grounded remediation worksheet + escalation drafts
+    (never sent).
+  - **Part I-B** — cross-list early warning: calibrated designation kinds
+    (obligation vs. signal), cross-list surfacing before a formal listing.
+  - **Part II** — identity resolution: variant-aware screening, corroboration
+    against published identifiers, beneficial-owner / proximity walks, the
+    identity-review RFI.
+  - **Part III** — geographic triangulation: six-signal totality over a designated
+    territory, the 7th bounded agency decision, VPN as obfuscation marker (never
+    location evidence), plain-language UI.
+  - **Part IV** — counterparty-designation lifecycle: the 8th bounded agency
+    decision (propose_unblock / propose_offboard / hold_pending), the subject-facing
+    customer notification (fail-closed against tipping-off, never sent), the
+    no-auto-unblock guard, and the plain-language UI + posture doc.
+  At sign-off, the **SAR calibration guard was wired live** into draft validation
+  (`assert_calibrated` fail-closed in `build_sar` + the drafter-critic loop,
+  alongside the grounding contract; over-claiming language is rejected, never
+  silently passed — the gold drafts were all clean, so no scorecard/audit moved).
   Full details in `docs/Build-Plan.md`.
+- **NEXT — Phase 9 (launch hardening):** CI, a security pass, a snippet-level SCA
+  scan, a cloud deploy of the demo, a recorded walkthrough, and a full
+  code-systems map. Not started; worked from the Phase 9 Launch Checklist.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.

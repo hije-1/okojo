@@ -59,41 +59,58 @@ over. Patterns are not people.
 
 ## Architecture
 
-One case runs as a compiled **LangGraph state machine** — deterministic by
-design (legibility is a compliance feature), with agency confined to **five
-bounded decision points**, each a pure rule over the evidence state, stamped
-into the audit chain with its rationale, and routed on the recorded outcome so
-the path taken and the audit trace cannot disagree.
+Okojo has **two entry points over one shared, read-only synthetic core.** A
+single-subject **case pipeline** runs as a compiled **LangGraph state machine** —
+deterministic by design (legibility is a compliance feature), with **five bounded
+decision points** that *route* the graph, each a pure rule stamped into the audit
+chain with its rationale so the path taken and the audit trace cannot disagree.
+The Phase-8 capstone adds a second entry point — a **designation-triggered
+remediation sweep** over the *whole ledger* — with **three more bounded decisions**
+that are *recorded* (review-tier, not routed). Both walk the same evidence, ground
+every surfaced claim through **one** membership definition (`GroundingResolver`),
+and write their **own** hash-chained audit trail — the two chain families never
+touch.
 
 ```mermaid
 flowchart TD
-    EV[("Synthetic evidence stores<br/>(KYC · ledger · device/IP · RFI · registry)")]
-    CG[("Persistent case graph<br/>(cross-case recidivism)")]
+    EV[("Shared read-only synthetic evidence<br/>KYC · ledger · device/IP · RFI · registry ·<br/>designations · holds · ownership · identity")]
+    GR{{"GroundingResolver — one membership definition<br/>every surfaced claim must resolve to a real row"}}
+    CG[("Persistent case graph<br/>cross-case recidivism")]
+    HUM(["Human investigator<br/>reviews · decides · files"])
 
-    EV --> PA["1 · Profile Aggregator"]
-    CG -. "history surfaced at case open" .-> PA
-    PA --> NE["2 · Network Expander"]
-    NE --> D1{"expand another hop?"}
-    D1 -- "continue (≤ 7)" --> NE
-    D1 -- "stop" --> RS["3 · On-chain Risk Scorer"]
-    RS --> TM["4 · Remark/Tell Miner + watchlist screening"]
-    TM --> AM["6 · Advisory Matcher"]
-    AM --> D2{"second advisory?"}
-    D2 -- "runner-up surfaced only" --> RFI["5 · RFI Contradiction-Checker"]
-    RFI --> D3{"re-RFI?"}
-    D3 -- "follow-up drafted, never sent" --> D4{"evidence sufficient to draft?"}
-    D4 -- "no — refer" --> HUM
-    D4 -- "yes" --> SAR["7 · SAR Drafter + Critic"]
-    SAR --> D5{"clears the rubric bar?"}
-    D5 -- "revise (bounded, never fabricates)" --> SAR
-    D5 -- "clears / flagged for review" --> PKG["8 · Case Packager"]
-    PKG -. "case recorded" .-> CG
-    PKG --> HUM["Human investigator — reviews, decides, files"]
+    EV --- GR
+
+    subgraph A["Entry point A · ONE SUBJECT — LangGraph case pipeline · 5 bounded decisions, routed"]
+        direction TB
+        PA["1 Profile Aggregator → 2 Network Expander → 3 On-chain Risk Scorer"]
+        PA --> TM["4 Tell Miner + watchlist screening → 6 Advisory Matcher → 5 RFI Contradiction-Checker"]
+        TM --> SAR["7 SAR Drafter + Critic → 8 Case Packager"]
+    end
+
+    subgraph B["Entry point B · WHOLE LEDGER — designation-triggered remediation sweep · component 9 · 3 bounded decisions, recorded"]
+        direction TB
+        FLOW["Flow sweep + two-system hold reconciliation → worksheet"]
+        FLOW --> STG["Identity resolution (II) · Geo triangulation (III) · Counterparty lifecycle (IV)"]
+        STG --> OUT["Escalations · customer notifications — drafted, never sent"]
+        BATCH["Batch path · many designations in one run"] -.-> FLOW
+    end
+
+    GR -. "grounds every claim" .-> A
+    GR -. "grounds every claim" .-> B
+
+    A --> CAC[("Case audit chain<br/>hash-linked · package built ON it")]
+    B --> SAC[("Sweep audit chain<br/>hash-linked · separate family")]
+    CAC --> CG
+    CG -. "recidivism surfaced at case open" .-> A
+    CAC --> HUM
+    SAC --> HUM
 ```
 
 Every stage, tool call, and decision writes to the **append-only, hash-chained
-audit trail** (omitted from the diagram for legibility; it is the spine, not a
-side-car — the case package is built *on* it).
+audit trail** — the spine, not a side-car: the case package is built *on* it, and
+the sweep writes its own separate chain. Individual decision routing and the
+per-stage records are omitted from the diagram for legibility (the full code map
+lands in Phase 9).
 
 **The nine components** (numbering is the target design, not build order):
 
@@ -105,7 +122,7 @@ side-car — the case package is built *on* it).
 6. **Regulatory Advisory Matcher** — FinCEN-advisory RAG, event-triggered on RFI key terms.
 7. **SAR Drafter + Critic** — grounded, self-critiquing narrative generation.
 8. **Case Packager + persistent case graph** — decision-ready package, append-only audit log, cross-case recidivism.
-9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone, in progress)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
+9. **Designation-Triggered Remediation Sweep** *(v1.0 capstone)* — given a new OFAC designation, sweep the full ledger for exposed accounts and draft remediation.
 
 ### The capstone in action: a designation → a remediation worksheet
 
@@ -126,10 +143,10 @@ sanctioned exposure but no flow to the *newly designated* addresses is excluded
 (no replay of an old answer key); a privileged/internal tag is flagged for
 review, never obeyed. Try it from the sidebar **"Designation sweep"** mode.
 
-> **Status:** the flow sweep (Phase 8, Part I), cross-list early warning
-> (Part I-B), identity resolution (Part II), and geographic triangulation
-> (Part III) are built and public; the counterparty-designation lifecycle
-> (Part IV) is underway before the capstone signs off.
+> **Status:** the capstone is **complete** — the flow sweep (Phase 8, Part I),
+> cross-list early warning (Part I-B), identity resolution (Part II), geographic
+> triangulation (Part III), and the counterparty-designation lifecycle (Part IV)
+> are all built and public.
 
 ---
 
@@ -283,24 +300,50 @@ noticed — building the Timeline as an actual chronology surfaced the
 impossibility in seconds. Views that make data *legible* are themselves a
 verification tool, not cosmetics.
 
-**Phase 8 (in progress):** the Designation-Triggered Remediation Sweep —
-component 9, the v1.0 capstone — is being built in parts. Parts I (flow sweep),
-I-B (cross-list early warning + calibrated designations), II (identity
-resolution — variant-aware screening, corroboration, beneficial-owner and
-proximity walks, and an identity-review RFI), and III (geographic triangulation —
-a six-signal totality, a totality-driven proposal decision, and a plain-language
-UI) are **complete and public**. Part IV (counterparty-designation lifecycle) is
-**underway**: after a counterparty service is designated, the relationship is
-dispositioned by an eighth bounded decision (propose unblock / offboard / hold),
-a subject-facing customer notification is drafted (fail-closed against
-tipping-off, never sent), and a guard proves the pipeline can never auto-unblock;
-the plain-language UI and posture doc are still to come.
+**Phase 8 (complete) — the Designation-Triggered Remediation Sweep, component 9
+and the v1.0 capstone.** A second entry point runs over the *whole ledger* and
+writes its own hash-chained audit trail, reusing the read-only core through the
+one grounding definition:
 
-**Roadmap (post-v1.0):** the Audit Narrator (a grounded summarizer over the
-system's own audit log — making the tamper-evident trail *reviewable*, not just
-provable) · ML alert auto-closure QA · vendor reconciliation ·
-tokenized-commodity issuance tracing · multilingual OSINT verifier ·
-LE-request/MLAT routing.
+- **Part I — flow sweep:** exposed accounts by flow and hop distance, two-system
+  hold reconciliation (the documented data-integrity gap), and a grounded
+  remediation worksheet plus escalation drafts — never sent.
+- **Part I-B — cross-list early warning:** calibrated designation kinds
+  (obligation vs. signal) that surface cross-list exposure ahead of a formal
+  listing.
+- **Part II — identity resolution:** variant-aware screening, corroboration
+  against published identifiers, beneficial-owner and proximity walks, and a
+  subject-facing identity-review RFI.
+- **Part III — geographic triangulation:** a six-signal totality over a
+  designated territory with a totality-driven proposal decision; VPN use is an
+  obfuscation marker, never location evidence.
+- **Part IV — counterparty-designation lifecycle:** after a counterparty service
+  is designated, an eighth bounded decision proposes the disposition (lift the
+  restriction / offboard / hold), a customer notification is drafted fail-closed
+  against tipping-off (never sent), and a guard proves the pipeline can never
+  auto-unblock.
+
+The SAR calibration guard is also wired live into draft validation — over-claiming
+language is rejected fail-closed, alongside the grounding contract.
+
+**Next — Phase 9 (launch hardening):** continuous integration, a security pass, a
+snippet-level SCA scan, a cloud deploy of the demo, a recorded walkthrough, and a
+full code-systems map.
+
+**Roadmap (post-v1.0):**
+
+- **Coverage-gap check** — the customer base's geographic footprint measured
+  against the enabled list-source regimes, surfaced as a standing signal (are we
+  screening against the lists our actual exposure calls for?).
+- **Audit Narrator** — a grounded summarizer over the system's own audit trails,
+  scoped to **all** chain families (case, sweep, and batch), making the
+  tamper-evident record *reviewable*, not just provable.
+- **API service facade** — the sweep and case pipelines are already payload-in /
+  proposals-out by design (validated payloads, grounded proposals, an append-only
+  audit trail between); production exposure is connector and infrastructure work,
+  not a redesign.
+- ML alert auto-closure QA · vendor reconciliation · tokenized-commodity issuance
+  tracing · multilingual OSINT verifier · LE-request/MLAT routing.
 
 ## Author
 

@@ -91,13 +91,15 @@ Membership in v1.0 is decided on **payoff-to-*marginal*-cost, not payoff alone.*
   capability (FinCEN's aggressive Iran program) *and* cheap to build last — it
   re-orchestrates finished components rather than adding a new subsystem.
 - **Roadmap (post-v1.0, ordered by payoff):** the **Audit Narrator** (grounded
-  summarizer over Okojo's own hash-chained audit log — makes the tamper-evident
-  trail *reviewable*, not just provable; low marginal cost, reuses the native log)
-  first; then PP-13 (ML auto-closure QA) and #8 (vendor reconciliation); then PP-14
-  (tokenized-commodity tracing — kept out of v1.0 despite timeliness because it
-  needs new contract-tracing tooling with little reuse), #5 (multilingual OSINT),
-  #4/#7 (LE-request/MLAT routing). Build these in public after launch to keep the
-  repo visibly growing. (See §13.)
+  summarizer over Okojo's own hash-chained audit trails — scoped to **all** chain
+  families: case, sweep, and batch — makes the tamper-evident record *reviewable*,
+  not just provable; low marginal cost, reuses the native log) first; then the
+  **coverage-gap check** and the **API service facade** (both added at Phase-8
+  sign-off — see §19); then PP-13 (ML auto-closure QA) and #8 (vendor
+  reconciliation); then PP-14 (tokenized-commodity tracing — kept out of v1.0
+  despite timeliness because it needs new contract-tracing tooling with little
+  reuse), #5 (multilingual OSINT), #4/#7 (LE-request/MLAT routing). Build these in
+  public after launch to keep the repo visibly growing. (See §13, §19.)
 
 ## 8. Data sources
 - **On-chain graph:** Elliptic / Elliptic++ (public, labeled BTC graph). NOTE:
@@ -158,6 +160,9 @@ _Added Day 3 (Phase 2 + Slice 4b complete)._
   it makes a *provable* log *reviewable*. A grounded summarizer over the log emits
   (a) a plain-language, citation-backed case narrative and (b) an actor/pattern
   access review that flags unusual access for human review.
+- **Scope broadened at Phase-8 sign-off (see §19):** Phase 8 added a second
+  audit-chain family (the sweep) and a batch path, so the Narrator's scope is now
+  **all** chain families — case, sweep, and batch — not the case log alone.
 - **Guardrails carry over unchanged:** the grounding contract and calibrated
   language apply — every summary sentence cites the log entries behind it, and
   anomalies are *flagged for human review, never concluded*.
@@ -358,3 +363,35 @@ _Added Day 6 (Phase 7, Slice E)._
   consistent and verified; determinism is re-proven by the standing two-run
   byte-identity and packager byte tests; the decision-trace eval (triples vs
   the domain-authored gold) is unchanged at P/R/F1=1.0.
+
+## 19. Phase-8 sign-off: the calibration guard goes live; three roadmap items
+_Added Day 11 (Phase 8 sign-off; component 9 complete)._
+
+- **The SAR calibration guard now has a live call site.** `calibration_violations`
+  (the over-claiming-language check: *instantly / autonomously / guaranteed /
+  proven fact / definitely / certainly*) had existed since Phase 1 but was called
+  only from tests — a control with the shape of enforcement but no substance,
+  exactly the pathology the P8-G falsification discipline exists to catch. Ruled
+  and wired: `assert_calibrated` is called fail-closed at SAR draft-validation
+  time, in `build_sar` and on every revised draft in the drafter-critic loop,
+  **alongside** the two-step grounding contract (`assert_grounded` /
+  `assert_resolvable`). A violating draft is rejected and the offending statements
+  surfaced — never silently passed.
+- **Why it moved nothing.** Verified *before* wiring: every gold SAR draft across
+  all 33 subjects (12 roster + 21 isolated) already has zero calibration
+  violations, so the guard never fires on the scenario. Proven byte-for-byte —
+  the case audit chains are identical (fixed clock) before and after the wiring,
+  and the guard emits no audit record. No version moved (SAR/CRITIC/AGENCY): this
+  activates an existing check, it does not change a threshold, rubric, or config.
+- **Three roadmap items added (post-v1.0, see §7).** (a) **Coverage-gap check** —
+  the customer base's geographic footprint measured against the enabled
+  list-source regimes, surfaced as a standing signal (are we screening against the
+  lists our actual exposure calls for?). (b) **Audit Narrator scope broadened to
+  all chain families** — Phase 8 added the sweep chain and the batch path, so the
+  Narrator now covers case + sweep + batch, not the case log alone (§13). (c)
+  **API service facade** — the sweep and case pipelines are already payload-in /
+  proposals-out by design (validated payloads, grounded proposals, an append-only
+  audit trail between), so production exposure is connector and infrastructure
+  work, not a redesign. All three are logged as scope, deliberately not built now
+  — roadmap discipline holds; Phase 9 is launch hardening (CI, security pass, SCA,
+  deploy, code-systems map).
