@@ -42,6 +42,24 @@ try:  # prefer the real Faker (see requirements.txt); fall back if unavailable
     from faker import Faker
 except ModuleNotFoundError:  # pragma: no cover
     from ._fakelite import FakeLite as Faker
+else:
+    # ---- cross-platform determinism pin ---------------------------------- #
+    # Faker's date_time provider chooses its RNG draw by host OS: on Windows
+    # ``_rand_seconds`` uses ``random.randint`` (integer seconds), everywhere
+    # else it uses ``random.uniform`` (float). The two consume DIFFERENT
+    # amounts of the seeded Mersenne-Twister stream, so ``fake.date_of_birth()``
+    # shifts every subsequent Faker draw on non-Windows hosts relative to
+    # Windows — at a fixed seed the generated name set, and therefore every
+    # downstream CSV, diverges across platforms. Pin all hosts to the
+    # integer-second path (what Windows already does — a no-op on the Windows
+    # reference platform, so committed bytes are unchanged) so the generator is
+    # byte-identical everywhere. See tests/test_generator_determinism.py.
+    from faker.providers.date_time import Provider as _FakerDateTimeProvider
+
+    def _rand_seconds_stable(self, start_datetime, end_datetime):
+        return self.generator.random.randint(start_datetime, end_datetime)
+
+    _FakerDateTimeProvider._rand_seconds = _rand_seconds_stable
 
 from ..config import (
     RING_JURISDICTIONS,
