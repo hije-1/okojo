@@ -1,27 +1,28 @@
-# Building an Agentic AI Portfolio Project: Strategy & Viability Analysis
+# Okojo — Scope Rationale & Viability Analysis
 
-**Prepared for:** Jennifer Hicks, CAMS-RM, CGSS, PMP
-**Purpose:** Identify which of your 10 documented investigation pain points is the most viable foundation for a from-scratch agentic AI demo — one that lives on GitHub and positions you as an AI-forward senior compliance leader.
+**Project:** Okojo — an agentic AI co-pilot for financial-crime investigations at a crypto exchange
+**Author:** Jennifer Hicks, CAMS-RM, CGSS, PMP
+**Purpose:** Record which of ten documented investigation pain points formed the most viable foundation for a from-scratch agentic AI prototype, and why the project took the shape it did.
 **Date:** July 21, 2026
 
 ---
 
 ## 1. How I evaluated the ten pain points
 
-For a *public portfolio* piece built *from scratch* — with no access to production exchange infrastructure, real customer data, or proprietary vendor APIs — the constraints are different from a production build. A pain point is "viable" here only if you can build something credible with synthetic or public data, ship it solo in a matter of weekends, make it genuinely *agentic* (not just a classifier or a script), and have it read as sophisticated to a compliance hiring manager *and* safe to publish openly.
+For a *public project* built *from scratch* — with no access to production exchange infrastructure, real customer data, or proprietary vendor APIs — the constraints are different from a production build. A pain point is "viable" here only if you can build something credible with synthetic or public data, ship it solo in a bounded timeframe, make it genuinely *agentic* (not just a classifier or a script), ground it in genuine investigative judgment an expert reviewer can verify, and publish it openly without hazard.
 
 I scored each pain point 1–5 on six dimensions:
 
 - **Data** — Can it be built with public or synthetic data, with no proprietary access?
 - **Build** — Is it realistically buildable solo in a bounded timeframe?
 - **Agentic** — Does it showcase real agent behavior (planning, tool use, multi-step orchestration, self-critique) rather than a single model call?
-- **Domain** — Does the problem signal deep compliance/FIU sophistication to an expert reviewer?
+- **Domain** — Does the problem exercise deep compliance/FIU judgment that an expert reviewer can verify?
 - **Safe** — Is it clean to publish on a public repo (no real PII, no operational-security or reputational hazard)?
-- **Wow** — Is it visually or conceptually distinctive — does it stand out in a portfolio and lean on *your* differentiators?
+- **Distinct** — Does it demonstrate something not commonly found in public tooling?
 
 ## 2. Scored ranking (all 10)
 
-| # | Pain point | Data | Build | Agentic | Domain | Safe | Wow | **Total /30** |
+| # | Pain point | Data | Build | Agentic | Domain | Safe | Distinct | **Total /30** |
 |---|-----------|:----:|:-----:|:-------:|:------:|:----:|:---:|:-------------:|
 | 2 | Network & cluster mapping | 5 | 3 | 5 | 5 | 5 | 5 | **28** |
 | 3 | "Defensive" SAR / high-quality SAR drafting | 5 | 5 | 4 | 5 | 5 | 4 | **28** |
@@ -36,15 +37,15 @@ I scored each pain point 1–5 on six dimensions:
 
 ### What the scores tell us
 
-**The top tier (#2, #3, #1, #5)** clusters tightly, and not by accident — each is data-rich (public datasets exist), LLM- or graph-native, and central to the daily investigator experience that a compliance leader will instantly recognize.
+**The top tier (#2, #3, #1, #5)** clusters tightly, and not by accident — each is data-rich (public datasets exist), LLM- or graph-native, and central to the daily investigator experience.
 
-**The bottom tier is bottom for real reasons.** #6 (data reconciliation) is genuinely important operationally but is essentially a diffing script — hard to make *agentic* and unglamorous in a portfolio. #10 (VIP roadblocks) is the one I'd actively steer you *away from*: an open-source project whose headline is "AI that routes around controls protecting privileged accounts" reads badly out of context, regardless of how carefully you frame the tiered-access logic. Keep that insight for an interview conversation, not a public repo.
+**The bottom tier is bottom for real reasons.** #6 (data reconciliation) is operationally important but is essentially a diffing script — hard to make genuinely *agentic*. #10 (VIP roadblocks) is deliberately excluded from public work: an open project whose headline is "AI that routes around controls protecting privileged accounts" reads badly out of context, regardless of how carefully the tiered-access logic is framed. The underlying control insight is instead built *into* the system: a "privileged / internal account" tag is something the agent flags for review, never obeys.
 
-**Two mid-tier entries punch above their rank for you specifically.** #8 (vendor reconciliation) and #5 (multilingual OSINT) both map onto rare parts of your background — your Chainalysis/Elliptic on-chain lineage and your Mandarin-linguist / OSINT tradecraft respectively. They score lower only because #8 is data-access constrained (you'd be simulating "multiple vendors" rather than calling real ones) and #5 carries mild care-in-publishing overhead. Both are excellent *modules* or *second projects*.
+**Two mid-tier entries punch above their rank.** #8 (vendor reconciliation) and #5 (multilingual OSINT) map onto rarer specialties — on-chain analytics lineage and multilingual OSINT tradecraft respectively. They score lower only because #8 is data-access constrained (simulating "multiple vendors" rather than calling real ones) and #5 carries mild care-in-publishing overhead. Both are strong *modules* or standalone follow-ons.
 
 **Update after a typology deep-dive.** Pressure-testing the field against publicly documented Iranian-oil / "shadow-banking" typologies (FinCEN advisories, OFAC designations, published exchange enforcement actions) re-ranked it: two capabilities buried inside the original ten are what actually crack attribution in documented investigations, and three genuinely new pain points emerged. Scored on the same six dimensions:
 
-| Pain point | Data | Build | Agentic | Domain | Safe | Wow | **/30** |
+| Pain point | Data | Build | Agentic | Domain | Safe | Distinct | **/30** |
 |-----------|:----:|:----:|:----:|:----:|:----:|:----:|:----:|
 | RFI contradiction-checking (promoted from #5) | 5 | 3 | 5 | 5 | 5 | 5 | **28** |
 | Remark / tell mining (PP-11) | 5 | 4 | 4 | 5 | 5 | 5 | **28** |
@@ -54,26 +55,25 @@ I scored each pain point 1–5 on six dimensions:
 
 The first two are folded into the flagship's headline capabilities below; **PP-12 is promoted to a committed v1.0 capstone** (see the MVP / capstone / roadmap split); PP-13 and PP-14 remain roadmap, re-ordered by payoff.
 
-## 3. Scope recommendation: one flagship, not a suite
+## 3. Scope decision: one system, not a suite
 
-You asked me to weigh this. **Build one flagship project, deliberately scoped, with a documented roadmap — not a scattered suite of small demos.**
+**The decision: build one coherent system, deliberately scoped, with a documented roadmap — not a scattered suite of small demos.**
 
-Here's the reasoning. You are not applying for a junior ML-engineer role where breadth-of-tricks matters; you are a senior compliance executive proving you can *architect* agentic systems and reason about them at a systems level. One coherent, well-scoped project demonstrates exactly the judgment that seniority is about: choosing what to build, what to defer, and why. Three thin demos demonstrate the opposite — that you optimized for surface area. A single flagship with a clearly-articulated MVP boundary and a "future work" roadmap actually *shows off* product-scoping discipline, which is itself a senior signal.
+The reasoning is architectural. The questions that make agentic AI interesting in this domain — grounding every claim, bounding every decision, keeping a tamper-evident record, composing capabilities over shared evidence — only appear at system scale. Three thin demos never encounter them. One coherent system with an explicit MVP boundary and a documented "future work" roadmap forces the real discipline: choosing what to build, what to defer, and why.
 
-The elegant move is that a single flagship can *contain* several of your top-ranked pain points as distinct agent capabilities under one narrative. That's the recommendation below.
+A single system can also *contain* several of the top-ranked pain points as distinct agent capabilities under one investigation narrative. That is the design below.
 
-## 4. Primary recommendation — the flagship
+## 4. The flagship design
 
-### "Okojo" — an Agentic Crypto-Investigations Co-Pilot
-*(name it whatever you like; a codename just makes the repo feel like a product)*
+### An agentic crypto-investigations co-pilot
 
-**The narrative.** A single flagged account arrives in the queue. Instead of an investigator spending hours clicking across a dozen dashboards, an orchestrating agent assembles a unified subject profile, expands the account into its full entity cluster on-chain, scores the network against sanctions and illicit-activity signals, and drafts an intelligence-rich SAR narrative — then hands a human a decision-ready package with a complete audit trail. It is the "investigator co-pilot" your own resume already references, made real.
+**The narrative.** A single flagged account arrives in the queue. Instead of an investigator spending hours clicking across a dozen dashboards, an orchestrating agent assembles a unified subject profile, expands the account into its full entity cluster on-chain, scores the network against sanctions and illicit-activity signals, and drafts an intelligence-rich SAR narrative — then hands a human a decision-ready package with a complete audit trail.
 
-**Why this one.** It fuses your three highest-scoring pain points into one story — **#1 (unified subject timeline)** as the orchestration spine, **#2 (cluster/network mapping)** and **#3 (high-quality SAR drafting)** as the two headline capabilities — and it leans directly on your two sharpest differentiators: on-chain graph fluency (Chainalysis/Elliptic/Leidos FININT) and SAR-pipeline leadership (your "same-day SAR pipeline architecture"). It satisfies the "balance of both" brief precisely: there is real, non-trivial engineering to show, but the spine of the story is a sophisticated compliance problem solved with obvious domain judgment.
+**Why this one.** It fuses the three highest-scoring pain points into one story — **#1 (unified subject timeline)** as the orchestration spine, **#2 (cluster/network mapping)** and **#3 (high-quality SAR drafting)** as the two headline capabilities — and it draws directly on documented casework experience with on-chain cluster analysis and SAR pipeline design. There is real, non-trivial engineering here, and the spine of the story is a sophisticated compliance problem that demands domain judgment at every step.
 
 ### Architecture
 
-A supervisor/orchestrator agent coordinating specialized sub-agents and tools, implemented as an explicit state machine so the control flow is legible (this legibility is a selling point — regulators and auditors care that an agent's steps are inspectable, and you can say so):
+A supervisor/orchestrator agent coordinating specialized sub-agents and tools, implemented as an explicit state machine so the control flow is legible. Legibility is a design requirement, not a convenience: regulators and auditors need an agent's steps to be inspectable.
 
 1. **Profile Aggregator** — tools that connect to several *mock* internal systems (KYC store, fiat + crypto ledgers, IP/device/session store, customer-service tickets, blockchain-intel feed). Returns a normalized, single timeline and auto-flags anomalies such as geolocation-IP vs. declared-residence mismatch and elevated VPN usage. *(covers pain point #1)*
 2. **Network Expander** — seeds from the flagged account and walks the transaction/wallet graph 1–7 hops (mirroring the cluster-expansion tools investigators rely on), linking entities on shared attributes — device/session and `device_fingerprint` identifiers, reused KYC documents, and on-chain counterparty flows — and including a **gas-funding linkage** tool (who funded whose gas), a move that repeatedly exposes the controller behind a "non-custodial" address in documented investigations. Emits an interactive, risk-weighted network graph. *(covers #2)*
@@ -81,13 +81,13 @@ A supervisor/orchestrator agent coordinating specialized sub-agents and tools, i
 4. **Remark/Tell Miner** — continuously mines user-generated free-text — withdrawal remarks, address labels, note fields — and fuzzy-matches it against sanctioned-entity names, transliterations, known aliases/nicknames, and entities already in the case graph. In documented investigations, attribution repeatedly breaks open on a single remark (an address labelled with its true controller's nickname, or "aggregation wallet"); this makes that systematic rather than lucky, and across languages. *(new — PP-11, promoted to headline)*
 5. **RFI Contradiction-Checker** — decomposes a subject's RFI response into discrete factual claims and adversarially tests each against device data, on-chain flows, corporate-registry OSINT, and *the subject's own prior RFI answers*, emitting a claim-by-claim contradiction table with evidence pointers. Documented investigations turn on polished, legalistic RFI narratives (licensed-trust "segregation," "no ownership or management relationship") that are flatly contradicted by shared devices and fund flows — today only catchable by an investigator holding the whole case in their head. *(new — the sharpened, promoted core of #5)*
 6. **Regulatory Advisory Matcher (FinCEN advisory RAG)** — maintains a searchable knowledge base of current FinCEN advisories and matches them to the unified profile and network. Event-triggered on RFI responses: when a reply from the flagged user *or* anyone in their cluster surfaces a key term (e.g., "oil" / "petroleum"), the matcher fuses that signal with structured corroborators already in the profile — jurisdictional nexus, name/entity hits, and on-chain links to flagged addresses — and, above a confidence threshold, attaches the specific advisory, the exact red-flag indicators it matched, and the SAR key terms FinCEN instructs filers to cite. *(regulatory grounding; see design notes below)*
-7. **SAR Drafter + Critic (agentic loop)** — assembles case facts into a FinCEN-style SAR narrative with predicate-offense tagging, citing any advisory and specific red-flag numbers surfaced by the Matcher, the contradiction table from the RFI checker, and the tell attributions — then a separate Critic agent scores the draft against an "intelligence-rich vs. defensive" rubric and sends it back for revision until it clears the bar. This self-critique loop is the most *agentic* part of the system and dramatizes your signature thesis: fewer, higher-quality reports. *(covers #3)*
+7. **SAR Drafter + Critic (agentic loop)** — assembles case facts into a FinCEN-style SAR narrative with predicate-offense tagging, citing any advisory and specific red-flag numbers surfaced by the Matcher, the contradiction table from the RFI checker, and the tell attributions — then a separate Critic agent scores the draft against an "intelligence-rich vs. defensive" rubric and sends it back for revision until it clears the bar. This self-critique loop is the most *agentic* part of the system and embodies its central thesis: fewer, higher-quality reports. *(covers #3)*
 8. **Case Packager + persistent case graph** — compiles the profile, network graph, risk score, tell hits, RFI contradiction table, matched advisories, and SAR draft into a human-review package with a full, timestamped, append-only audit log of every access, action, and tool call. Every subject, address, device, and entity persists in a **case graph**, so at the next case open the agent surfaces "this subject/address/device already appeared in N prior cases" — the cross-case recidivism the real volume-driven queue kept missing (one account cleared five prior "retain & monitor" reviews before anyone connected it to the network).
 9. **Designation-Triggered Remediation Sweep (v1.0 capstone)** — a *second entry point* over the same components: given a new OFAC designation (new SDN entity or crypto addresses), it sweeps the full synthetic ledger for directly and indirectly exposed accounts, verifies block status across the warehouse and admin systems (catching the data-integrity gaps documented in public enforcement actions), triages by exposure, and drafts a per-account remediation worksheet and escalations. Because it reuses the Risk Scorer, Network Expander, case graph, sanctions ingestion, and SAR/escalation drafter, its marginal cost is low — which is exactly why it's built last, as the capstone, rather than in the early core. Its regulator relevance is the highest in the system given the current aggressive posture of FinCEN's Iran program. *(PP-12 — promoted from roadmap to committed v1.0 scope)*
 
 #### Design notes on the Advisory Matcher (viability)
 
-This addition is highly viable and, more than that, it *upgrades the whole system's thesis* — it turns "this account is risky" into "this account matches FinCEN Advisory X, red flags 3 and 7, file citing key term Y," which is exactly the intelligence-rich output an FIU wants. A few design points make it robust rather than noisy:
+This capability upgrades the whole system's thesis — it turns "this account is risky" into "this account matches FinCEN Advisory X, red flags 3 and 7, file citing key term Y," which is exactly the intelligence-rich output an FIU wants. A few design points make it robust rather than noisy:
 
 - **Data is ideal.** FinCEN advisories are US-government public domain, published as 508-compliant PDFs with explicit, numbered red-flag indicators, named typologies, and prescribed SAR key terms — safe to ingest and even redistribute in a public repo. This is one of the cleanest possible data sources.
 - **Use hybrid matching, not keyword-only.** Keyword/regex on the advisory's published key terms gives precision, but on its own it's brittle to obfuscation, code words, and other languages. Layer in semantic/embedding similarity and structured entity-and-graph matching (name → advisory named-entity list; address → advisory-referenced flagged addresses; jurisdiction → advisory scope). This is also where the roadmap's multilingual capability (#5) compounds — an RFI reply in Farsi or Mandarin still triggers.
@@ -118,7 +118,7 @@ This design was pressure-tested against publicly documented Iranian-oil / "shado
 
 Python; an agent-orchestration framework (**LangGraph** for legible, inspectable state machines — its explicitness is a virtue here; **CrewAI** or **AutoGen** are fine alternatives); an LLM via API; **DuckDB/SQLite** for the mock stores; **networkx + pyvis** for the network graph; **Streamlit** (or a small FastAPI + HTML UI) for the demo; **pytest** for tests; Faker + the datasets above for data. All current and free.
 
-### Scoped MVP vs. roadmap (this framing is part of the deliverable)
+### Scoped MVP vs. roadmap
 
 **MVP core (build first):** the orchestrator + Profile Aggregator (#1) + Network Expander with gas-funding linkage (#2) + Remark/Tell Miner (PP-11) + RFI Contradiction-Checker + Regulatory Advisory Matcher (FinCEN RAG) + SAR Drafter/Critic (#3), over Elliptic + the IBM IT-AML dataset (HI-Small) + OFAC + a snapshot of current FinCEN advisories + the synthetic oil/sanctions-evasion scenario, with a Streamlit demo and full audit logging. These are what make the generated SARs both regulator-grounded and genuinely investigative.
 **Committed v1.0 capstone (build last, on top of the core):** the Designation-Triggered Remediation Sweep (PP-12). It's the most regulator-relevant capability in the system and, because it re-orchestrates finished components rather than adding a new subsystem, its marginal cost is low — the reason it's a capstone rather than an early-core item. Membership in v1.0 is decided on payoff-to-*marginal*-cost, not payoff alone.
@@ -129,17 +129,17 @@ Python; an agent-orchestration framework (**LangGraph** for legible, inspectable
 1. **Foundations** — synthetic data generators + mock system connectors; load Elliptic and the IBM IT-AML dataset (HI-Small); stand up the OFAC/OpenSanctions matcher.
 2. **The spine** — orchestrator + Profile Aggregator producing a unified, anomaly-flagged timeline end to end.
 3. **The headline capabilities** — Network Expander with interactive graph, then the SAR Drafter + Critic loop.
-4. **Polish for portfolio** — Streamlit demo, audit-trail viewer, README, architecture diagram, a short screen-capture GIF, tests, and a written "responsible-AI / human-in-the-loop" note.
+4. **Polish & publication** — Streamlit demo, audit-trail viewer, README, architecture diagram, a short screen-capture GIF, tests, and a written "responsible-AI / human-in-the-loop" note.
 
-### How to present it on GitHub (this matters as much as the code)
+### Documentation principles
 
-Open the README in *your* executive voice: frame the real-world problem (defensive SARs, cluster-level reviews, fragmented silos) the way a compliance leader briefs a board, then show the architecture diagram, then the demo GIF (the network graph and a sample generated SAR are your visual money-shots). Include a prominent **"Responsible AI & Audit Trail"** section — human-in-the-loop by design, every agent action logged, synthetic-data-only disclaimer, and a note on regulatory defensibility. That section is not boilerplate; for a compliance-exec audience it is arguably the single most differentiating thing in the repo, because it proves you build AI the way a regulator would want it built.
+The README leads with the real-world problem in practitioner terms (defensive SARs, account-level reviews of cluster-level risk, fragmented internal data), then the architecture diagram, then the demo. A prominent **"Responsible AI & Audit Trail"** section states the operating posture: human-in-the-loop by design, every agent action logged, synthetic-data-only. That section is not boilerplate — it documents the system's central design commitment: built the way a regulator would want it built.
 
-## 5. Alternatives, if you change your mind on scope
+## 5. Alternatives considered
 
-If you ever want a **clean standalone second project** that leans on a different differentiator, build **#5 — the multilingual document + OSINT verifier**. It ingests a synthetic source-of-wealth packet (say, a business-registration certificate in Mandarin), extracts entities, translates, cross-references a public corporate registry (OpenCorporates / GLEIF), and flags discrepancies such as a registration date that contradicts the user's operational claims. It's genuinely agentic (extract → translate → external tool call → reason about conflicts), and it's the one project that showcases your linguist background — a combination almost no other compliance candidate can claim.
+A **clean standalone alternative** leaning on a different specialty: **#5 — the multilingual document + OSINT verifier**. It ingests a synthetic source-of-wealth packet (say, a business-registration certificate in Mandarin), extracts entities, translates, cross-references a public corporate registry (OpenCorporates / GLEIF), and flags discrepancies such as a registration date that contradicts the user's operational claims. It's genuinely agentic (extract → translate → external tool call → reason about conflicts) and draws on multilingual OSINT tradecraft rarely paired with compliance-systems work.
 
-If you prefer a **single standalone flagship** over the fused co-pilot, **#3 (SAR quality)** is the safest high-credibility pick and the fastest to a polished result, and **#2 (network graph)** is the highest visual wow. The fused co-pilot simply gives you all three at once under one narrative, which is why it's my primary recommendation.
+Among single standalone options, **#3 (SAR quality)** is the safest high-credibility pick and the fastest to a polished result, and **#2 (network graph)** is the most visually distinctive. The fused co-pilot gives all three at once under one narrative, which is why it won.
 
 ## 6. Guardrails for a public compliance repo
 
