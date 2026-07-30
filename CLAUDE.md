@@ -154,14 +154,42 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   alongside the grounding contract; over-claiming language is rejected, never
   silently passed — the gold drafts were all clean, so no scorecard/audit moved).
   Full details in `docs/Build-Plan.md`.
-- **NEXT — Phase 9 (Audit Narrator):** a grounded, template-based summarizer over
-  the system's own hash-chained audit trails (case + sweep + batch), making the
-  tamper-evident record reviewable, not just provable — every narrative sentence
-  cites the record behind it (fail-closed), a failed chain verification IS the
-  narrative, and the narrator writes NOTHING to any chain (read-only). Promoted
-  from the roadmap by PM ruling (2026-07-31); see DECISIONS §13/§19. CI
-  (regenerate + `python -m pytest` on every push) lands as its first slice.
-- **THEN — Phase 10 (launch hardening):** a security pass, a snippet-level SCA
+- **Phase 9 (Audit Narrator): COMPLETE and public.** A grounded, read-only
+  summarizer over the system's own hash-chained audit trails, making the
+  tamper-evident record **reviewable**, not just provable. It reads a chain and
+  renders one plain-language sentence per record, each citing the record behind
+  it (fail-closed grounding), in two registers (consequential actions prominent,
+  setup records de-emphasized); it is deterministic (a `(actor, action)->sentence`
+  template map, **no LLM**), screened with the SAR drafter's exact `BANNED_TERMS`,
+  and **writes NOTHING to any chain** — so every existing chain and all 12+
+  capability scorecards are byte-identical BY CONSTRUCTION. A failed chain
+  verification IS the narrative (the break located + cited; nothing past it
+  summarized). Scoped to **all** chain families:
+  - **Slice 0** — lean single-job **CI** (regenerate + `python -m pytest` on every
+    push/PR) + README badge + the phase resequencing (narrator promoted from the
+    roadmap to committed Phase 9; launch hardening → Phase 10). One CI-red fix
+    followed (a pre-existing Faker `date_of_birth` platform-nondeterminism in the
+    generator, root-caused and pinned; byte-identical on Windows, green on Linux).
+  - **Slice 1** — the narrator core over the **case** family (13 actors / ~35
+    actions), the one additive read-only `AuditLog.verify_chain_located()` touch
+    (write path byte-untouched), `narrator_config()` + `docs/narrator-methodology.md`
+    (the **11th** doc↔code anti-drift pair), `NARRATOR_VERSION = "1.0.0"` pinned
+    through the artifact (never stamped into a chain).
+  - **Slice 2** — the **sweep** family (2 actors / 19 actions, faithful 1:1
+    reads) + **batch** composition (N constituent sweep narratives + a roll-up
+    grounded ONLY to constituent chain records — the derived `rollup` dict is
+    never a grounding source; a broken constituent is reported and excluded).
+    Sweep grounding P/R/F1=1.0 vs a domain-authored gold; real-chain coverage over
+    ALL generated sweep chains (every record templated, grounds, calibrates;
+    observed vocabulary == the registry exactly); tampered + batch-with-broken
+    fixtures; a demonstrated P8-G falsification.
+  - **Slice 3** — the two-register narrator UI in the case audit tab AND the sweep
+    audit section (plain sentences on screen, cited seq/hash in provenance),
+    verified via the existing module-scoped AppTest fixture + a render-helper
+    check; then this status bump. NARRATOR stays **1.0.0** (template-map growth is
+    content, not config); all other versions frozen.
+  514 green tests (1 skipped: the ST backend). Full details in `docs/Build-Plan.md`.
+- **NEXT — Phase 10 (launch hardening):** a security pass, a snippet-level SCA
   scan, a cloud deploy of the demo, a full code-systems map, and — last — a
   recorded walkthrough. Not started.
 

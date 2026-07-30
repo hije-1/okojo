@@ -8,10 +8,10 @@
   <a href="https://github.com/hije-1/okojo/actions/workflows/ci.yml"><img src="https://github.com/hije-1/okojo/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
 </p>
 
-> **Status:** Phase 8 complete — the v1.0 capstone (the designation-triggered
-> remediation sweep) is shipped and the core is reliability-hardened. Fully
-> synthetic data, built in the open. Details in
-> [Status & roadmap](#status--roadmap).
+> **Status:** Phase 9 complete — the Audit Narrator makes the tamper-evident
+> record *reviewable*, not just provable, across every chain family (case, sweep,
+> and batch), on top of the shipped v1.0 capstone. Fully synthetic data, built in
+> the open. Details in [Status & roadmap](#status--roadmap).
 
 ## The Problem
 
@@ -331,15 +331,21 @@ one grounding definition:
 The SAR calibration guard is also wired live into draft validation — over-claiming
 language is rejected fail-closed, alongside the grounding contract.
 
-**Next — Phase 9 (Audit Narrator):** a grounded summarizer over the system's own
-hash-chained audit trails. It reads a chain and produces a plain-language
-narrative of what the agent did, in order, and why — with every sentence citing
-the specific record behind it, and a failed chain verification reported as the
-narrative itself. Scoped to **all** chain families (case, sweep, and batch), it
-makes the tamper-evident record *reviewable*, not just provable. Continuous
-integration (regenerate + test on every push) lands as its first slice.
+**Phase 9 (complete) — the Audit Narrator.** A grounded, read-only summarizer
+over the system's own hash-chained audit trails. It reads a chain and produces a
+plain-language narrative of what the agent did, in order, and why — one sentence
+per record, each citing the specific record behind it (fail-closed grounding),
+in two registers (consequential actions prominent, setup records de-emphasized).
+It is deterministic (a template map, no LLM), screened with the SAR drafter's
+exact calibration guard, and **writes nothing to any chain** — so every existing
+chain stays byte-identical. A failed chain verification *is* the narrative: the
+break is located and cited, and nothing past it is summarized. Scoped to **all**
+chain families — case, sweep, and batch (a batch roll-up grounded only to its
+constituent sweep chains) — it makes the tamper-evident record *reviewable*, not
+just provable, and it is surfaced in both audit views. Continuous integration
+(regenerate + test on every push) landed as its first slice.
 
-**Then — Phase 10 (launch hardening):** a security pass, a snippet-level SCA scan,
+**Next — Phase 10 (launch hardening):** a security pass, a snippet-level SCA scan,
 a cloud deploy of the demo, a full code-systems map, and — last — a recorded
 walkthrough.
 

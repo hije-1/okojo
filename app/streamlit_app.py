@@ -26,6 +26,7 @@ import streamlit.components.v1 as components
 from okojo.advisory import RETRIEVAL_VERSION, retrieval_config
 from okojo.casegraph import CaseGraphStore
 from okojo.connectors import Connectors
+from okojo.narrator import NARRATOR_VERSION, narrate_chain
 from okojo.network import build_roster
 from okojo.orchestrator import run_case
 from okojo.orchestrator.pipeline import default_out_dir
@@ -55,7 +56,7 @@ _LOGO_PATH = str(Path(__file__).resolve().parents[1] / "okojo-logo.png")
 # ONE of the three hand-maintained status surfaces (README status block,
 # CLAUDE.md status block, and this on-screen caption) — update all three at
 # every phase sign-off.
-_PHASE = "Phase 8"
+_PHASE = "Phase 9"
 
 st.set_page_config(
     page_title="Okojo — Crypto-Investigations Co-Pilot",
@@ -1235,6 +1236,13 @@ def _render_sweep_mode(conn: Connectors) -> None:
             f"sweep's own hash chain · chain verified: "
             f"**{res.audit_verified}** · {len(res.audit_records)} records."
         )
+
+    # Reviewable, not just provable: the Audit Narrator reads this sweep's own
+    # chain and renders it in plain language (Phase 9). Read-only — it writes
+    # nothing to the chain.
+    _render_audit_narrative(res.audit_records, family="sweep",
+                            subject=d.designation_id)
+
     with st.expander("Audit trail (this sweep's own tamper-evident chain)"):
         audit_df = pd.DataFrame([
             {"seq": r["seq"], "actor": r["actor"], "action": r["action"],
@@ -1247,6 +1255,54 @@ def _render_sweep_mode(conn: Connectors) -> None:
         f"v{IDENTITY_VERSION} · money-flow edges: control links and value "
         f"transfers · name-match threshold {sweep_config()['name_match_threshold']}."
     )
+
+
+def _render_audit_narrative(records, *, family: str, subject=None) -> None:
+    """Render the read-only Audit Narrator's two-register narrative over one
+    hash chain: plain sentences on screen, the cited ``(seq, hash)`` provenance
+    kept in an expander.
+
+    The narrator is grounded and read-only — it writes nothing, and every
+    sentence cites the exact record it reads. Setup records (tool calls, the
+    versioned ``*_config`` stamps) render de-emphasized; consequential actions
+    render prominent; a chain that fails verification renders its break report
+    and nothing past it. Degrades to a caption rather than aborting the surface
+    if narration cannot run (the reliability discipline: a reading aid never
+    takes the audit tab down)."""
+    try:
+        nar = narrate_chain(records, family=family, subject=subject)
+    except Exception:  # pragma: no cover - narrator is fail-closed; the UI must not abort
+        st.caption("Audit narrative unavailable for this chain.")
+        return
+
+    st.markdown(
+        f"**Plain-language narrative** — read-only, grounded, narrator "
+        f"v{NARRATOR_VERSION}. Each line is numbered by its record's `seq` in the "
+        f"chain below, so a sentence and the raw record it reads carry the same "
+        f"number; every sentence cites that record (provenance in the expander)."
+    )
+    for s in nar.sentences:
+        # Number every line by the record's own seq so the narrative and the raw
+        # hash chain line up one-to-one (a broken chain shows a single break line
+        # numbered at the record where verification first failed). The number is
+        # bold-formatted (`**n.**`, never a bare `n. `) so Markdown renders it as
+        # literal text rather than swallowing it into an auto-numbered list.
+        n = s.ref.seq
+        if s.register == "break":
+            st.error(f"**{n}.** {s.text}")
+        elif s.register == "setup":
+            st.caption(f"**{n}.** · {s.text}")
+        else:
+            st.markdown(f"**{n}.** {s.text}")
+
+    with st.expander("Narrative provenance (each sentence's cited record)"):
+        st.dataframe(
+            pd.DataFrame([
+                {"line": i + 1, "register": s.register, "seq": s.ref.seq, "hash": s.ref.hash}
+                for i, s in enumerate(nar.sentences)
+            ]),
+            use_container_width=True, hide_index=True,
+        )
 
 
 def main() -> None:
@@ -1813,6 +1869,14 @@ def main() -> None:
             )
         else:
             st.error("Hash chain FAILED verification — the log was tampered with.")
+
+        # Reviewable, not just provable: the Audit Narrator reads this very chain
+        # and renders a plain-language, citation-backed account of what the agent
+        # did, in order (Phase 9). Read-only — it writes nothing to the chain.
+        _render_audit_narrative(res.audit_records, family="case",
+                                subject=f"uid:{res.subject_uid}")
+
+        st.markdown("**Raw hash chain**")
         audit_df = pd.DataFrame([
             {"seq": r["seq"], "timestamp": r["timestamp"], "actor": r["actor"],
              "action": r["action"], "target": r.get("target"), "detail": r.get("detail"),

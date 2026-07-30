@@ -15,6 +15,7 @@ The two properties this slice must hold together:
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pytest
@@ -476,3 +477,143 @@ def test_simulate_valid_payload_runs_sweep(sweep_app_simulate):
     # false-positive path renders (worksheet section present, no exception).
     text = _all_text(at)
     assert "Remediation worksheet" in text
+
+
+# --------------------------------------------------------------------------- #
+# Phase 9 Slice 3: the Audit Narrator's two-register rendering.
+#
+# The sweep audit section is checked live via the existing module-scoped
+# ``sweep_app`` fixture (no new app spin). The case-family rendering and the
+# broken-chain break report are checked against the shared render helper through
+# a recording stand-in for streamlit — a pure call, again no app spin.
+# --------------------------------------------------------------------------- #
+# raw record action slugs that must live ONLY in the raw hash-chain dataframe,
+# never in the narrative register (markdown / caption).
+_NARRATIVE_SLUGS = ("sweep_open", "sweep_complete", "exposure_sweep",
+                    "block_verify", "escalations_draft", "name_screen")
+
+
+def _lead_num(line):
+    """The record seq a narrative line is numbered with (e.g. '**3.** ...' or
+    '3. · ...' or '3. Chain verification FAILED ...'), or None for an unnumbered
+    line such as the section header."""
+    m = re.match(r"^\*{0,2}(\d+)\.", line)
+    return int(m.group(1)) if m else None
+
+
+def _provenance_df(at):
+    for d in at.dataframe:
+        cols = list(d.value.columns)
+        if {"seq", "hash", "register"} <= set(cols):
+            return d.value
+    raise AssertionError("narrative provenance dataframe not rendered")
+
+
+def test_sweep_audit_narrator_renders_plain(sweep_app):
+    """The sweep audit section renders the narrator's plain sentences on screen,
+    each numbered by its record seq; no raw record action slug leaks into the
+    narrative register."""
+    text = _all_text(sweep_app)
+    assert "Opened the remediation sweep" in text
+    assert "Completed the sweep" in text
+    # the first sentence is numbered by its record seq (1) so it lines up with
+    # the raw hash chain (the shared render helper numbers every line)
+    assert re.search(r"\*\*1\.\*\*\s*Opened the remediation sweep", text)
+    for slug in _NARRATIVE_SLUGS:
+        assert slug not in text, slug
+
+
+def test_sweep_audit_narrator_provenance_keeps_seq_hash(sweep_app):
+    """The narrative provenance keeps each sentence's cited (seq, hash): seqs are
+    1..N in order and every hash is a full 64-hex audit hash."""
+    prov = _provenance_df(sweep_app)
+    assert list(prov["seq"]) == list(range(1, len(prov) + 1))
+    assert all(isinstance(h, str) and len(h) == 64 for h in prov["hash"])
+
+
+class _StRecorder:
+    """A minimal stand-in for the ``streamlit`` module: records what the render
+    helper emits so the narrative + provenance are assertable without an app
+    spin. Only the calls the helper makes are implemented."""
+
+    def __init__(self):
+        self.md, self.cap, self.err, self.df = [], [], [], []
+        self.lines = []  # (kind, body) in render order, across md/cap/err
+
+    def markdown(self, body, **_):
+        self.md.append(body)
+        self.lines.append(("md", body))
+
+    def caption(self, body, **_):
+        self.cap.append(body)
+        self.lines.append(("cap", body))
+
+    def error(self, body, **_):
+        self.err.append(body)
+        self.lines.append(("err", body))
+
+    def dataframe(self, data, **_):
+        self.df.append(data)
+
+    def expander(self, *_, **__):
+        recorder = self
+
+        class _Ctx:
+            def __enter__(self):
+                return recorder
+
+            def __exit__(self, *_exc):
+                return False
+
+        return _Ctx()
+
+
+def test_case_audit_narrator_two_register_and_break(monkeypatch, conn, trust_uid, tmp_path):
+    """The shared render helper narrates a CASE chain in two registers (actions
+    prominent, setup de-emphasized), keeps (seq, hash) provenance, and renders a
+    broken chain's break report — nothing past the break."""
+    import app.streamlit_app as app_mod
+    from okojo.orchestrator import run_case
+
+    res = run_case(trust_uid, conn=conn, out_dir=tmp_path / "c", render_graph=False)
+
+    rec = _StRecorder()
+    monkeypatch.setattr(app_mod, "st", rec)
+    app_mod._render_audit_narrative(res.audit_records, family="case",
+                                    subject=f"uid:{trust_uid}")
+
+    action_text = "\n".join(rec.md)
+    setup_text = "\n".join(rec.cap)
+    # two registers: a consequential action rendered prominent (markdown), a
+    # versioned *_config stamp de-emphasized (caption)
+    assert "Opened the case" in action_text
+    assert any("policy into the record" in c for c in rec.cap)
+    # no raw record slug leaks into either narrative register
+    for slug in ("case_open", "agency_config", "case_recorded"):
+        assert slug not in action_text and slug not in setup_text, slug
+    # every narrative line is numbered by its record's seq, in render order, so
+    # the narrative and the raw hash chain line up one-to-one
+    rendered_seqs = [_lead_num(body) for kind, body in rec.lines
+                     if kind in ("md", "cap", "err") and _lead_num(body) is not None]
+    assert rendered_seqs == [r["seq"] for r in res.audit_records]
+    # the case_open line (seq 1) is the prominent, numbered action line
+    assert any(_lead_num(m) == res.audit_records[0]["seq"] and "Opened the case" in m
+               for m in rec.md)
+    # provenance keeps each sentence's cited (seq, hash), 1:1 with the chain
+    prov = rec.df[-1]
+    assert list(prov["seq"]) == [r["seq"] for r in res.audit_records]
+    assert list(prov["hash"]) == [r["hash"] for r in res.audit_records]
+    assert not rec.err  # a verified chain renders no break
+
+    # a tampered chain renders its break report (via st.error) and nothing past it
+    broken = [dict(r) for r in res.audit_records]
+    mid = len(broken) // 2
+    broken[mid]["detail"] = (broken[mid].get("detail") or "") + " TAMPERED"
+    rec2 = _StRecorder()
+    monkeypatch.setattr(app_mod, "st", rec2)
+    app_mod._render_audit_narrative(broken, family="case")
+    assert len(rec2.err) == 1 and "FAILED" in rec2.err[0] and "withheld" in rec2.err[0].lower()
+    # the break line is numbered at the record where verification first failed
+    assert _lead_num(rec2.err[0]) == broken[mid]["seq"]
+    assert len(rec2.df[-1]) == 1  # break-report-only: a single cited record
+    assert all("Plain-language narrative" in m for m in rec2.md)  # no action lines past the break
