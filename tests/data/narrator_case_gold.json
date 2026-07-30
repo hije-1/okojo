@@ -1,0 +1,60 @@
+{
+  "readme": "Domain-authored gold for the Audit Narrator over planted CASE chains. Each record is built into a real hash chain (fixed clock) and narrated; `expected[i]` is the independently-authored expectation for records[i] (seq i+1): its register and substrings its plain sentence must contain. The two chains deliberately exercise the conditional templates a single happy-path run does not hit (recidivism_flagged, graph_render_failed, human_referral, history_clear) alongside the setup register (tool_call, *_config).",
+  "narrator_version": "1.0.0",
+  "chains": [
+    {
+      "name": "recidivist_referral",
+      "subject": "uid:900000001",
+      "records": [
+        {"actor": "orchestrator", "action": "case_open", "target": "uid:900000001", "detail": "Planted Subject One"},
+        {"actor": "agency", "action": "agency_config", "detail_obj": {"version": "1.5.0"}},
+        {"actor": "case_graph", "action": "casegraph_config", "detail_obj": {"version": "1.1.0"}},
+        {"actor": "case_graph", "action": "recidivism_flagged", "target": "uid:900000001", "detail": "3 prior cleared reviews"},
+        {"actor": "profile_aggregator", "action": "tool_call", "target": "uid:900000001"},
+        {"actor": "profile_aggregator", "action": "profile_built", "target": "uid:900000001", "detail": "10 events, 2 anomalies"},
+        {"actor": "network_expander", "action": "tool_call", "target": "uid:900000001", "detail": "max_hops=3"},
+        {"actor": "network_expander", "action": "graph_render_failed", "detail": "render backend unavailable"},
+        {"actor": "network_expander", "action": "expanded", "detail_obj": {"reached": 4, "sanctioned": 1}},
+        {"actor": "risk_scorer", "action": "scored", "detail_obj": {"score": 42}},
+        {"actor": "orchestrator", "action": "human_referral", "target": "uid:900000001", "detail": "insufficient_evidence"},
+        {"actor": "case_graph", "action": "case_recorded", "target": "case:planted-1", "detail": "disposition=insufficient_evidence"}
+      ],
+      "expected": [
+        {"register": "action", "must_include": ["Opened the case", "Planted Subject One", "uid:900000001"]},
+        {"register": "setup", "must_include": ["agency decision policy", "v1.5.0"]},
+        {"register": "setup", "must_include": ["case-graph policy", "v1.1.0"]},
+        {"register": "action", "must_include": ["Flagged the subject for human review", "3 prior cleared reviews"]},
+        {"register": "setup", "must_include": ["Invoked the profile aggregator"]},
+        {"register": "action", "must_include": ["Built the subject profile", "10 events, 2 anomalies"]},
+        {"register": "setup", "must_include": ["Invoked the network expander"]},
+        {"register": "action", "must_include": ["network-graph render failed", "render backend unavailable"]},
+        {"register": "action", "must_include": ["Expanded the network", "reached=4", "sanctioned=1"]},
+        {"register": "action", "must_include": ["Scored on-chain risk", "score=42"]},
+        {"register": "action", "must_include": ["Referred the case to a human investigator", "insufficient_evidence"]},
+        {"register": "action", "must_include": ["Recorded the case in the persistent case graph", "disposition=insufficient_evidence"]}
+      ]
+    },
+    {
+      "name": "clean_full_draft",
+      "subject": "uid:900000002",
+      "records": [
+        {"actor": "orchestrator", "action": "case_open", "target": "uid:900000002", "detail": "Planted Subject Two"},
+        {"actor": "case_graph", "action": "history_clear", "target": "uid:900000002", "detail": "no prior reviews"},
+        {"actor": "advisory_matcher", "action": "matched", "detail": "FIN-2019-A001"},
+        {"actor": "rfi_reader", "action": "rfi_surfaced", "target": "uid:900000002", "detail": "RFI-77"},
+        {"actor": "agency", "action": "decision", "target": "sar_bar", "detail_obj": {"decision_id": "sar_bar", "outcome": "clears_bar", "rationale": "the revision loop converged", "plain_language": "The draft cleared the review bar."}},
+        {"actor": "sar_drafter", "action": "drafted", "target": "uid:900000002", "detail": "6 grounded claim(s)"},
+        {"actor": "case_packager", "action": "packaged", "target": "data/cases/case_900000002/case_package.json", "detail_obj": {"package": "case_package.json", "sha256": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789", "disposition": "clears_bar"}}
+      ],
+      "expected": [
+        {"register": "action", "must_include": ["Opened the case", "Planted Subject Two", "uid:900000002"]},
+        {"register": "action", "must_include": ["clear case-graph history", "no prior reviews"]},
+        {"register": "action", "must_include": ["Matched a regulatory advisory", "FIN-2019-A001"]},
+        {"register": "action", "must_include": ["Surfaced the RFI", "RFI-77"]},
+        {"register": "action", "must_include": ["bounded decision 'sar_bar'", "The draft cleared the review bar"]},
+        {"register": "action", "must_include": ["Drafted the SAR narrative", "6 grounded claim(s)"]},
+        {"register": "action", "must_include": ["Assembled the decision-ready package", "disposition clears_bar", "SHA-256"]}
+      ]
+    }
+  ]
+}

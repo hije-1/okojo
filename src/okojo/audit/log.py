@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable, Iterable, Optional, Union
@@ -27,6 +28,22 @@ GENESIS_HASH = "0" * 64
 _PAYLOAD_FIELDS = (
     "seq", "timestamp", "actor", "action", "target", "detail", "provenance", "prev_hash",
 )
+
+
+@dataclass(frozen=True)
+class ChainVerification:
+    """The located result of verifying a hash chain.
+
+    ``verify()`` answers *whether* a chain is intact; this answers *where* it
+    first breaks, so a reader (e.g. the Audit Narrator) can report the break at
+    the exact record. Read-only — computing it never touches the write path.
+    """
+
+    ok: bool
+    verified_count: int          # leading records that fully verified before any break
+    break_seq: Optional[int] = None   # 1-based position where verification first fails
+    reason: Optional[str] = None      # "seq_out_of_order" | "prev_hash_mismatch" | "hash_mismatch"
+
 
 ProvenanceArg = Optional[Union[Provenance, Iterable[Provenance]]]
 
@@ -112,15 +129,39 @@ class AuditLog:
         return out
 
     def verify(self) -> bool:
-        """Recompute the chain end-to-end; ``True`` iff nothing was tampered with."""
-        prev = GENESIS_HASH
-        for expected_seq, rec in enumerate(self.read_all(), start=1):
-            if rec.get("seq") != expected_seq:
-                return False
-            if rec.get("prev_hash") != prev:
-                return False
-            payload = {k: rec.get(k) for k in _PAYLOAD_FIELDS}
-            if self._digest(payload) != rec.get("hash"):
-                return False
-            prev = rec["hash"]
-        return True
+        """Recompute the chain end-to-end; ``True`` iff nothing was tampered with.
+
+        Preserved verbatim as the boolean entry point; it now delegates to
+        :meth:`verify_chain_located` so the located and boolean checks share one
+        definition of "intact" and can never disagree.
+        """
+        return self.verify_chain_located().ok
+
+    def verify_chain_located(self) -> ChainVerification:
+        """Verify the chain and report *where* it first breaks (read-only)."""
+        return verify_records(self.read_all())
+
+
+def verify_records(records: Iterable[dict]) -> ChainVerification:
+    """Verify an already-read list of chain records, locating the first break.
+
+    Pure and read-only: the same recompute as :meth:`AuditLog.verify`, tracking
+    the first record whose seq, ``prev_hash``, or recomputed ``hash`` fails. On
+    the first failure it returns immediately (content at or beyond a broken link
+    is untrustworthy, so it is neither checked nor reported). ``break_seq`` is the
+    1-based position of that record; ``verified_count`` is how many leading
+    records verified before it.
+    """
+    prev = GENESIS_HASH
+    verified = 0
+    for expected_seq, rec in enumerate(records, start=1):
+        if rec.get("seq") != expected_seq:
+            return ChainVerification(False, verified, expected_seq, "seq_out_of_order")
+        if rec.get("prev_hash") != prev:
+            return ChainVerification(False, verified, expected_seq, "prev_hash_mismatch")
+        payload = {k: rec.get(k) for k in _PAYLOAD_FIELDS}
+        if AuditLog._digest(payload) != rec.get("hash"):
+            return ChainVerification(False, verified, expected_seq, "hash_mismatch")
+        prev = rec["hash"]
+        verified += 1
+    return ChainVerification(True, verified, None, None)
