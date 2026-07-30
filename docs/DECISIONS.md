@@ -25,7 +25,7 @@ co-pilot** ("Okojo") that fuses several top pain points under one narrative.
 Ten candidate pain points were scored 1–5 on six dimensions: **Data** (buildable
 with public/synthetic data), **Build** (solo-feasible), **Agentic** (real
 tool-use/reasoning, not a classifier), **Domain** (compliance/FIU sophistication),
-**Safe** (publishable — no PII/opsec/reputational hazard), **Wow**
+**Safe** (publishable — no PII/opsec/reputational hazard), **Distinct**
 (distinctiveness). Top tier: network/cluster mapping, SAR quality, unified subject
 timeline, multilingual OSINT. Full table in `Strategy.md`.
 
@@ -138,7 +138,7 @@ the generator changes.
 _Added Day 3 (Phase 2 complete)._
 
 - **MIT retained through the public research phase — deliberate.** It maximizes the
-  repo's job-search value and costs nothing long-term: the author remains the sole
+  repo's openness and reach and costs nothing long-term: the author remains the sole
   copyright holder and can relicense future versions at any time (already-published
   versions remain MIT regardless). **Revisit at the v1.0 launch** — the natural
   inflection point — where the options include relicensing future work (e.g.,
