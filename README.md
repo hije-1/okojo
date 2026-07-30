@@ -4,6 +4,10 @@
 
 # Okojo — an Agentic Crypto-Investigations Co-Pilot
 
+<p align="center">
+  <a href="https://github.com/hije-1/okojo/actions/workflows/ci.yml"><img src="https://github.com/hije-1/okojo/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
+</p>
+
 > **Status:** Phase 8 complete — the v1.0 capstone (the designation-triggered
 > remediation sweep) is shipped and the core is reliability-hardened. Fully
 > synthetic data, built in the open. Details in
@@ -84,7 +88,7 @@ flowchart TD
     subgraph A["Entry point A · ONE SUBJECT — LangGraph case pipeline · 5 bounded decisions, routed"]
         direction TB
         PA["1 Profile Aggregator → 2 Network Expander → 3 On-chain Risk Scorer"]
-        PA --> TM["4 Tell Miner + watchlist screening → 6 Advisory Matcher → 5 RFI Contradiction-Checker"]
+        PA --> TM["4 Tell Miner + watchlist screening → 5 RFI Contradiction-Checker → 6 Advisory Matcher"]
         TM --> SAR["7 SAR Drafter + Critic → 8 Case Packager"]
     end
 
@@ -111,7 +115,7 @@ Every stage, tool call, and decision writes to the **append-only, hash-chained
 audit trail** — the spine, not a side-car: the case package is built *on* it, and
 the sweep writes its own separate chain. Individual decision routing and the
 per-stage records are omitted from the diagram for legibility (the full code map
-lands in Phase 9).
+lands in Phase 10).
 
 **The nine components** (numbering is the target design, not build order):
 
@@ -327,18 +331,23 @@ one grounding definition:
 The SAR calibration guard is also wired live into draft validation — over-claiming
 language is rejected fail-closed, alongside the grounding contract.
 
-**Next — Phase 9 (launch hardening):** continuous integration, a security pass, a
-snippet-level SCA scan, a cloud deploy of the demo, a recorded walkthrough, and a
-full code-systems map.
+**Next — Phase 9 (Audit Narrator):** a grounded summarizer over the system's own
+hash-chained audit trails. It reads a chain and produces a plain-language
+narrative of what the agent did, in order, and why — with every sentence citing
+the specific record behind it, and a failed chain verification reported as the
+narrative itself. Scoped to **all** chain families (case, sweep, and batch), it
+makes the tamper-evident record *reviewable*, not just provable. Continuous
+integration (regenerate + test on every push) lands as its first slice.
+
+**Then — Phase 10 (launch hardening):** a security pass, a snippet-level SCA scan,
+a cloud deploy of the demo, a full code-systems map, and — last — a recorded
+walkthrough.
 
 **Roadmap (post-v1.0):**
 
 - **Coverage-gap check** — the customer base's geographic footprint measured
   against the enabled list-source regimes, surfaced as a standing signal (are we
   screening against the lists our actual exposure calls for?).
-- **Audit Narrator** — a grounded summarizer over the system's own audit trails,
-  scoped to **all** chain families (case, sweep, and batch), making the
-  tamper-evident record *reviewable*, not just provable.
 - **API service facade** — the sweep and case pipelines are already payload-in /
   proposals-out by design (validated payloads, grounded proposals, an append-only
   audit trail between); production exposure is connector and infrastructure work,

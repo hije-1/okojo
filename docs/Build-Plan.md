@@ -81,11 +81,17 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 - **Demo money-shot:** paste in a designation → the system surfaces every exposed account and produces the remediation worksheet. This becomes a README headline.
 - **Milestone:** the highest-regulator-relevance capability, built cheaply on top of the core. Refresh the demo + GIF.
 
-### Phase 9 — Buffer, launch & narrative (Weeks 18–20: Nov 17–Dec 5, flexible)
+### Phase 9 — Audit Narrator (Weeks 18–19: Nov 17–28)
+- **Audit Narrator — promoted from the roadmap to committed scope (PM ruling 2026-07-31).** A grounded, template-based summarizer over Okojo's own hash-chained audit trails — all three chain families (case, sweep, batch) — that reads a chain and produces a plain-language narrative of what the agent did, in order, and why. Every sentence cites the specific record behind it (fail-closed on an unresolvable citation); a failed chain verification IS the narrative (the break reported, cited, never summarized past). Rationale: raw access/audit logs in real institutions are endpoint-level clickstream that even experienced practitioners struggle to read; a tamper-evident log that no one can read still hides anomalies in plain sight. The Narrator makes the centerpiece audit trail legible, closing the loop from "provable" to "reviewable." Deterministic (templates, zero LLM — a faithful 1:1 reading of the record); read-only (writes nothing to any chain, so all existing chains and capability scorecards stay byte-identical). Ships with `narrator_config()` + a methodology doc (the 11th doc↔code anti-drift pair) and its own eval (grounding P/R, a tampered-chain fixture, an ungrounded-injection falsification). Marginal cost is low: the input is the structured, provenance-carrying log Okojo already emits.
+- **First slice: continuous integration** (pulled forward from launch hardening) — regenerate + `python -m pytest` on every push over a bare clone, so the narrator builds under independent green.
+- **Milestone:** the audit trail is reviewable, not just provable.
+
+### Phase 10 — Launch hardening & narrative (Week 20: Dec 1–5, flexible)
 - Absorb overruns (agentic builds always overrun somewhere).
+- Security pass, snippet-level SCA scan, cloud deploy of the demo, full code-systems map.
 - Companion essay — designing agentic AI for regulated compliance workflows, using the sanctions-evasion scenario as the worked example.
-- **Audit Narrator (post-v1.0, high priority / low marginal cost).** A grounded summarization agent over Okojo's own hash-chained audit log, producing (a) a plain-language case narrative — what each agent did, in order, with citations to the log entries behind every sentence — and (b) an access review for auditors: activity grouped by actor and pattern, with unusual access surfaced as flags for human review (never conclusions). Rationale: raw access/audit logs in real institutions are endpoint-level clickstream that even experienced practitioners struggle to read; a tamper-evident log that no one can read still hides anomalies in plain sight. The Narrator makes the centerpiece audit trail legible, closing the loop from "provable" to "reviewable." Marginal cost is low: the input is the structured, provenance-carrying log Okojo already emits. Candidate to pull into v1.0 if schedule cushion allows.
-- Optional, if time remains: begin the next roadmap module — ML alert auto-closure QA (PP-13) or vendor reconciliation (#8).
+- **Last:** a recorded walkthrough (no recording happens until the narrator is live).
+- Optional, if time remains: begin the next roadmap module — coverage-gap check, API service facade, or ML alert auto-closure QA (PP-13).
 - **Milestone:** launched, documented, and shareable.
 
 ## At-a-glance
@@ -101,6 +107,7 @@ This plan builds the flagship from the strategy doc. It bakes in the eight exper
 | 6 | Oct 6–17 | Agency + case-graph + audit | Agentic, recidivism-aware, auditable |
 | 7 | Oct 20–31 | UI + polish | Polished core (pre-capstone) |
 | 8 | Nov 3–14 | Remediation sweep (capstone) | Designation → exposed-account sweep + worksheet |
-| 9 | Nov 17–Dec 5 | Buffer + launch | Launched v1.0, documented, companion essay |
+| 9 | Nov 17–28 | Audit Narrator | Grounded narrative over every chain family; CI |
+| 10 | Dec 1–5 | Launch hardening | Launched v1.0, documented, companion essay, walkthrough |
 
-**Total:** ~20 weeks × 20 hrs ≈ 400 hours, with the final ~3 weeks as deliberate buffer and the remediation-sweep capstone committed inside v1.0.
+**Total:** ~20 weeks × 20 hrs ≈ 400 hours, with the final weeks as deliberate buffer, the remediation-sweep capstone committed inside v1.0, and the Audit Narrator promoted ahead of launch hardening (2026-07-31).

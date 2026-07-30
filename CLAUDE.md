@@ -154,9 +154,16 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   alongside the grounding contract; over-claiming language is rejected, never
   silently passed — the gold drafts were all clean, so no scorecard/audit moved).
   Full details in `docs/Build-Plan.md`.
-- **NEXT — Phase 9 (launch hardening):** CI, a security pass, a snippet-level SCA
-  scan, a cloud deploy of the demo, a recorded walkthrough, and a full
-  code-systems map. Not started; worked from the Phase 9 Launch Checklist.
+- **NEXT — Phase 9 (Audit Narrator):** a grounded, template-based summarizer over
+  the system's own hash-chained audit trails (case + sweep + batch), making the
+  tamper-evident record reviewable, not just provable — every narrative sentence
+  cites the record behind it (fail-closed), a failed chain verification IS the
+  narrative, and the narrator writes NOTHING to any chain (read-only). Promoted
+  from the roadmap by PM ruling (2026-07-31); see DECISIONS §13/§19. CI
+  (regenerate + `python -m pytest` on every push) lands as its first slice.
+- **THEN — Phase 10 (launch hardening):** a security pass, a snippet-level SCA
+  scan, a cloud deploy of the demo, a full code-systems map, and — last — a
+  recorded walkthrough. Not started.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.

@@ -90,16 +90,19 @@ Membership in v1.0 is decided on **payoff-to-*marginal*-cost, not payoff alone.*
   (component 9). Promoted from roadmap because it is the most regulator-relevant
   capability (FinCEN's aggressive Iran program) *and* cheap to build last — it
   re-orchestrates finished components rather than adding a new subsystem.
-- **Roadmap (post-v1.0, ordered by payoff):** the **Audit Narrator** (grounded
-  summarizer over Okojo's own hash-chained audit trails — scoped to **all** chain
-  families: case, sweep, and batch — makes the tamper-evident record *reviewable*,
-  not just provable; low marginal cost, reuses the native log) first; then the
-  **coverage-gap check** and the **API service facade** (both added at Phase-8
-  sign-off — see §19); then PP-13 (ML auto-closure QA) and #8 (vendor
-  reconciliation); then PP-14 (tokenized-commodity tracing — kept out of v1.0
-  despite timeliness because it needs new contract-tracing tooling with little
-  reuse), #5 (multilingual OSINT), #4/#7 (LE-request/MLAT routing). Build these in
-  public after launch to keep the repo visibly growing. (See §13, §19.)
+- **Committed post-capstone: the Audit Narrator, promoted to Phase 9** (PM ruling
+  2026-07-31 — see §13). The grounded summarizer over Okojo's own hash-chained
+  audit trails (scoped to **all** chain families: case, sweep, and batch) makes the
+  tamper-evident record *reviewable*, not just provable; low marginal cost, reuses
+  the native log. Launch hardening becomes **Phase 10** (its CI slice excepted —
+  CI lands as Phase 9's first slice so the narrator builds under independent green).
+- **Roadmap (post-v1.0, ordered by payoff):** the **coverage-gap check** and the
+  **API service facade** (both added at Phase-8 sign-off — see §19); then PP-13 (ML
+  auto-closure QA) and #8 (vendor reconciliation); then PP-14 (tokenized-commodity
+  tracing — kept out of v1.0 despite timeliness because it needs new
+  contract-tracing tooling with little reuse), #5 (multilingual OSINT), #4/#7
+  (LE-request/MLAT routing). Build these in public after launch to keep the repo
+  visibly growing. (See §13, §19.)
 
 ## 8. Data sources
 - **On-chain graph:** Elliptic / Elliptic++ (public, labeled BTC graph). NOTE:
@@ -150,24 +153,43 @@ _Added Day 3 (Phase 2 complete)._
   and relicensing later would then require their consent. **Revisit alongside the
   license at v1.0** — a DCO or CLA would be the mechanism if PRs are ever opened.
 
-## 13. Audit Narrator added to the roadmap (post-v1.0)
-_Added Day 3 (Phase 2 + Slice 4b complete)._
+## 13. Audit Narrator — promoted from roadmap to committed Phase 9
+_Added Day 3 (Phase 2 + Slice 4b complete); promoted to committed scope Day 10
+(2026-07-31, PM ruling)._
 
 - **Audit Narrator added to the roadmap (user-proposed).** Prioritized *ahead of
   PP-13* because it reuses Okojo's native hash-chained audit log — no new data and
   no new privacy surface — and directly strengthens the audit-trail centerpiece:
   it makes a *provable* log *reviewable*. A grounded summarizer over the log emits
-  (a) a plain-language, citation-backed case narrative and (b) an actor/pattern
-  access review that flags unusual access for human review.
+  a plain-language, citation-backed narrative of what the agent did, in order, and
+  why.
 - **Scope broadened at Phase-8 sign-off (see §19):** Phase 8 added a second
   audit-chain family (the sweep) and a batch path, so the Narrator's scope is now
   **all** chain families — case, sweep, and batch — not the case log alone.
+- **PROMOTED to Phase 9 (2026-07-31, PM ruling).** Resequenced *ahead of* launch
+  hardening because it completes the audit-trail centerpiece; launch hardening
+  becomes **Phase 10** (CI excepted — CI lands as Phase 9's first slice so the
+  narrator builds under independent green), and no demo recording or walkthrough
+  happens until the narrator is live. Design rulings, all committed:
+  - **1:1 narration** — one sentence per record, with a two-register de-emphasis
+    for setup records (`*_config`, `tool_call`) vs consequential actions; a
+    faithful reading of the record, not a lossy summary.
+  - **Templates, zero LLM** — a deterministic `(actor, action) → sentence`
+    template map, so narrator output is byte-deterministic per chain and the eval
+    holds. The faithful-reading rationale is recorded in the methodology doc.
+  - **Verify first; a failed verification IS the narrative** — a broken chain is
+    reported (the seq where it first fails, cited), never summarized past the break.
+  - **Batch** narrates as N sweep-chain narratives + a roll-up summary grounded to
+    the constituent sweep-chain records; the non-chained `rollup` dict is never a
+    grounding source.
+  - **Read-only** — the narrator writes NOTHING to any chain; all existing chains
+    and capability scorecards are byte-identical by construction. Its version is
+    pinned through the artifact (`narrator_config()`, `NARRATOR 1.0.0`, the 11th
+    doc↔code anti-drift pair), like `packager_config` — not stamped into any chain.
 - **Guardrails carry over unchanged:** the grounding contract and calibrated
-  language apply — every summary sentence cites the log entries behind it, and
-  anomalies are *flagged for human review, never concluded*.
-- **Deliberately not built now — roadmap discipline holds.** Logged here as scope;
-  build order stays per `docs/Build-Plan.md`. Candidate to pull into v1.0 only if
-  schedule cushion allows.
+  language apply — every summary sentence cites the log entries behind it
+  (fail-closed on an unresolvable citation), and the `BANNED_TERMS` calibration
+  guard applies to narrator output.
 
 ## 14. AI-assisted development & code provenance
 _Added Day 4 (Phase 4 complete; pre-Phase-5)._
@@ -387,10 +409,13 @@ _Added Day 11 (Phase 8 sign-off; component 9 complete)._
   list-source regimes, surfaced as a standing signal (are we screening against the
   lists our actual exposure calls for?). (b) **Audit Narrator scope broadened to
   all chain families** — Phase 8 added the sweep chain and the batch path, so the
-  Narrator now covers case + sweep + batch, not the case log alone (§13). (c)
+  Narrator now covers case + sweep + batch, not the case log alone (§13).
+  **Subsequently promoted to committed Phase 9 (2026-07-31, PM ruling — see §13);
+  launch hardening became Phase 10, CI excepted.** (c)
   **API service facade** — the sweep and case pipelines are already payload-in /
   proposals-out by design (validated payloads, grounded proposals, an append-only
   audit trail between), so production exposure is connector and infrastructure
-  work, not a redesign. All three are logged as scope, deliberately not built now
-  — roadmap discipline holds; Phase 9 is launch hardening (CI, security pass, SCA,
-  deploy, code-systems map).
+  work, not a redesign. Items (a) and (c) remain logged as scope, deliberately not
+  built now — roadmap discipline holds; Phase 10 is launch hardening (security
+  pass, SCA, deploy, code-systems map, recorded walkthrough last), with CI pulled
+  forward into Phase 9's first slice.
