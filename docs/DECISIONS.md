@@ -4,6 +4,8 @@ This file preserves the reasoning behind Okojo so that anyone (or any agent)
 picking up the project has the full context that would otherwise live only in a
 chat history. Read it before changing scope, architecture, or the data model.
 Companion docs: `Strategy.md` (full write-up) and `Build-Plan.md` (dated plan).
+This log records *why* each choice stands; for *who decided* — the human decision
+authority behind the project — see `docs/human-decisions.md`.
 
 _Last updated at handoff from the planning phase (Phase 0 complete)._
 
