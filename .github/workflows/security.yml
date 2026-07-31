@@ -1,0 +1,40 @@
+name: Security audit
+
+# Dependency vulnerability audit — SEPARATE from the badge CI (ci.yml), which
+# stays lean and green on every push. This job installs the pinned runtime set
+# fresh (exactly what the deploy resolves) and runs pip-audit over the resolved
+# environment, so it catches a newly-disclosed CVE in a transitive dependency of
+# the shipped app. Scheduled weekly, plus on-demand via the Actions "Run workflow"
+# button. It is intentionally NOT wired to push/PR: a dependency CVE landing
+# upstream should not retroactively turn a code-only PR red.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install runtime dependencies (the deployed set)
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install pip-audit (pinned, dev-only)
+        run: pip install -c requirements.txt -r requirements-dev.txt
+
+      - name: Audit the resolved environment
+        # Fails the job on any known vulnerability, so a weekly regression is
+        # visible. Runtime pins are constrained above so the auditor cannot
+        # silently upgrade a runtime dependency.
+        run: python -m pip_audit --desc

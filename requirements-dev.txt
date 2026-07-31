@@ -1,0 +1,19 @@
+# Okojo — development / security-tooling dependencies (NOT runtime).
+#
+# These are the launch-hardening security scanners. They are deliberately kept
+# OUT of requirements.txt so the app install, the badge CI, and the deployed demo
+# stay lean — nothing here is imported by the application or exercised by the test
+# suite. Installing this file changes ZERO runtime pins (verified by a before/after
+# pip-freeze diff at introduction: only additive transitive dev packages, every
+# existing pin — pandas, numpy, pydantic, streamlit, langgraph, … — byte-unchanged).
+#
+#   pip install -c requirements.txt -r requirements-dev.txt
+#
+# The -c constraint pins the runtime set so a dev tool can never silently upgrade a
+# runtime dependency.
+
+# Static application-security linter (bandit -r src/ app/).
+bandit==1.9.4
+# Dependency vulnerability audit against the PyPI advisory / OSV database
+# (pip-audit over the pinned requirements).
+pip-audit==2.10.1

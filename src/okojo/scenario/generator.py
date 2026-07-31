@@ -591,7 +591,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     out_dir = Path(out_dir) if out_dir else SYNTHETIC_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    rng = random.Random(seed)
+    rng = random.Random(seed)  # nosec B311 — seeded deterministic synthetic-data RNG, determinism is policy (docs/human-decisions.md D-022); non-cryptographic by design.
     fake = Faker()
     fake.seed_instance(seed)
 

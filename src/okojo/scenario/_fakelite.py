@@ -29,10 +29,10 @@ class FakeLite:
     """Implements only .name(), .company(), .date_of_birth(), .seed_instance()."""
 
     def __init__(self, seed: int = 0) -> None:
-        self._rng = random.Random(seed)
+        self._rng = random.Random(seed)  # nosec B311 — seeded deterministic synthetic-data RNG, determinism is policy (docs/human-decisions.md D-022); non-cryptographic by design.
 
     def seed_instance(self, seed: int) -> None:
-        self._rng = random.Random(seed)
+        self._rng = random.Random(seed)  # nosec B311 — seeded deterministic synthetic-data RNG, determinism is policy (docs/human-decisions.md D-022); non-cryptographic by design.
 
     def name(self) -> str:
         return f"{self._rng.choice(_FIRST)} {self._rng.choice(_LAST)}"

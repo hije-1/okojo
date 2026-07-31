@@ -108,7 +108,7 @@ def get_embedder(prefer_model: bool = True) -> Embedder:
     if prefer_model:
         try:
             return SentenceTransformerEmbedder()
-        except Exception:
+        except Exception:  # nosec B110 — intentional optional-import fallback
             # sentence-transformers/torch not installed, or model unavailable
             # offline — degrade to the deterministic lexical embedder.
             pass
