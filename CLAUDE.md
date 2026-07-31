@@ -103,6 +103,8 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   9-tab demo (Decisions tab, recidivism banner, package download).
   211 green tests (1 skipped: the ST backend).
 - **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
+  Live demo: <https://okojo-demo.streamlit.app/> (free-tier hosting; first load
+  after idle may take a minute to wake).
 - **Phase 7 (UI polish & reliability hardening): COMPLETE.**
   The reliability tail as **executable properties**: a graph-render guard
   (failure degrades + audit-stamped, never aborts; happy path proven

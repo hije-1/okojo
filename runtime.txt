@@ -1,1 +1,2 @@
 python-3.12
+# Note: Streamlit Community Cloud ignores this file — its Python version is a deploy-time Advanced setting. Kept (with .python-version) for CI/local/uv parity.

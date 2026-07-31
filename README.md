@@ -8,6 +8,10 @@
   <a href="https://github.com/hije-1/okojo/actions/workflows/ci.yml"><img src="https://github.com/hije-1/okojo/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>
 </p>
 
+<p align="center">
+  <b><a href="https://okojo-demo.streamlit.app/">▶ Live demo</a></b> (free-tier hosting; first load after idle may take a minute to wake)
+</p>
+
 > **Status:** Phase 9 complete — the Audit Narrator makes the tamper-evident
 > record *reviewable*, not just provable, across every chain family (case, sweep,
 > and batch), on top of the shipped v1.0 capstone. Fully synthetic data, built in
