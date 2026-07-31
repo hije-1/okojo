@@ -78,6 +78,7 @@ exhaustive, test-guarded inventory.
 | `src/okojo/scenario/generator.py` | Deterministic synthetic-scenario generator (seeded; regenerates byte-identically). | `generate_scenario` |
 | `src/okojo/scenario/_fakelite.py` | Dependency-free stand-in for the Faker subset used, so the generator still runs without Faker. | `FakeLite` |
 | `src/okojo/connectors/store.py` | DuckDB-backed store presenting the synthetic CSVs as mock internal systems. | `Record`, `Store` |
+| `src/okojo/bootstrap.py` | Boot hook that regenerates the (gitignored) synthetic dataset in-process on a fresh deploy; a no-op when data is already present. | `provision_scenario_dataset`, `ensure_default_scenario_dataset`, `scenario_dataset_present` |
 | `src/okojo/audit/log.py` | Append-only, hash-chained audit log + located chain verification. | `AuditLog`, `verify_records`, `ChainVerification`, `GENESIS_HASH` |
 | `src/okojo/entity/backbone.py` | One canonical, de-duplicated view of every entity in a case. | `EntityBackbone`, `Entity`, `build_backbone` |
 

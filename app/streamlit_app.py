@@ -24,6 +24,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from okojo.advisory import RETRIEVAL_VERSION, retrieval_config
+from okojo.bootstrap import ensure_default_scenario_dataset
 from okojo.casegraph import CaseGraphStore
 from okojo.connectors import Connectors
 from okojo.narrator import NARRATOR_VERSION, narrate_chain
@@ -113,6 +114,10 @@ _ROLE_LABEL = {
 
 @st.cache_resource
 def get_connectors() -> Connectors:
+    # Boot hook: on a fresh deploy the gitignored dataset is absent, so
+    # regenerate it in-process (deterministically) before the first read. A
+    # no-op when a complete dataset is already on disk — it never overwrites.
+    ensure_default_scenario_dataset()
     return Connectors()
 
 
