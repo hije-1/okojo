@@ -2,7 +2,7 @@
   <img src="okojo-logo.png" alt="Okojo logo" width="180">
 </p>
 
-# Okojo — an Agentic Crypto-Investigations Co-Pilot
+# Okojo™ — an Agentic Crypto-Investigations Co-Pilot
 
 <p align="center">
   <a href="https://github.com/hije-1/okojo/actions/workflows/ci.yml"><img src="https://github.com/hije-1/okojo/actions/workflows/ci.yml/badge.svg" alt="CI status"></a>

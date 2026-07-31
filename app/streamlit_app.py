@@ -60,7 +60,7 @@ _LOGO_PATH = str(Path(__file__).resolve().parents[1] / "okojo-logo.png")
 _PHASE = "v1.0"
 
 st.set_page_config(
-    page_title="Okojo — Crypto-Investigations Co-Pilot",
+    page_title="Okojo™ — Crypto-Investigations Co-Pilot",
     page_icon=_LOGO_PATH,
     layout="wide",
 )
@@ -1313,7 +1313,7 @@ def _render_audit_narrative(records, *, family: str, subject=None) -> None:
 def main() -> None:
     st.markdown(
         "<h1 style='font-size:1.6rem;font-weight:700;margin:0 0 0.25rem;'>"
-        "Okojo — Agentic Crypto-Investigations Co-Pilot</h1>",
+        "Okojo™ — Agentic Crypto-Investigations Co-Pilot</h1>",
         unsafe_allow_html=True,
     )
     st.caption(f"{_PHASE} · **fully synthetic data** · a human reviews, decides, and files.")
