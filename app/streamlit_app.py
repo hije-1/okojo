@@ -57,7 +57,7 @@ _LOGO_PATH = str(Path(__file__).resolve().parents[1] / "okojo-logo.png")
 # ONE of the three hand-maintained status surfaces (README status block,
 # CLAUDE.md status block, and this on-screen caption) — update all three at
 # every phase sign-off.
-_PHASE = "Phase 9"
+_PHASE = "v1.0"
 
 st.set_page_config(
     page_title="Okojo — Crypto-Investigations Co-Pilot",
@@ -1397,8 +1397,8 @@ def main() -> None:
     c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 2])
     expansion_summary = res.expansion.summary()
     c1.metric("Anomalies", len(res.profile.anomalies))
-    c2.metric("Network reached", expansion_summary["accounts_reached"])
-    c3.metric("Sanctioned reached", expansion_summary["sanctioned_addresses_reached"])
+    c2.metric("Network", expansion_summary["accounts_reached"])
+    c3.metric("Sanctioned", expansion_summary["sanctioned_addresses_reached"])
     c4.metric("Tells", len(res.tells))
     c5.metric("Watchlist hits", len(res.alias_hits))
     c6.metric("Advisory", res.advisory.advisory_id if res.advisory else "—")

@@ -191,9 +191,24 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
     check; then this status bump. NARRATOR stays **1.0.0** (template-map growth is
     content, not config); all other versions frozen.
   514 green tests (1 skipped: the ST backend). Full details in `docs/Build-Plan.md`.
-- **NEXT — Phase 10 (launch hardening):** a security pass, a snippet-level SCA
-  scan, a cloud deploy of the demo, a full code-systems map, and — last — a
-  recorded walkthrough. Not started.
+- **Phase 10 (launch hardening): COMPLETE — v1.0.0 released.** The launch pass,
+  across four sessions: CI (regenerate + full suite on every push/PR) with a
+  status badge (Phase 9 Slice 0); a **security pass** (bandit + pip-audit as
+  dev-only tooling, documented triage, GitHub private vulnerability reporting)
+  (Session A); a **code-systems map** with a completeness tripwire, a boot-time
+  data-regen hook, the Python-3.12 deploy pins, and the cloud-hosted **live demo**
+  (Session B); and — at the tag — a **Tier-2 snippet-level SCA** (FOSSA free-OSS
+  tier: zero snippet matches against our own source; 18 dependency-license
+  findings dispositioned as effective-license-permissive false positives, the
+  certifi precedent extended) plus the **v1.0.0 release** (CHANGELOG + GitHub
+  Release; MIT retained + no external contributions, DECISIONS §20) (Session C).
+  All capability scorecards byte-identical across the phase; versions frozen;
+  the account-name determinism canary untouched. The three hand-maintained status
+  surfaces (this block, the README status block, the app `_PHASE` caption) moved
+  to **v1.0** together at the tag.
+- **NEXT — v1.0.0 walkthrough (Session D):** a recorded demo/walkthrough of the
+  live system — the last Phase-10 item, produced as content on top of the
+  release, not a status gate.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.

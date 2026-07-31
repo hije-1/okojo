@@ -154,6 +154,10 @@ _Added Day 3 (Phase 2 complete)._
   Rationale: an outside contributor would hold copyright in their lines under MIT,
   and relicensing later would then require their consent. **Revisit alongside the
   license at v1.0** — a DCO or CLA would be the mechanism if PRs are ever opened.
+- **RESOLVED at v1.0 (2026-07-31, PM ruling — see §20):** the v1.0 revisit is
+  closed. **Keep MIT, and continue not accepting external code contributions.**
+  The relicensing option is preserved (sole copyright holder; already-published
+  versions stay MIT regardless). DCO/CLA machinery deliberately not adopted.
 
 ## 13. Audit Narrator — promoted from roadmap to committed Phase 9
 _Added Day 3 (Phase 2 + Slice 4b complete); promoted to committed scope Day 10
@@ -421,3 +425,37 @@ _Added Day 11 (Phase 8 sign-off; component 9 complete)._
   built now — roadmap discipline holds; Phase 10 is launch hardening (security
   pass, SCA, deploy, code-systems map, recorded walkthrough last), with CI pulled
   forward into Phase 9's first slice.
+
+## 20. v1.0 license & contribution ruling: keep MIT, no external contributions
+_Added Day 11 (2026-07-31, Phase 10 Session C — at the v1.0.0 tag). Resolves the
+"revisit at v1.0" placeholders left in §12._
+
+- **Context.** §12 deliberately deferred the license/contribution question to the
+  v1.0 launch — the natural inflection point. Cutting the v1.0.0 tag is that
+  point, so the question was put to the PM at tag time with three options.
+- **Options considered:**
+  1. **Keep MIT + continue accepting no external code contributions** (the
+     registered PM recommendation).
+  2. **Relicense future work** — keep v1.0 MIT but place post-v1.0 work under a
+     different license (e.g. BSL/PolyForm source-available, or open-core).
+  3. **Adopt DCO + CLA** — open to outside contributions with a Developer
+     Certificate of Origin sign-off plus a Contributor License Agreement.
+- **Ruling (PM, 2026-07-31): Option 1 — keep MIT, no external contributions.**
+  - **Why keep MIT.** It maximizes the repo's openness and reach at no long-term
+    cost. As sole copyright holder the author can still relicense future versions
+    at any time; already-published versions remain MIT regardless. MIT also keeps
+    the prototype usable as a credibility layer under any later commercial product
+    without foreclosing that path.
+  - **Why no external contributions.** Accepting outside code would give a
+    contributor copyright in their lines under MIT, and any later relicensing of
+    those lines would then require their consent — so the no-contributions posture
+    is what *preserves* the Option-2 relicensing choice for later. Issues and
+    feedback remain welcome; only code contributions are declined.
+  - **Why not DCO/CLA now.** Adopting contributor-agreement machinery only makes
+    sense once inviting PRs; that is not the posture for a solo synthetic-data
+    research prototype. Logged as the mechanism to reach for *if* contributions are
+    ever opened (unchanged from §12).
+- **Effect.** No repo-wide license change: `LICENSE` (MIT) stays as-is; the README
+  states the no-external-contributions posture in calibrated terms. This ruling
+  closes the §12 revisit; the relicensing option is explicitly preserved, not
+  exercised.

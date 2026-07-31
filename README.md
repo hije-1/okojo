@@ -12,10 +12,12 @@
   <b><a href="https://okojo-demo.streamlit.app/">▶ Live demo</a></b> (free-tier hosting; first load after idle may take a minute to wake)
 </p>
 
-> **Status:** Phase 9 complete — the Audit Narrator makes the tamper-evident
-> record *reviewable*, not just provable, across every chain family (case, sweep,
-> and batch), on top of the shipped v1.0 capstone. Fully synthetic data, built in
-> the open. Details in [Status & roadmap](#status--roadmap).
+> **Status: v1.0** — all ten build phases complete, from the synthetic-data
+> foundations through the designation-triggered remediation sweep (the capstone)
+> and the grounded Audit Narrator that makes the tamper-evident record
+> *reviewable*, not just provable, across every chain family (case, sweep, and
+> batch). Fully synthetic data, built in the open. See the
+> [CHANGELOG](CHANGELOG.md) and [Status & roadmap](#status--roadmap).
 
 ## The Problem
 
