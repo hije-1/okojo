@@ -178,6 +178,144 @@ def _source_caption(provs, prefix: str = "source") -> None:
         st.caption(f"{prefix}: {text}")
 
 
+def _str_cite_caption(cites, prefix: str = "source") -> None:
+    """Citation caption for already-formatted cite strings (``list[str]``).
+
+    The designation-check result exposes provenance as pre-``cite()``-d strings
+    (read, never re-derive), not ``Provenance`` objects, so it cannot go through
+    ``_source_caption`` / ``_cites`` — but every surfaced line still shows its
+    pointer (the grounding contract's UI half)."""
+    if cites:
+        st.caption(f"{prefix}: " + "; ".join(cites))
+
+
+# --- v1.1 subject-as-seed designation check (Sanctions-tab addendum) --------- #
+# Display-only slug -> plain language, like _RISK_REASON_LABEL: the raw states
+# stay the module's tested contract (DesignationCheckResult), so these maps only
+# change how the posture reads on screen, never the audit record or the data.
+_BADGE_LABEL = {
+    "no_match": "No designation match",
+    "possible_match": "Possible designation match — needs human review",
+    "match_corroborated": "Corroborated designation match",
+}
+_MATCH_KIND_LABEL = {
+    "name": "name match",
+    "variant": "name-variant match",
+    "address": "controls a designated address",
+}
+
+
+def _match_kind_label(kind: str) -> str:
+    return _MATCH_KIND_LABEL.get(kind, kind)
+
+
+def _designation_meta_line(meta) -> str:
+    """One plain-language line of a designation's metadata: name, id, program,
+    source regime, and — the doctrine that changes what an investigator does —
+    whether it is a blocking obligation or an early-warning signal (its
+    ``standing_phrase``, prebuilt by the check)."""
+    return (f"{meta.designated_name} ({meta.designation_id}) · {meta.program} · "
+            f"{meta.source_regime} · {meta.standing_phrase}")
+
+
+def _render_designation_posture(dc) -> None:
+    """The subject-as-seed designation posture, at the top of the Sanctions tab.
+
+    A three-state badge (the SUBJECT's own posture only) rendered as ONE visual
+    block with the exposure lines beneath it — non-clean lines carry warning
+    styling, so a GREEN badge never reads as an all-clear for the whole block
+    (Q2a). A ``name_only_dismissed`` collision is GREEN on the badge but always
+    renders a standing, cited dismissal line, never tucked in an expander (Q2b).
+    Cluster hits are network notices that NAME the entity, never the badge. Every
+    surfaced line carries its evidence pointer; nothing here mutates any store."""
+    badge = dc.badge_state
+    label = _BADGE_LABEL.get(badge, badge)
+    st.markdown(
+        f"#### Designation & sanctions posture — {dc.subject_name} "
+        f"(uid {dc.subject_uid})")
+
+    # -- the headline badge (subject's OWN posture only) ------------------- #
+    if badge == "match_corroborated":
+        st.error(f"**{label}.** This subject's own name/identity matches a "
+                 "designation and the published identifiers corroborate it. "
+                 "Human review required.")
+    elif badge == "possible_match":
+        st.warning(f"**{label}.** This subject has an active name / variant / "
+                   "designated-address hit with no disqualifying identifier. "
+                   "Human review required.")
+    else:
+        st.success(f"**{label}.** This subject's own accounts match no active "
+                   "designation name, variant, or designated address.")
+
+    # -- the subject's badge-driving hits, each cited --------------------- #
+    for h in dc.subject_hits:
+        line = f"- **{_match_kind_label(h.match_kind)}** — {_designation_meta_line(h.meta)}"
+        if h.matched_form:
+            line += f" · matched: {h.matched_form}"
+        if h.corroboration_outcome:
+            line += f" · {_corroboration_label(h.corroboration_outcome)}"
+        st.markdown(line)
+        if h.mismatched_fields:
+            st.caption("identifiers that differ: " + ", ".join(h.mismatched_fields))
+        _str_cite_caption(h.provenance)
+
+    # -- Q2b: the ALWAYS-visible dismissal line (cited, never an expander) - #
+    for d in dc.dismissals:
+        st.warning(
+            "**Name collision screened and dismissed** — "
+            f"{_designation_meta_line(d.meta)}. A same-name collision resolved to "
+            "a different person (identifiers actively differ: "
+            f"{', '.join(d.mismatched_fields)}).")
+        _str_cite_caption(d.provenance)
+
+    # -- fund-flow exposure (Q2a: warning styling, a separate fact) -------- #
+    for f in dc.flow_exposures:
+        reach = "direct" if f.direct else f"{f.hops}-hop"
+        st.warning(
+            f"**Fund-flow exposure** — {_designation_meta_line(f.meta)} · {reach} · "
+            f"{_timing_label(f.timing)} · tainted ${f.tainted_amount_usdt:,.0f}. "
+            "Exposure is a separate fact from a name match.")
+        _str_cite_caption(f.provenance)
+
+    # -- counterparty lifecycle state (display-only; no proposal) --------- #
+    for c in dc.counterparty_states:
+        st.markdown(
+            f"- **Counterparty lifecycle state:** "
+            f"{_CP_STATE_LABEL.get(c.state, c.state)} — {_designation_meta_line(c.meta)}")
+        _str_cite_caption(c.provenance)
+
+    # -- territory read (location signals indicate, never prove) ---------- #
+    for t in dc.territory_lines:
+        if t.surfaced:
+            st.warning(
+                f"**Territory signal** — {t.note} ({t.meta.designation_id}). "
+                "Location signals indicate possible presence; they never prove it.")
+            _str_cite_caption(t.provenance)
+        else:
+            st.caption(f"Territory: {t.note} ({t.meta.designation_id}).")
+
+    # -- network notices: NAME the entity + designation + hops ------------ #
+    if dc.network_notices:
+        st.markdown("**Network notices** — cluster hits, not the subject's own "
+                    "posture (the Network tab is the deep view):")
+        for n in dc.network_notices:
+            hop = f" · {n.hops}-hop" if n.hops is not None else ""
+            kind = (_match_kind_label(n.kind) if n.kind in _MATCH_KIND_LABEL
+                    else "fund-flow exposure")
+            st.markdown(f"- uid {n.uid} · {n.entity_name} — {kind}{hop} — "
+                        f"{_designation_meta_line(n.meta)}")
+            _str_cite_caption(n.provenance)
+
+    # -- coverage footer (visible absence of the un-ingested list) -------- #
+    cov = dc.coverage
+    footer = (f"Screened {cov.designations_screened} designation(s) across "
+              f"{cov.list_sources_screened} list source(s).")
+    if cov.declared_not_ingested:
+        footer += (" Declared but not ingested, screened as visible-absent: "
+                   + ", ".join(cov.declared_not_ingested) + ".")
+    st.caption(footer)
+
+
 def _diff_html(a: str, b: str) -> tuple[str, str]:
     """Return (a_html, b_html) with the characters that differ highlighted, so a
     reviewer can see *exactly* where a name and a watchlist alias diverge
@@ -1466,9 +1604,20 @@ def main() -> None:
             "sanctioned endpoint? Two faces of the same question — a name match and a "
             "fund-flow match."
         )
+
+        # v1.1: the subject-as-seed designation posture leads the tab — the
+        # investigator lives in case mode, so the subject's own designation
+        # match / exposure / territory posture must be apparent here, not only
+        # in the ledger-wide Designation sweep mode.
+        if res.designation_check is not None:
+            _render_designation_posture(res.designation_check)
+
+        st.markdown("---")
+        st.markdown("#### Ledger-wide screening context — all accounts")
         st.caption(
-            "Scope: **this subject's** accounts only — ledger-wide designation "
-            "sweeps live in **Designation sweep** mode."
+            "The posture above is **this subject's** own designation match; the "
+            "screens below run across the wider dataset. Ledger-wide **designation "
+            "sweeps** live in **Designation sweep** mode."
         )
 
         st.markdown("#### Watchlist name screening")
@@ -1703,7 +1852,7 @@ def main() -> None:
 
     # -- Tells ------------------------------------------------------------- #
     with tab_tells:
-        st.subheader("Remark tells")
+        st.subheader("Tells")
         st.caption(
             "Free-text transaction remarks fuzzy-matched (RapidFuzz) against "
             "curated control/illicit phrases (*illicit_phrase*) and the case's own "
