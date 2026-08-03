@@ -129,6 +129,15 @@ _RISK_KIND_LABEL = {
     "gas_only": "gas-only",
 }
 
+# Remark-tell category slug -> plain language. Display-only, exactly like the
+# risk maps above: the raw slug stays the miner's tested contract
+# (RemarkTell.category), so this only changes how the Tells table reads on
+# screen, never the mined data or the audit record.
+_TELL_CATEGORY_LABEL = {
+    "illicit_phrase": "Illicit-phrase match",
+    "control_alias": "Names a case entity",
+}
+
 
 @st.cache_resource
 def get_connectors() -> Connectors:
@@ -187,6 +196,49 @@ def _str_cite_caption(cites, prefix: str = "source") -> None:
     pointer (the grounding contract's UI half)."""
     if cites:
         st.caption(f"{prefix}: " + "; ".join(cites))
+
+
+def _tell_author(conn, tx):
+    """Resolve a remark tell's **author** — the sending side of its transaction —
+    to an account of record. Display-layer only: reads the tx and the address
+    book, never touches the miner or its outputs.
+
+    A tell's ``from_ref`` is either a ``uid:...`` account (the sender of record)
+    or an on-chain address; an address is resolved to its **controller of record
+    in the address book** (``addresses.controller_uid`` — recorded evidence, not
+    an Okojo inference). Returns ``(label, resolved_uid_or_None)`` so the caller
+    can flag rows authored by the current subject.
+    """
+    from_ref = str(tx["from_ref"]) if tx is not None else ""
+    if from_ref.startswith("uid:"):
+        uid = int(from_ref.split(":", 1)[1])
+        acct = conn.get_account(uid)
+        name = acct["entity_name"] if acct else "unknown account"
+        return f"{name} (uid {uid})", uid
+    if from_ref:
+        short = (from_ref[:6] + "…" + from_ref[-4:]) if len(from_ref) > 12 else from_ref
+        addr = conn.get_address(from_ref)
+        if addr is not None and addr.get("controller_uid") is not None:
+            uid = int(addr["controller_uid"])
+            acct = conn.get_account(uid)
+            name = acct["entity_name"] if acct else "unknown account"
+            return f"{name} (uid {uid}) — via address {short}", uid
+        return f"on-chain address {short} (no account of record)", None
+    return "unknown", None
+
+
+def _tell_note_source(tell) -> str:
+    """Row-level citation for a tell's *analyst note* — honest about where the
+    note text comes from (both curated, in two forms; see the Tells caption).
+
+    For a phrase match the note is the rationale drawn verbatim from the miner's
+    curated signal-phrase registry, so the row cites the matched registry key(s).
+    For an alias match the note is a fixed category descriptor the miner attaches
+    to every ``control_alias`` hit — cited as such, never as a phrase-registry row.
+    """
+    if tell.category == "illicit_phrase":
+        return "signal-phrase registry[" + "; ".join(tell.matched_terms) + "]"
+    return "fixed alias-tell descriptor"
 
 
 # --- v1.1 subject-as-seed designation check (Sanctions-tab addendum) --------- #
@@ -1855,19 +1907,49 @@ def main() -> None:
         st.subheader("Tells")
         st.caption(
             "Free-text transaction remarks fuzzy-matched (RapidFuzz) against "
-            "curated control/illicit phrases (*illicit_phrase*) and the case's own "
-            "entity-name tokens (*control_alias* — a remark naming a controller is "
-            "an attribution tell). **This screen runs over every remark in the "
-            "dataset, not just this subject's transactions** — attribution often "
-            "breaks open on someone else's remark. Each hit is a flag for human "
-            "review, never a determination."
+            "curated control/illicit phrases (an *illicit-phrase match*) and the "
+            "case's own entity-name tokens (a *names-a-case-entity* match — a remark "
+            "naming a controller is an attribution tell). **This screen runs over "
+            "every remark in the dataset, not just this subject's transactions** — "
+            "attribution often breaks open on someone else's remark. Each hit is a "
+            "flag for human review, never a determination."
         )
         if res.tells:
+            tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
+            st.caption(
+                "**Reading the table.** Each row is attributed to its remark's "
+                "**author** — the sending side of the transaction; an on-chain "
+                "sending address is resolved to its controller of record in the "
+                "address book. **◆ this subject** marks rows authored by the current "
+                "subject (grouped first); the rest are dataset-wide. **Match "
+                "strength** is the RapidFuzz similarity ratio (0–100), shown at or "
+                "above the pinned threshold. The **analyst note (curated)** is, for a "
+                "phrase match, the rationale drawn from the miner's curated "
+                "signal-phrase registry (cited under *note source*); for an "
+                "entity-name match, a fixed category descriptor."
+            )
+            rows = []
+            for h in res.tells:
+                author, author_uid = _tell_author(conn, tx_by_id.get(h.tx_id))
+                is_subject = author_uid is not None and author_uid == subject_uid
+                rows.append({
+                    "_subject": is_subject,
+                    "scope": "◆ this subject" if is_subject else "dataset-wide",
+                    "remark author": author,
+                    "tx_id": h.tx_id,
+                    "type": _TELL_CATEGORY_LABEL.get(h.category, h.category),
+                    "remark": h.remark,
+                    "matched": ", ".join(h.matched_terms),
+                    "match strength": h.score,
+                    "analyst note (curated)": h.note,
+                    "note source": _tell_note_source(h),
+                    "source": _cites(h.provenance),
+                })
+            # Subject-authored rows grouped first; stable within each group
+            # (Python's sort is stable, so the miner's order is preserved).
+            rows.sort(key=lambda r: 0 if r["_subject"] else 1)
             bc = pd.DataFrame([
-                {"tx_id": h.tx_id, "category": h.category, "remark": h.remark,
-                 "matched": ", ".join(h.matched_terms), "score": h.score,
-                 "note": h.note, "source": _cites(h.provenance)}
-                for h in res.tells
+                {k: v for k, v in r.items() if k != "_subject"} for r in rows
             ])
             st.dataframe(bc, use_container_width=True, hide_index=True)
             with st.expander("How the match works — show the math"):
@@ -1879,9 +1961,9 @@ def main() -> None:
                     "caught without short tokens matching unrelated substrings."
                 )
                 st.markdown(
-                    "The score is the **best fuzzy-match similarity (0–100) for human "
-                    "review — not a risk score.** Each row's `source` cites the exact "
-                    "transaction whose remark matched."
+                    "**Match strength** is the **best fuzzy-match similarity (0–100) "
+                    "for human review — not a risk score.** Each row's `source` cites "
+                    "the exact transaction whose remark matched."
                 )
         else:
             st.info("No remark tells surfaced across the dataset.")

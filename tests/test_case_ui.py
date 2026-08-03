@@ -1,7 +1,7 @@
-"""Case-mode UI: the Sanctions tab's plain-language layer (no raw slugs).
+"""Case-mode UI: the Sanctions and Tells tabs' plain-language layer (no raw slugs).
 
 Companion to ``test_sweep_ui.py`` (which holds the sweep view to the same
-standard). Two properties:
+standard). Three properties:
 
   1. the case-mode on-chain exposure view renders the compliance-officer
      plain-language forms for its risk-score reason codes and the
@@ -14,6 +14,13 @@ standard). Two properties:
      directly through a recorder (the audit-trail tab legitimately carries the
      raw record slugs, so a whole-app text sweep would be the wrong instrument);
      one AppTest proves the section renders end-to-end in the real app.
+  3. the **Tells** tab attributes each remark to its author (the sending side of
+     the transaction, resolved to an account of record), marks subject-authored
+     rows and groups them first, renders the category in plain language (no raw
+     ``illicit_phrase`` / ``control_alias`` slug), and cites the analyst note's
+     source per row. Verified on the rendered AppTest dataframe, plus a pure-logic
+     check of the attribution resolver (no extra app spin — the module-scoped
+     ``case_app`` is reused).
 
 The raw machine slugs stay the model's tested contract, never the screen.
 """
@@ -38,6 +45,10 @@ _POSTURE_SLUGS = (
     "exposure_detected", "notification_drafted", "acknowledgment_recorded",
     "stop_dealing_verified", "unblock_proposed", "offboard_proposed",
 )
+
+# The remark-tell category slugs that must never reach the Tells table (they
+# stay the miner's tested contract, ``RemarkTell.category``).
+_TELL_SLUGS = ("illicit_phrase", "control_alias")
 
 
 @pytest.fixture(scope="module")
@@ -79,6 +90,14 @@ def _score_breakdown_text(at):
         if exp.label.startswith("Score breakdown"):
             return "\n".join(el.value for el in exp.markdown)
     raise AssertionError("score-breakdown expander not rendered")
+
+
+def _tells_df(at):
+    """The Tells-tab dataframe, found by its distinctive attribution column."""
+    for d in at.dataframe:
+        if "remark author" in list(d.value.columns):
+            return d.value
+    raise AssertionError("tells dataframe not rendered")
 
 
 def test_sanctions_tab_risk_reasons_render_plain_language(case_app):
@@ -306,3 +325,108 @@ def test_posture_renders_end_to_end_in_app(case_app):
     assert any("Ledger-wide screening context" in m for m in md), "ledger-wide section header missing"
     # the old subject-scope caption text is gone (its scope role moved down)
     assert not any("this subject's** accounts only" in c for c in caps)
+
+
+# --------------------------------------------------------------------------- #
+# Tells tab — attribution, plain-language category, note provenance             #
+# --------------------------------------------------------------------------- #
+def test_tells_tab_attribution_and_labels_render(case_app):
+    """The Tells table gains its structural attribution column, plain-language
+    category labels (no raw slug), and a per-row note-source citation."""
+    from app.streamlit_app import _TELL_CATEGORY_LABEL
+
+    assert not case_app.exception
+    df = _tells_df(case_app)
+    cols = list(df.columns)
+    for c in ("scope", "remark author", "type", "match strength",
+              "analyst note (curated)", "note source", "source"):
+        assert c in cols, f"tells table missing the {c!r} column"
+
+    # Category renders in plain language — the raw slug never reaches the screen.
+    joined = " | ".join(str(v) for row in df.itertuples(index=False) for v in row)
+    for slug in _TELL_SLUGS:
+        assert slug not in joined, f"raw tell category slug {slug!r} leaked into the UI"
+    assert set(df["type"]) <= set(_TELL_CATEGORY_LABEL.values())
+
+    # Attribution is plain name + uid (default subject authors ≥1 tell of record).
+    assert any("uid " in str(a) for a in df["remark author"]), \
+        "the remark-author column must resolve to a plain name + uid"
+
+    # Every row cites its note source; phrase matches cite the curated registry.
+    assert all(str(s).strip() for s in df["note source"]), "every note must cite a source"
+    phrase_rows = df[df["type"] == _TELL_CATEGORY_LABEL["illicit_phrase"]]
+    assert not phrase_rows.empty, "the default subject exercises a phrase match"
+    assert all("signal-phrase registry[" in str(s) for s in phrase_rows["note source"]), \
+        "a phrase-match note must cite the signal-phrase registry key"
+
+
+def test_tell_author_resolves_the_remark_author_side(conn, trust_uid):
+    """Pure-logic check of the attribution resolver (no app spin): a ``uid:``
+    sender resolves to that account; an on-chain sending address resolves to its
+    controller of record in the address book. The default subject's own
+    controller-wallet remark therefore attributes back to the subject."""
+    from app.streamlit_app import _tell_author
+    from okojo.entity import build_backbone
+    from okojo.remarks.miner import mine_remarks
+
+    tells = mine_remarks(conn, backbone=build_backbone(conn))
+    tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
+
+    subject_authored = 0
+    for h in tells:
+        tx = tx_by_id[h.tx_id]
+        label, uid = _tell_author(conn, tx)
+        from_ref = str(tx["from_ref"])
+        if from_ref.startswith("uid:"):
+            # a KYC account sender resolves to itself, name + uid
+            assert uid == int(from_ref.split(":", 1)[1])
+            assert f"uid {uid}" in label
+        else:
+            # an on-chain sender resolves via the address book's controller_uid
+            addr = conn.get_address(from_ref)
+            expected = addr["controller_uid"] if addr is not None else None
+            if expected is not None:
+                assert uid == int(expected)
+                assert "via address" in label
+        if uid == trust_uid:
+            subject_authored += 1
+
+    # The default subject (the trust) authored at least one tell via its
+    # controller wallet — so the subject-marker path is genuinely exercised.
+    assert subject_authored >= 1
+
+
+def test_tells_scope_marker_tracks_remark_author_p8g(case_app, conn, trust_uid):
+    """P8-G (UI). The **◆ this subject** marker is not cosmetic — it partitions
+    the table by remark-author, and subject rows are grouped first.
+
+    Falsification (quoted in the slice report): swapping the equality to
+    ``assert rendered == set(df['tx_id'])`` — i.e. claiming *every* tell is the
+    subject's — goes red with
+    'the scope marker must track the remark-author side, not all rows'.
+    """
+    from app.streamlit_app import _tell_author
+
+    assert not case_app.exception
+    df = _tells_df(case_app)
+
+    # Independently recompute which tells the default subject authored.
+    tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
+    expected = {
+        tx_id for tx_id in df["tx_id"]
+        if _tell_author(conn, tx_by_id.get(tx_id))[1] == trust_uid
+    }
+    assert expected, "the default subject authors ≥1 tell (else the check is vacuous)"
+
+    scopes = list(df["scope"])
+    rendered = {
+        tx_id for tx_id, sc in zip(df["tx_id"], scopes) if "this subject" in str(sc)
+    }
+    assert rendered == expected, \
+        "the scope marker must track the remark-author side, not all rows"
+
+    # Subject-authored rows are grouped first (all before any dataset-wide row).
+    first_wide = next((i for i, s in enumerate(scopes) if "this subject" not in str(s)),
+                      len(scopes))
+    assert all("this subject" in str(s) for s in scopes[:first_wide]), \
+        "subject-authored rows must be grouped first"
