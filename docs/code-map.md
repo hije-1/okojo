@@ -141,6 +141,7 @@ exhaustive, test-guarded inventory.
 | `src/okojo/identity/ownership.py` | Beneficial-owner and officer walk. | `walk_ownership`, `OwnershipWalkResult` |
 | `src/okojo/identity/proximity.py` | The proximity ring around a resolved identity. | `build_proximity_ring`, `ProximityRing` |
 | `src/okojo/geo/signals.py` | Geo-triangulation signal collectors + the totality dossier. | `assemble_dossier`, `GeoDossier`, `GeoSignal` |
+| `src/okojo/designation_check/check.py` | v1.1 subject-as-seed designation check — the case-side mirror of the sweep; a read-only composition of the sweep/geo/identity machinery that writes to no chain. | `run_designation_check`, `DesignationCheckResult`, `compute_badge` |
 
 ## Audit narration, UI, and data generation
 
