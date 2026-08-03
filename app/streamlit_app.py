@@ -111,6 +111,24 @@ _ROLE_LABEL = {
     "noise": "Ordinary",
 }
 
+# On-chain risk score reason codes / decomposition kind -> plain language for
+# the compliance officer. Display-only: the raw slugs remain the model's tested
+# contract (RiskScore.reasons / ScoreDecomposition.kind), so this map never
+# touches the scored data — only how it reads on screen. "gas" is kept: it is
+# meaningful crypto-forensics vocabulary used elsewhere in the app (the
+# gas-collapse callout), not jargon-for-its-own-sake.
+_RISK_REASON_LABEL = {
+    "sanctioned_flow_exposure": "funds reach a sanctioned endpoint",
+    "direct_sanctioned_counterparty": "direct sanctioned counterparty",
+    "structured_transfers": "structured transfers",
+    "gas_funded_hop": "gas-funded hop",
+    "gas_only_link": "gas-only link",
+}
+_RISK_KIND_LABEL = {
+    "money_flow": "money-flow",
+    "gas_only": "gas-only",
+}
+
 
 @st.cache_resource
 def get_connectors() -> Connectors:
@@ -1430,9 +1448,12 @@ def main() -> None:
 
     names = {a["uid"]: a["entity_name"] for a in accounts}
 
-    (tab_sanctions, tab_timeline, tab_network, tab_tells, tab_rfi,
+    # Tabs run left-to-right in component order (Profile/Timeline → Network →
+    # Sanctions → Tells → RFI → Advisory → Decisions → SAR → Audit); st.tabs has
+    # no default-tab option, so case mode lands on the subject's Timeline.
+    (tab_timeline, tab_network, tab_sanctions, tab_tells, tab_rfi,
      tab_advisory, tab_decisions, tab_sar, tab_audit) = st.tabs(
-        ["Sanctions", "Timeline", "Network", "Tells", "RFI", "Advisory",
+        ["Timeline", "Network", "Sanctions", "Tells", "RFI", "Advisory",
          "Decisions", "SAR draft", "Audit trail"]
     )
 
@@ -1444,6 +1465,10 @@ def main() -> None:
             "sanctions/watchlist name, and do any account's funds reach a synthetic "
             "sanctioned endpoint? Two faces of the same question — a name match and a "
             "fund-flow match."
+        )
+        st.caption(
+            "Scope: **this subject's** accounts only — ledger-wide designation "
+            "sweeps live in **Designation sweep** mode."
         )
 
         st.markdown("#### Watchlist name screening")
@@ -1500,8 +1525,9 @@ def main() -> None:
             rdf = pd.DataFrame([
                 {"uid": str(s.uid), "name": names.get(s.uid, s.uid), "score": s.score,
                  "band": s.band, "hops_to_sanctioned": s.hop_distance,
-                 "tainted_usdt": s.tainted_amount_usdt, "reasons": ", ".join(s.reasons),
-                 "money_flow": s.exposure_path, "source": _cites(s.provenance)}
+                 "tainted_usdt": s.tainted_amount_usdt,
+                 "reasons": ", ".join(_RISK_REASON_LABEL.get(r, r) for r in s.reasons),
+                 "on money-flow path": s.exposure_path, "source": _cites(s.provenance)}
                 for s in res.risk.scores
             ])
             st.dataframe(rdf, use_container_width=True, hide_index=True)
@@ -1515,7 +1541,8 @@ def main() -> None:
                 for s in res.risk.scores:
                     d = s.decomposition
                     st.markdown(
-                        f"**uid {s.uid}** · {names.get(s.uid, s.uid)} · _{d.kind}_  \n"
+                        f"**uid {s.uid}** · {names.get(s.uid, s.uid)} · "
+                        f"_{_RISK_KIND_LABEL.get(d.kind, d.kind)}_  \n"
                         f"`{d.formula}`  → **{s.score:.3f}** ({s.band})"
                     )
 
