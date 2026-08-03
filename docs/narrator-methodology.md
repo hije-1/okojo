@@ -87,7 +87,7 @@ v1.0.0 covers all three chain families over one set of shared machinery
 (`verify_chain_located`, the grounding resolver, the calibration guard, the
 two-register artifact):
 
-* **Case** — the 13-actor case chain the compiled pipeline writes.
+* **Case** — the 14-actor case chain the compiled pipeline writes.
 * **Sweep** — the Designation-Triggered Remediation Sweep's own chain, over two
   actors (`remediation_sweep`, `sweep_packager`) and 19 actions. Each template is
   a faithful 1:1 reading of the record's own detail — it reports the counts and

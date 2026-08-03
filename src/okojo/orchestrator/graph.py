@@ -67,6 +67,7 @@ from ..audit import AuditLog
 from ..casegraph import CaseGraphStore, RecidivismView, casegraph_config
 from ..config import REPO_ROOT
 from ..connectors import Connectors
+from ..designation_check import DesignationCheckResult, run_designation_check
 from ..entity import EntityBackbone, build_backbone
 from ..network import (
     ExpansionWalk,
@@ -136,6 +137,10 @@ class CaseState(TypedDict, total=False):
     # completes and the failure is surfaced (never silently swallowed)
     render_error: Optional[str]
     risk: RiskScoring
+    # v1.1: the subject-as-seed designation check (case-side mirror of the
+    # sweep), run right after the risk/sanctions stage over the case's own
+    # network cluster. Read-only; stamps one proof-of-screening record.
+    designation_check: DesignationCheckResult
     backbone: EntityBackbone
     tells: list[RemarkTell]
     alias_hits: list[AliasMatch]
@@ -289,6 +294,61 @@ def _risk(state: CaseState) -> CaseState:
     audit.append("risk_scorer", "scoring_config", detail=json.dumps(risk.config))
     audit.append("risk_scorer", "scored", detail=json.dumps(risk.summary()))
     return {"risk": risk}
+
+
+def _designation_check_summary(result: DesignationCheckResult) -> dict:
+    """The screen's conclusion, embedded in its audit record (design lock Q3b).
+
+    Scalar fields lead (the badge state, the coverage, the counts) so the
+    narrator's one-line reading is faithful and calibrated; the structured
+    ``hits`` / ``dismissals`` lists carry the corroboration outcome and the
+    mismatched-field rationale per subject hit, so the chain PROVES what the
+    check concluded (and the Sanctions tab renders it). Nothing here is a
+    tunable constant — it is a faithful transcription of the result object.
+    """
+    return {
+        "badge_state": result.badge_state,
+        "designations_screened": result.coverage.designations_screened,
+        "list_sources_screened": result.coverage.list_sources_screened,
+        "subject_hit_count": len(result.subject_hits),
+        "dismissed_count": len(result.dismissals),
+        "flow_exposure_count": len(result.flow_exposures),
+        "territory_signal_count": sum(1 for t in result.territory_lines if t.surfaced),
+        "network_notice_count": len(result.network_notices),
+        "hits": [{"designation_id": h.meta.designation_id, "match_kind": h.match_kind,
+                  "corroboration_outcome": h.corroboration_outcome,
+                  "mismatched_fields": h.mismatched_fields,
+                  "provenance": h.provenance} for h in result.subject_hits],
+        "dismissals": [{"designation_id": d.meta.designation_id,
+                        "mismatched_fields": d.mismatched_fields,
+                        "provenance": d.provenance} for d in result.dismissals],
+    }
+
+
+def _designation_check(state: CaseState) -> CaseState:
+    """Screen the subject (+ their case cluster) against every designation.
+
+    The cluster is the case's own Network-Expander reach at the selected hop
+    cap (``reached_account_uids``) — the check sees exactly what the
+    investigator sees on the Network tab. Read-only: no store is mutated. One
+    UNCONDITIONAL ``designation_check/screened`` record lands in every case
+    chain (design lock Q3a) — "did you check?" is the regulator's first
+    question, so proof-of-screening is an audit fact whether or not anything
+    matched; the conclusion is embedded in the record (Q3b).
+    """
+    conn, audit, subject_uid = state["conn"], state["audit"], state["subject_uid"]
+    cluster = set(state["expansion"].reached_account_uids)
+    result = run_designation_check(conn, subject_uid, cluster)
+    # The evidence pointers behind every subject-own conclusion (hits +
+    # adjudicated dismissals) are embedded IN the record's detail payload
+    # (each hit/dismissal carries its cite list) — so the chain proves the
+    # conclusion AND the evidence it rests on. Like the other summary records
+    # (risk_scorer/scored, remark_miner/mined) the record's top-level
+    # provenance field stays unset; the check exposes already-formatted cite
+    # strings (read, never re-derive), not Provenance objects.
+    audit.append("designation_check", "screened", target=f"uid:{subject_uid}",
+                 detail=json.dumps(_designation_check_summary(result)))
+    return {"designation_check": result}
 
 
 def _backbone(state: CaseState) -> CaseState:
@@ -587,6 +647,7 @@ _NODES: tuple[tuple[str, object], ...] = (
     ("decide_expand", _decide_expand),
     ("network_finalize", _network_finalize),
     ("risk_scorer", _risk),
+    ("designation_check", _designation_check),
     ("entity_backbone", _backbone),
     ("remark_miner", _tells),
     ("advisory_matcher", _advisory),
@@ -634,7 +695,10 @@ def build_case_graph():
     })
 
     g.add_edge("network_finalize", "risk_scorer")
-    g.add_edge("risk_scorer", "entity_backbone")
+    # v1.1: the designation check runs right after the risk/sanctions stage,
+    # on the unconditional backbone, so exactly one screen record lands per case.
+    g.add_edge("risk_scorer", "designation_check")
+    g.add_edge("designation_check", "entity_backbone")
     g.add_edge("entity_backbone", "remark_miner")
     g.add_edge("remark_miner", "advisory_matcher")
 

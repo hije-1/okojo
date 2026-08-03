@@ -333,6 +333,9 @@ CASE_TEMPLATES: dict[tuple, _Template] = {
     ("risk_scorer", "tool_call"): _tool("risk scorer"),
     ("risk_scorer", "scoring_config"): _config("on-chain scoring policy"),
     ("risk_scorer", "scored"): _phrase("action", "Scored on-chain risk", detail=True),
+    ("designation_check", "screened"): _phrase(
+        "action", "Screened the subject and cluster against every designation",
+        detail=True, target=True),
     ("remark_miner", "tool_call"): _tool("remark miner"),
     ("remark_miner", "mined"): _phrase("action", "Mined remark tells", detail=True),
     ("remark_miner", "alias_screened"): _phrase(

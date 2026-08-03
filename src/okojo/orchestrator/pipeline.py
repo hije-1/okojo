@@ -24,6 +24,7 @@ from ..audit import AuditLog
 from ..casegraph import CaseGraphStore, RecidivismView
 from ..config import REPO_ROOT
 from ..connectors import Connectors
+from ..designation_check import DesignationCheckResult
 from ..network import NetworkExpansion
 from ..remarks import AliasMatch, RemarkTell
 from ..rfi import ContradictionTable, RfiDecomposition, RfiView
@@ -68,6 +69,9 @@ class CaseResult:
     # completed; the failure is recorded in the audit chain
     # (``network_expander/graph_render_failed``) and surfaced in the UI.
     render_error: Optional[str] = None
+    # v1.1: the subject-as-seed designation check (badge + exposure + territory
+    # + coverage), surfaced on the Sanctions tab. Read-only; always present.
+    designation_check: Optional[DesignationCheckResult] = None
 
 
 def default_out_dir(subject_uid: int) -> Path:
@@ -143,6 +147,7 @@ def run_case(
             package_path=final.get("package_path"),
             package_sha256=final.get("package_sha256"),
             render_error=final.get("render_error"),
+            designation_check=final.get("designation_check"),
         )
     finally:
         if owns_conn:

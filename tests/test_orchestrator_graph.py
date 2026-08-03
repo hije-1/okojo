@@ -20,8 +20,10 @@ from okojo.orchestrator import build_case_graph, run_case
 # The full topology: the fixed component backbone plus the five bounded
 # decision points and their effect nodes. Slice B replaced the atomic
 # network_expander node with the seed/hop/decide/finalize loop and inserted
-# the decision nodes -- this pin was updated in the same slice, deliberately:
-# any future topology change must show up as a diff here.
+# the decision nodes; v1.1 inserted the subject-as-seed `designation_check`
+# node on the unconditional backbone, right after `risk_scorer` -- this pin
+# was updated in the same slice, deliberately: any future topology change must
+# show up as a diff here.
 _NODES = (
     "case_open",
     "profile_aggregator",
@@ -30,6 +32,7 @@ _NODES = (
     "decide_expand",
     "network_finalize",
     "risk_scorer",
+    "designation_check",
     "entity_backbone",
     "remark_miner",
     "advisory_matcher",
@@ -58,7 +61,10 @@ _EDGES = {
     ("decide_expand", "network_hop"),
     ("decide_expand", "network_finalize"),
     ("network_finalize", "risk_scorer"),
-    ("risk_scorer", "entity_backbone"),
+    # v1.1: the subject-as-seed designation check sits on the unconditional
+    # backbone, right after the risk/sanctions stage.
+    ("risk_scorer", "designation_check"),
+    ("designation_check", "entity_backbone"),
     ("entity_backbone", "remark_miner"),
     ("remark_miner", "advisory_matcher"),
     ("advisory_matcher", "decide_second_advisory"),
