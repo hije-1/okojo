@@ -138,6 +138,12 @@ the generator changes.
 - Decide the LLM provider/model for the reasoning components (kept provider-agnostic
   so far).
 - Set up the public GitHub repo + a steady public commit cadence.
+- **RESOLVED (long closed; retained as the Day-0 record).** All three threads are
+  done: the walking skeleton shipped and was published (Phase 1), and every phase
+  through v1.1 followed; the reasoning components stayed provider-agnostic — no
+  external LLM, deterministic templates throughout; the public repo and a steady
+  commit cadence are established. Current status lives in `CLAUDE.md` and the
+  [CHANGELOG](../CHANGELOG.md).
 
 ## 12. Licensing & contribution policy
 _Added Day 3 (Phase 2 complete)._
@@ -158,6 +164,9 @@ _Added Day 3 (Phase 2 complete)._
   closed. **Keep MIT, and continue not accepting external code contributions.**
   The relicensing option is preserved (sole copyright holder; already-published
   versions stay MIT regardless). DCO/CLA machinery deliberately not adopted.
+- **Superseded at v1.1 (2026-08-03 — see §21):** the reserved relicensing option
+  was exercised — the license changed to BSL 1.1 for v1.1.0 and later (v1.0.0 and
+  earlier remain MIT). The no-external-contributions posture is unchanged.
 
 ## 13. Audit Narrator — promoted from roadmap to committed Phase 9
 _Added Day 3 (Phase 2 + Slice 4b complete); promoted to committed scope Day 10
@@ -459,3 +468,32 @@ _Added Day 11 (2026-07-31, Phase 10 Session C — at the v1.0.0 tag). Resolves t
   states the no-external-contributions posture in calibrated terms. This ruling
   closes the §12 revisit; the relicensing option is explicitly preserved, not
   exercised.
+- **RESOLVED / superseded at v1.1 (2026-08-03).** The "keep MIT" decision above
+  governed the v1.0.x line and is preserved for those published snapshots. At the
+  v1.1.0 release the relicensing option this ruling reserved was exercised: the
+  license was changed to BSL 1.1 for v1.1.0 and later — see §21. The
+  no-external-contributions posture is unchanged.
+
+## 21. v1.1 license change: MIT → Business Source License 1.1
+_Added Day 12 (2026-08-03, the v1.1.0 release session). Supersedes the "keep MIT"
+ruling in §20 for v1.1.0 and later._
+
+- **Ruling (2026-08-03).** From v1.1.0 onward Okojo does not remain MIT. The
+  license is changed to the **Business Source License 1.1** (BSL 1.1,
+  source-available), using the MariaDB template verbatim.
+- **Parameters (PM-confirmed at the release).**
+  - **Licensor:** Jennifer Hicks.
+  - **Licensed Work:** Okojo v1.1.0 and later.
+  - **Additional Use Grant:** non-production use — research, evaluation, and
+    demonstration — is free; production or commercial use requires a license from
+    the Licensor.
+  - **Change Date:** 2030-08-03 (four years from the v1.1.0 release date).
+  - **Change License:** MIT — each version converts to MIT on its Change Date.
+- **v1.0.0 and earlier are unaffected.** Those published snapshots remain under
+  the MIT License; that grant is irrevocable and is not withdrawn by this change.
+- **Contribution posture unchanged** from §20: issues and feedback remain welcome;
+  external code contributions are not accepted.
+- **Effect.** `LICENSE` is replaced with the BSL 1.1 text; the README license
+  section, `SECURITY.md`, and the three status surfaces state the split (v1.1.0+ =
+  BSL 1.1; v1.0.0 and earlier = MIT) in calibrated terms. GitHub's license
+  detector reports BSL-1.1 from this release forward.

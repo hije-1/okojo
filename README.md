@@ -12,11 +12,13 @@
   <b><a href="https://okojo-demo.streamlit.app/">▶ Live demo</a></b> (free-tier hosting; first load after idle may take a minute to wake)
 </p>
 
-> **Status: v1.0** — all ten build phases complete, from the synthetic-data
+> **Status: v1.1** — all ten v1.0 build phases complete, from the synthetic-data
 > foundations through the designation-triggered remediation sweep (the capstone)
 > and the grounded Audit Narrator that makes the tamper-evident record
 > *reviewable*, not just provable, across every chain family (case, sweep, and
-> batch). Fully synthetic data, built in the open. See the
+> batch) — plus the v1.1 subject-as-seed designation check that screens each case
+> subject against the designation lists and surfaces the posture on the Sanctions
+> tab. Fully synthetic data, built in the open. See the
 > [CHANGELOG](CHANGELOG.md) and [Status & roadmap](#status--roadmap).
 
 ## The Problem
@@ -121,7 +123,7 @@ Every stage, tool call, and decision writes to the **append-only, hash-chained
 audit trail** — the spine, not a side-car: the case package is built *on* it, and
 the sweep writes its own separate chain. Individual decision routing and the
 per-stage records are omitted from the diagram for legibility (the full code map
-lands in Phase 10).
+is in [`docs/code-map.md`](docs/code-map.md)).
 
 **The nine components** (numbering is the target design, not build order):
 
@@ -351,9 +353,21 @@ constituent sweep chains) — it makes the tamper-evident record *reviewable*, n
 just provable, and it is surfaced in both audit views. Continuous integration
 (regenerate + test on every push) landed as its first slice.
 
-**Next — Phase 10 (launch hardening):** a security pass, a snippet-level SCA scan,
-a cloud deploy of the demo, a full code-systems map, and — last — a recorded
-walkthrough.
+**Phase 10 (complete) — launch hardening, released as v1.0.0.** Continuous
+integration (regenerate + full suite on every push), a security pass (bandit +
+pip-audit as dev tooling, GitHub private vulnerability reporting), a
+snippet-level SCA scan, a full code-systems map with a completeness tripwire, the
+Python-3.12 deploy pins, and the cloud-hosted live demo. The one remaining launch
+item is a recorded walkthrough of the finished system.
+
+**v1.1 (complete) — subject-as-seed designation check.** The case pipeline runs a
+read-only designation check on its unconditional backbone: it screens each case
+subject (and its expansion cluster) against the designation lists and surfaces the
+posture on the Sanctions tab — a three-state badge, fund-flow and territory
+exposure lines, named-network notices, and a coverage footer — writing one
+unconditional proof-of-screening record per case. From v1.1.0 the project is
+source-available under the Business Source License 1.1 (v1.0.0 and earlier remain
+MIT).
 
 **Roadmap (post-v1.0):**
 
@@ -382,4 +396,26 @@ down the road. Thanks for taking a look!
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+Okojo **v1.1.0 and later** is source-available under the **Business Source
+License 1.1** — see [LICENSE](LICENSE). Non-production use (research, evaluation,
+and demonstration) is free; production or commercial use requires a license from
+the Licensor. On the Change Date (2030-08-03) each version converts to the MIT
+License.
+
+Versions **v1.0.0 and earlier remain under the MIT License**; that grant is
+irrevocable for those published snapshots.
+
+## Sources
+
+- [IBM Transactions for Anti-Money Laundering (AML) — Kaggle](https://www.kaggle.com/datasets/ealtman2019/ibm-transactions-for-anti-money-laundering-aml)
+- [IBM AMLSim — GitHub](https://github.com/IBM/AMLSim)
+- [Realistic Synthetic Financial Transactions for AML Models (IT-AML paper, arXiv)](https://arxiv.org/html/2306.16424v1)
+- [AMLNet — Synthetic AML Transaction Dataset (Zenodo)](https://zenodo.org/records/16482144)
+- [Elliptic Data Set for Anti-Money Laundering in Bitcoin](https://www.elliptic.co/media-center/elliptic-releases-bitcoin-transactions-data)
+- [Elliptic++ Dataset — GitHub](https://github.com/git-disl/EllipticPlusPlus)
+- [OFAC Sanctions List Service (official downloads)](https://ofac.treasury.gov/sanctions-list-service)
+- [US OFAC SDN List — OpenSanctions](https://www.opensanctions.org/datasets/us_ofac_sdn/)
+- [The best AI agent frameworks in 2026 — LangChain](https://www.langchain.com/resources/ai-agent-frameworks)
+- [FinCEN Advisory on the Iranian Regime's Illicit Oil Smuggling (June 2025, PDF)](https://www.fincen.gov/system/files/advisory/2025-06-06/FinCEN-Advisory-Illicit-Oil-Smuggling-508.pdf)
+- [FinCEN Advisory on Chinese Money Laundering Networks (August 2025, PDF)](https://www.fincen.gov/system/files/2025-08/FinCEN-Advisory-CMLN-508.pdf)
+- [FinCEN Advisories index](https://www.fincen.gov/resources/advisoriesbulletinsfact-sheets/advisories)

@@ -102,7 +102,8 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   P/R/F1=1.0; phase1/phase2/advisory/sar/rfi scorecards byte-identical.
   9-tab demo (Decisions tab, recidivism banner, package download).
   211 green tests (1 skipped: the ST backend).
-- **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public, MIT).
+- **PUBLISHED:** live at <https://github.com/hije-1/okojo> (public;
+  source-available under BSL 1.1 from v1.1.0, MIT for v1.0.0 and earlier).
   Live demo: <https://okojo-demo.streamlit.app/> (free-tier hosting; first load
   after idle may take a minute to wake).
 - **Phase 7 (UI polish & reliability hardening): COMPLETE.**
@@ -206,6 +207,21 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   the account-name determinism canary untouched. The three hand-maintained status
   surfaces (this block, the README status block, the app `_PHASE` caption) moved
   to **v1.0** together at the tag.
+- **v1.1 (subject-as-seed designation check + license change): RELEASED and
+  public.** A read-only designation check runs on the unconditional case backbone
+  right after the risk scorer: it screens each case subject (and its expansion
+  cluster) against the designation lists and surfaces the posture on the Sanctions
+  tab — a three-state badge (corroborated match / active or name-only hit / no
+  match), fund-flow and territory exposure lines, named-network notices, and a
+  coverage footer — writing one unconditional `designation_check/screened` proof
+  record per case (X1a module / X1b wiring+eval / X1c UI). Case-UI polish shipped
+  just before (component-order tabs, plain-language risk/role slug maps, the
+  "Tells" header). No config, no version bump, no new ground-truth keys; all
+  capability scorecards byte-identical (the eval reads existing designation keys);
+  case-chain tips moved by design (+1 record per chain). 554 green tests (1
+  skipped: the ST backend). **The license changed to BSL 1.1 at this release**
+  (source-available; v1.0.0 and earlier remain MIT — DECISIONS §21). The three
+  hand-maintained status surfaces moved to **v1.1** together at the v1.1.0 tag.
 - **NEXT — v1.0.0 walkthrough (Session D):** a recorded demo/walkthrough of the
   live system — the last Phase-10 item, produced as content on top of the
   release, not a status gate.

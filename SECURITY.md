@@ -22,7 +22,7 @@ not maintained. There is no long-term-support commitment.
 
 | Version | Supported |
 |---|---|
-| Latest release / `main` | ✅ |
+| `1.1.x` / `main` | ✅ |
 | Older tags / commits | ❌ |
 
 ## Reporting a vulnerability

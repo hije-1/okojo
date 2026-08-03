@@ -9,6 +9,42 @@ financial-crime investigations at a crypto exchange. It is not production
 screening, not legal or compliance advice, and not a SAR-filing tool; a human
 always reviews, decides, and files. All data is synthetic or public.
 
+## [1.1.0] - 2026-08-03
+
+### Added
+- **Subject-as-seed designation check on the case pipeline.** A read-only check
+  runs on the unconditional case backbone (right after risk scoring): it screens
+  each case subject and its expansion cluster against the designation lists and
+  surfaces the posture on the Sanctions tab.
+  - A three-state posture badge — corroborated designation match / active or
+    name-only hit / no match — with a cited, always-visible dismissal line for a
+    name-only hit.
+  - Fund-flow and hop-distance exposure lines, a designated-territory line, and
+    named-network notices for cluster-level hits (cluster hits never escalate the
+    subject's own badge).
+  - A ledger-wide screening-coverage footer (designations screened, list sources,
+    and any list that is visibly absent).
+  - One unconditional `designation_check/screened` proof-of-screening record per
+    case, embedding the corroboration outcome and any mismatched fields.
+
+### Changed
+- **License changed to the Business Source License 1.1** for v1.1.0 and later:
+  source-available; non-production use (research, evaluation, demonstration) is
+  free, production or commercial use requires a license from the Licensor, and
+  each version converts to the MIT License on its Change Date (2030-08-03).
+  Versions **v1.0.0 and earlier remain under the MIT License**.
+- **Case-UI polish.** The case tabs render in component order (the subject's
+  Timeline first); on-chain risk-score reason codes and score-decomposition kinds
+  render in plain language; the case Sanctions tab carries a scope caption; and
+  the case Tells tab header reads "Tells."
+- A ™ mark on the prominent use of the Okojo name (README title, app header, and
+  browser tab title).
+
+### Notes
+- No capability version was bumped and no new ground-truth keys were added — all
+  capability scorecards are byte-identical to v1.0.0. By design, each case audit
+  chain gains the one new proof-of-screening record.
+
 ## [1.0.0] - 2026-07-31
 
 First public release. Okojo runs a synthetic case end-to-end — profile
