@@ -38,6 +38,7 @@ from okojo.sar.critic import FINCEN_RUBRIC
 from okojo.scorer import SCORING_VERSION, scoring_config
 from okojo.agency import AGENCY_VERSION
 from okojo.geo import GEO_VERSION
+from okojo.coverage import COVERAGE_VERSION, run_coverage_audit
 from okojo.identity import IDENTITY_VERSION, OWNERSHIP_CONTROL_THRESHOLD
 from okojo.sweep import (
     GAP_TAXONOMY,
@@ -127,6 +128,15 @@ _RISK_REASON_LABEL = {
 _RISK_KIND_LABEL = {
     "money_flow": "money-flow",
     "gas_only": "gas-only",
+}
+
+# Coverage gap-class slug -> plain language, display-only (the raw slug stays the
+# coverage module's tested contract, JurisdictionCoverage.gap_class). None = a
+# covered jurisdiction.
+_COVERAGE_STATUS_LABEL = {
+    None: "Covered by an enabled list",
+    "ingestion": "Coverage declared but not ingested",
+    "no_coverage": "No enabled list coverage",
 }
 
 # Remark-tell category slug -> plain language. Display-only, exactly like the
@@ -366,6 +376,11 @@ def _render_designation_posture(dc) -> None:
         footer += (" Declared but not ingested, screened as visible-absent: "
                    + ", ".join(cov.declared_not_ingested) + ".")
     st.caption(footer)
+    st.caption(
+        "Institution-level screening-coverage assessment — how the customer "
+        "base's whole geographic footprint maps to enabled list coverage — lives "
+        "in **Designation sweep** mode."
+    )
 
 
 def _diff_html(a: str, b: str) -> tuple[str, str]:
@@ -1467,6 +1482,88 @@ def _render_sweep_mode(conn: Connectors) -> None:
         f"Sweep methodology v{SWEEP_VERSION} · identity resolution "
         f"v{IDENTITY_VERSION} · money-flow edges: control links and value "
         f"transfers · name-match threshold {sweep_config()['name_match_threshold']}."
+    )
+
+    # The institution-level screening coverage-gap panel — independent of the
+    # picked designation, so it renders once at the foot of sweep mode.
+    _render_coverage_panel(conn)
+
+
+def _render_coverage_panel(conn) -> None:
+    """Institution-level screening coverage-gap panel (independent of the picked
+    designation): does our list-source coverage reach the jurisdictions our
+    customer base actually touches? Two registers — the finding in plain language
+    up top, the cited provenance and the assessment's own audit narrative below.
+    Read-only: it surfaces a finding, proposes nothing, changes nothing."""
+    st.divider()
+    st.markdown("### Screening coverage (institution-level)")
+    st.caption(
+        "A standing, whole-book question, independent of the designation above: "
+        "does our list-source coverage reach the jurisdictions our customer base "
+        "actually touches? A footprint jurisdiction with no enabled list coverage "
+        "is a **screening-scope observation, not a legal claim.**"
+    )
+
+    res = run_coverage_audit(conn)
+    a = res.assessment
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Footprint jurisdictions", len(a.footprint_jurisdictions))
+    m2.metric("Covered", len(a.covered_jurisdictions))
+    m3.metric("Ingestion gaps", len(a.ingestion_gaps))
+    m4.metric("No-coverage gaps", len(a.no_coverage_gaps))
+
+    # The finding, plain language (prominent register).
+    if a.no_coverage_gaps:
+        st.warning(
+            "**No enabled list coverage** for footprint in "
+            + ", ".join(a.no_coverage_gaps)
+            + " — a screening-scope observation, not a legal claim."
+        )
+    if a.ingestion_gaps:
+        st.warning(
+            "**Coverage declared but not ingested** for footprint in "
+            + ", ".join(a.ingestion_gaps)
+            + " (would be covered by ingesting: "
+            + ", ".join(a.declared_not_ingested_regimes) + ")."
+        )
+    if a.covered_jurisdictions:
+        st.success(
+            "Covered by an enabled list: " + ", ".join(a.covered_jurisdictions) + "."
+        )
+
+    st.markdown("**Footprint — three legs, counted separately**")
+    st.dataframe(pd.DataFrame([
+        {"leg": leg.label, "count": leg.total, "unit": leg.count_unit,
+         "jurisdictions": ", ".join(sorted(leg.counts))}
+        for leg in a.footprint_legs
+    ]), use_container_width=True, hide_index=True)
+
+    st.markdown("**Per-jurisdiction coverage**")
+    st.dataframe(pd.DataFrame([
+        {"jurisdiction": jc.jurisdiction,
+         "status": _COVERAGE_STATUS_LABEL.get(jc.gap_class, ""),
+         "covering lists (enabled)": ", ".join(jc.ingested_regimes) or "—",
+         "note": jc.annotation or ""}
+        for jc in a.per_jurisdiction
+    ]), use_container_width=True, hide_index=True)
+
+    with st.expander("Coverage provenance (every finding line, cited)"):
+        for jc in a.per_jurisdiction:
+            _str_cite_caption(jc.provenance, prefix=jc.jurisdiction)
+
+    # The assessment's own hash-chained trail, narrated (Phase 9, read-only).
+    _render_audit_narrative(res.audit_records, family="coverage", subject="coverage")
+    with st.expander("Audit trail (the coverage assessment's own chain)"):
+        st.dataframe(pd.DataFrame([
+            {"seq": r["seq"], "actor": r["actor"], "action": r["action"],
+             "hash": r["hash"][:12] + "…"}
+            for r in res.audit_records
+        ]), use_container_width=True, hide_index=True)
+    st.caption(
+        f"Screening-coverage methodology v{COVERAGE_VERSION} · chain verified: "
+        f"**{res.audit_verified}** · {len(res.audit_records)} records · "
+        "read-only (proposes nothing, changes nothing)."
     )
 
 

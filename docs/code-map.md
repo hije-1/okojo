@@ -142,6 +142,8 @@ exhaustive, test-guarded inventory.
 | `src/okojo/identity/proximity.py` | The proximity ring around a resolved identity. | `build_proximity_ring`, `ProximityRing` |
 | `src/okojo/geo/signals.py` | Geo-triangulation signal collectors + the totality dossier. | `assemble_dossier`, `GeoDossier`, `GeoSignal` |
 | `src/okojo/designation_check/check.py` | v1.1 subject-as-seed designation check — the case-side mirror of the sweep; a read-only composition of the sweep/geo/identity machinery that writes to no chain. | `run_designation_check`, `DesignationCheckResult`, `compute_badge` |
+| `src/okojo/coverage/assessment.py` | Institution-level screening coverage-gap check — measures the customer base's three-leg geographic footprint against the enabled+ingested list-source regimes and surfaces covered / gap jurisdictions as cited findings. Read-only; reads the frozen sweep registry, writes no chain. | `run_coverage_assessment`, `CoverageAssessment`, `JurisdictionCoverage`, `FootprintLeg` |
+| `src/okojo/coverage/pipeline.py` | The coverage assessment's own hash-chained audit trail (a new chain family under `data/coverage/`) — stamps the finding into a fresh tamper-evident chain, mirroring the sweep's own-chain discipline. Reuses the read-only assessment; changes nothing. | `run_coverage_audit`, `CoverageAuditResult`, `default_coverage_dir` |
 
 ## Audit narration, UI, and data generation
 

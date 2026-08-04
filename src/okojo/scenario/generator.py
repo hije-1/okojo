@@ -1989,6 +1989,23 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "counterparty_personas": counterparty_personas,
         "counterparty_exposed_uids": counterparty_exposed_uids,
         "counterparty_clean_uid": counterparty_clean_uid,
+        # COVERAGE (institution-level screening coverage-gap) answer keys. These
+        # are HAND-AUTHORED here, independent of ``coverage_config`` (never
+        # imported into the generator), so ``test_coverage_eval`` scoring the
+        # assessment against them is a real check, never circular. The footprint
+        # is the union of three legs (residence + KYC-issuing + nationality); a
+        # jurisdiction is COVERED iff an ingested regime lists it, an INGESTION
+        # gap iff only a declared-but-not-ingested regime lists it, a NO-COVERAGE
+        # gap iff no regime lists it at all. XV (the nationality-leg-only
+        # fictional parent country of the designated Qazrun territory) is the sole
+        # no-coverage gap — the finding the residence leg alone would miss.
+        "coverage_footprint_jurisdictions": [
+            "AE", "BR", "CN", "DE", "GB", "HK", "NZ", "QZ", "SG", "TR", "US", "XV", "ZA",
+        ],
+        "coverage_covered_jurisdictions": ["AE", "DE", "GB", "US"],
+        "coverage_ingestion_gaps": ["BR", "CN", "HK", "NZ", "QZ", "SG", "TR", "ZA"],
+        "coverage_no_coverage_gaps": ["XV"],
+        "coverage_declared_not_ingested_regimes": ["SYN-UN-CONSOLIDATED"],
     }
 
     # ---- write outputs ---------------------------------------------------- #

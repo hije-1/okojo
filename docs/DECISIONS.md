@@ -422,7 +422,14 @@ _Added Day 11 (Phase 8 sign-off; component 9 complete)._
 - **Three roadmap items added (post-v1.0, see §7).** (a) **Coverage-gap check** —
   the customer base's geographic footprint measured against the enabled
   list-source regimes, surfaced as a standing signal (are we screening against the
-  lists our actual exposure calls for?). (b) **Audit Narrator scope broadened to
+  lists our actual exposure calls for?). **BUILT 2026-08-04 (rides on v1.1.0, not
+  separately tagged): a three-leg footprint (residence + KYC-issuing + nationality)
+  vs the enabled+ingested regimes, two gap classes (ingestion / no-coverage), a new
+  versioned `coverage_config` + methodology doc + anti-drift pair (the 12th;
+  COVERAGE 1.0.0) that READS the frozen sweep registry (SWEEP untouched), its own
+  `coverage` audit-chain family narrated by the read-only Narrator (NARRATOR stays
+  1.0.0), and a sweep-mode panel + case pointer. All existing scorecards
+  byte-identical.** (b) **Audit Narrator scope broadened to
   all chain families** — Phase 8 added the sweep chain and the batch path, so the
   Narrator now covers case + sweep + batch, not the case log alone (§13).
   **Subsequently promoted to committed Phase 9 (2026-07-31, PM ruling — see §13);

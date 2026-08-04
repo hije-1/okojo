@@ -544,9 +544,68 @@ SWEEP_TEMPLATES: dict[tuple, _Template] = {
     ("sweep_packager", "packaged"): _Template("action", _sweep_packaged_render),
 }
 
+# --------------------------------------------------------------------------- #
+# COVERAGE-family template registry
+#
+# The institution-level screening coverage-gap assessment writes its own
+# hash-chained trail over one actor — ``coverage_assessment`` — with five
+# actions. Each template is a faithful 1:1 reading of the record's own detail.
+# Setup register for the versioned policy stamp; the action register for the
+# consequential steps.
+# --------------------------------------------------------------------------- #
+def _coverage_open_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    legs = d.get("footprint_legs") or []
+    v = d.get("config_version")
+    suffix = f" (policy v{v})" if v else ""
+    return _period(
+        f"Opened the institution-level screening coverage-gap assessment over "
+        f"{len(legs)} footprint leg(s){suffix}; read-only")
+
+
+def _coverage_footprint_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    n = len(d.get("footprint_jurisdictions") or [])
+    legs = d.get("legs") or []
+    parts = ", ".join(f"{leg.get('leg')} {leg.get('total')} {leg.get('count_unit')}"
+                      for leg in legs)
+    tail = f" ({parts})" if parts else ""
+    return _period(
+        f"Derived the customer-base footprint: {n} jurisdiction(s) across "
+        f"{len(legs)} leg(s){tail}")
+
+
+def _coverage_finding_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    return _period(
+        f"Assessed coverage: {len(d.get('covered') or [])} covered jurisdiction(s), "
+        f"{len(d.get('ingestion_gaps') or [])} ingestion-gap(s), "
+        f"{len(d.get('no_coverage_gaps') or [])} no-coverage gap(s), "
+        f"{len(d.get('declared_not_ingested_regimes') or [])} regime(s) declared "
+        f"but not ingested (a screening-scope observation, not a legal claim)")
+
+
+def _coverage_complete_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    return _period(
+        f"Completed the coverage assessment: {d.get('covered') or 0} covered, "
+        f"{d.get('ingestion_gaps') or 0} ingestion-gap(s), "
+        f"{d.get('no_coverage_gaps') or 0} no-coverage gap(s); "
+        f"finding surfaced for human review, nothing changed")
+
+
+COVERAGE_TEMPLATES: dict[tuple, _Template] = {
+    ("coverage_assessment", "assessment_open"): _Template("action", _coverage_open_render),
+    ("coverage_assessment", "coverage_config"): _config("screening-coverage policy"),
+    ("coverage_assessment", "footprint"): _Template("action", _coverage_footprint_render),
+    ("coverage_assessment", "coverage_finding"): _Template("action", _coverage_finding_render),
+    ("coverage_assessment", "assessment_complete"): _Template("action", _coverage_complete_render),
+}
+
 _TEMPLATES: dict[str, dict[tuple, _Template]] = {
     "case": CASE_TEMPLATES,
     "sweep": SWEEP_TEMPLATES,
+    "coverage": COVERAGE_TEMPLATES,
 }
 
 
@@ -746,7 +805,7 @@ def narrator_config() -> dict:
             "the narrative artifact (like packager_config), never stamped into a chain"
         ),
         "scope": (
-            "all chain families (case, sweep, batch); records lacking a "
+            "all chain families (case, sweep, batch, coverage); records lacking a "
             "family-specific template still narrate faithfully via a generic reading, "
             "so template coverage is additive and does not itself move the version"
         ),

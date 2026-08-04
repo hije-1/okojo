@@ -617,3 +617,50 @@ def test_case_audit_narrator_two_register_and_break(monkeypatch, conn, trust_uid
     assert _lead_num(rec2.err[0]) == broken[mid]["seq"]
     assert len(rec2.df[-1]) == 1  # break-report-only: a single cited record
     assert all("Plain-language narrative" in m for m in rec2.md)  # no action lines past the break
+
+
+# --- COVERAGE Slice C3: the institution-level screening-coverage panel -------
+#
+# The panel renders at the foot of sweep mode, independent of the picked
+# designation, so the domestic ``sweep_app`` exercises it directly.
+
+
+def _coverage_df(at):
+    """The per-jurisdiction coverage dataframe (jurisdiction + status columns)."""
+    for d in at.dataframe:
+        cols = list(d.value.columns)
+        if "jurisdiction" in cols and "status" in cols:
+            return d.value
+    raise AssertionError("coverage per-jurisdiction dataframe not rendered")
+
+
+def test_coverage_panel_renders_finding_in_plain_language(sweep_app):
+    assert not sweep_app.exception
+    text = _all_text(sweep_app)
+    assert "Screening coverage (institution-level)" in text
+    # The calibrated frame is on screen, verbatim.
+    assert "screening-scope observation, not a legal claim" in text
+    # The nationality-leg no-coverage gap (XV) is surfaced as a finding.
+    assert "No enabled list coverage" in text and "XV" in text
+    # The versioned methodology + the read-only, verified chain are captioned.
+    from app.streamlit_app import COVERAGE_VERSION
+    assert f"Screening-coverage methodology v{COVERAGE_VERSION}" in text
+
+
+def test_coverage_panel_per_jurisdiction_uses_plain_status_no_slug(sweep_app):
+    df = _coverage_df(sweep_app)
+    statuses = set(df["status"])
+    from app.streamlit_app import _COVERAGE_STATUS_LABEL
+    # Every status renders through the plain-language map; no underscored slug.
+    assert statuses <= set(_COVERAGE_STATUS_LABEL.values())
+    assert "no_coverage" not in statuses and "kyc_issuing" not in " ".join(statuses)
+    # XV is flagged no-coverage; QZ carries its territory-scoping note.
+    rows = {r["jurisdiction"]: r for _, r in df.iterrows()}
+    assert rows["XV"]["status"] == _COVERAGE_STATUS_LABEL["no_coverage"]
+    assert "territory" in rows["QZ"]["note"].lower()
+
+
+def test_coverage_panel_narrates_its_own_chain(sweep_app):
+    """The coverage assessment's own chain is narrated (read-only, grounded)."""
+    text = _all_text(sweep_app)
+    assert "Completed the coverage assessment" in text

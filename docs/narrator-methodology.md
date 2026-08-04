@@ -83,7 +83,7 @@ sweep and batch families does not itself move the version.
 
 ## Scope
 
-v1.0.0 covers all three chain families over one set of shared machinery
+v1.0.0 covers all four chain families over one set of shared machinery
 (`verify_chain_located`, the grounding resolver, the calibration guard, the
 two-register artifact):
 
@@ -103,6 +103,13 @@ two-register artifact):
   break-position record of a broken one). The `rollup` dict is a view, **never a
   grounding source**; a broken constituent is reported and excluded from the
   roll-up, never summarized past its break.
+* **Coverage** — the institution-level screening coverage-gap assessment's own
+  chain, over one actor (`coverage_assessment`) and five actions (open, the
+  versioned policy stamp, footprint, finding, complete). Each template is a
+  faithful 1:1 reading of the record's counts, with the policy stamp in the
+  setup register and the footprint / finding / complete steps in the action
+  register. Read-only: the assessment writes only its own chain, so no case or
+  sweep chain moves.
 
 Template coverage is additive by construction: an unknown record still narrates
 faithfully via the generic reading, so extending the map never moves the version.
@@ -123,7 +130,7 @@ so the doc and the code can never silently drift.
   "calibration": "narrator output is screened with the SAR drafter's exact BANNED_TERMS tuple; over-claiming language is rejected",
   "verification": "the chain is verified FIRST; a chain that fails verification is reported as the narrative itself (the break located and cited, the count that verified before it stated), and content at or beyond the break is never summarized",
   "read_only": "the narrator writes NOTHING to any chain; its version is pinned through the narrative artifact (like packager_config), never stamped into a chain",
-  "scope": "all chain families (case, sweep, batch); records lacking a family-specific template still narrate faithfully via a generic reading, so template coverage is additive and does not itself move the version"
+  "scope": "all chain families (case, sweep, batch, coverage); records lacking a family-specific template still narrate faithfully via a generic reading, so template coverage is additive and does not itself move the version"
 }
 ```
 <!-- narrator-config:end -->

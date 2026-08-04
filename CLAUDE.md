@@ -222,6 +222,27 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   skipped: the ST backend). **The license changed to BSL 1.1 at this release**
   (source-available; v1.0.0 and earlier remain MIT — DECISIONS §21). The three
   hand-maintained status surfaces moved to **v1.1** together at the v1.1.0 tag.
+- **v1.1 (screening coverage-gap check): BUILT (rides on v1.1.0, not separately
+  tagged — the Tells-tab precedent).** The institution-level third act of the
+  cross-list story: a read-only assessment that measures the customer base's whole
+  geographic footprint — residence, KYC-issuing, and nationality jurisdictions,
+  each a separately-counted, cited leg (nationality added on PM ruling; it surfaces
+  the one no-coverage jurisdiction the residence leg alone misses) — against the
+  **enabled + ingested** list-source regimes, surfacing two gap classes (ingestion
+  gap / no-coverage gap) as standing, cited findings ("a screening-scope
+  observation, not a legal claim"). A **new versioned `coverage_config`** (the
+  regime→jurisdiction coverage policy) with its own `docs/coverage-methodology.md`
+  and doc↔code anti-drift test — the **12th** such pair; **COVERAGE 1.0.0**. The
+  frozen sweep `LIST_SOURCE_REGISTRY` is READ for ingested status, never
+  duplicated (SWEEP stays frozen). Its **own hash-chained audit trail** (a new
+  `coverage` chain family under `data/coverage/`), narrated by the read-only Audit
+  Narrator (5 new templates; **NARRATOR stays 1.0.0** — additive template growth).
+  A "Screening coverage" panel in sweep mode + a one-line case-Sanctions pointer.
+  Eval: exact-set footprint/covered/gap membership + a P8-G ingested-flip
+  falsification. **All existing capability scorecards byte-identical** (additive gt
+  keys only; account-name canary untouched); no version moved but `coverage`; no
+  existing chain moved (new family). 582 green tests (1 skipped: the ST backend).
+  The three status surfaces stay at **v1.1** (this rides on the release, no tag).
 - **NEXT — v1.0.0 walkthrough (Session D):** a recorded demo/walkthrough of the
   live system — the last Phase-10 item, produced as content on top of the
   release, not a status gate.

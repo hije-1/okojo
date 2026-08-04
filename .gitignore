@@ -18,6 +18,8 @@ data/synthetic/*
 data/cases/
 # Runtime sweep output (audit logs, remediation packages)
 data/sweeps/
+# Runtime coverage-assessment output (audit log)
+data/coverage/
 
 # Notebooks / scratch
 .ipynb_checkpoints/

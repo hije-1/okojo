@@ -15,11 +15,13 @@
 > **Status: v1.1** — all ten v1.0 build phases complete, from the synthetic-data
 > foundations through the designation-triggered remediation sweep (the capstone)
 > and the grounded Audit Narrator that makes the tamper-evident record
-> *reviewable*, not just provable, across every chain family (case, sweep, and
-> batch) — plus the v1.1 subject-as-seed designation check that screens each case
-> subject against the designation lists and surfaces the posture on the Sanctions
-> tab. Fully synthetic data, built in the open. See the
-> [CHANGELOG](CHANGELOG.md) and [Status & roadmap](#status--roadmap).
+> *reviewable*, not just provable, across every chain family (case, sweep, batch,
+> and coverage) — plus the v1.1 subject-as-seed designation check that screens each
+> case subject against the designation lists and surfaces the posture on the
+> Sanctions tab, and a screening coverage-gap check that measures the customer
+> base's whole geographic footprint against the enabled list-source regimes and
+> surfaces the mismatch as a standing, cited signal. Fully synthetic data, built in
+> the open. See the [CHANGELOG](CHANGELOG.md) and [Status & roadmap](#status--roadmap).
 
 ## The Problem
 
@@ -106,6 +108,7 @@ flowchart TD
         FLOW --> STG["Identity resolution (II) · Geo triangulation (III) · Counterparty lifecycle (IV)"]
         STG --> OUT["Escalations · customer notifications — drafted, never sent"]
         BATCH["Batch path · many designations in one run"] -.-> FLOW
+        COV["Screening coverage-gap check · institution-level footprint vs enabled lists · read-only finding"]
     end
 
     GR -. "grounds every claim" .-> A
@@ -113,10 +116,12 @@ flowchart TD
 
     A --> CAC[("Case audit chain<br/>hash-linked · package built ON it")]
     B --> SAC[("Sweep audit chain<br/>hash-linked · separate family")]
+    COV --> COVC[("Coverage audit chain<br/>hash-linked · separate family")]
     CAC --> CG
     CG -. "recidivism surfaced at case open" .-> A
     CAC --> HUM
     SAC --> HUM
+    COVC --> HUM
 ```
 
 Every stage, tool call, and decision writes to the **append-only, hash-chained
@@ -348,10 +353,10 @@ It is deterministic (a template map, no LLM), screened with the SAR drafter's
 exact calibration guard, and **writes nothing to any chain** — so every existing
 chain stays byte-identical. A failed chain verification *is* the narrative: the
 break is located and cited, and nothing past it is summarized. Scoped to **all**
-chain families — case, sweep, and batch (a batch roll-up grounded only to its
-constituent sweep chains) — it makes the tamper-evident record *reviewable*, not
-just provable, and it is surfaced in both audit views. Continuous integration
-(regenerate + test on every push) landed as its first slice.
+chain families — case, sweep, batch (a batch roll-up grounded only to its
+constituent sweep chains), and coverage — it makes the tamper-evident record
+*reviewable*, not just provable, and it is surfaced in every audit view.
+Continuous integration (regenerate + test on every push) landed as its first slice.
 
 **Phase 10 (complete) — launch hardening, released as v1.0.0.** Continuous
 integration (regenerate + full suite on every push), a security pass (bandit +
@@ -369,11 +374,21 @@ unconditional proof-of-screening record per case. From v1.1.0 the project is
 source-available under the Business Source License 1.1 (v1.0.0 and earlier remain
 MIT).
 
+**v1.1 (complete) — screening coverage-gap check.** The institution-level third
+act of the cross-list story: it measures the customer base's whole geographic
+footprint — residence, KYC-issuing, and nationality jurisdictions, each a
+separately-counted, cited leg — against the *enabled + ingested* list-source
+regimes, and surfaces the mismatch as a standing, cited finding: which
+jurisdictions the book touches with no enabled list coverage, and which regimes
+are declared but not ingested. Calibrated ("a screening-scope observation, not a
+legal claim"), read-only, it proposes nothing and writes its own separate
+hash-chained audit trail (a new chain family). Surfaced as a "Screening coverage"
+panel in sweep mode, with a one-line pointer from the case Sanctions tab. Its
+regime → jurisdiction coverage policy is a new versioned config with its own
+methodology doc and doc↔code anti-drift guard (the twelfth such pair).
+
 **Roadmap (post-v1.0):**
 
-- **Coverage-gap check** — the customer base's geographic footprint measured
-  against the enabled list-source regimes, surfaced as a standing signal (are we
-  screening against the lists our actual exposure calls for?).
 - **API service facade** — the sweep and case pipelines are already payload-in /
   proposals-out by design (validated payloads, grounded proposals, an append-only
   audit trail between); production exposure is connector and infrastructure work,

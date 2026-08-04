@@ -9,6 +9,35 @@ financial-crime investigations at a crypto exchange. It is not production
 screening, not legal or compliance advice, and not a SAR-filing tool; a human
 always reviews, decides, and files. All data is synthetic or public.
 
+## [Unreleased]
+
+### Added
+- **Screening coverage-gap check (institution-level).** A read-only assessment
+  that measures the customer base's whole geographic footprint against the
+  enabled list-source regimes and surfaces the mismatch as a standing, cited
+  finding — the automated form of a coverage argument practitioners otherwise
+  make by hand.
+  - The footprint is three separately-counted, separately-cited legs — residence
+    country, KYC-issuing country, and nationality (the nationality leg surfaces a
+    no-coverage jurisdiction the residence leg alone would miss).
+  - Two gap classes: an *ingestion gap* (a jurisdiction covered only by a
+    declared-but-not-ingested regime) and a *no-coverage gap* (covered by no
+    regime at all). Both are calibrated as a screening-scope observation, not a
+    legal claim.
+  - A new versioned `coverage_config` (the regime → jurisdiction coverage policy)
+    with its own methodology doc and doc↔code anti-drift guard — the twelfth such
+    pair. The frozen sweep list-source registry is read, never duplicated, so
+    what counts as *enabled* coverage can never drift from the sweep.
+  - Its own hash-chained audit trail (a new `coverage` chain family under
+    `data/coverage/`), narrated by the read-only Audit Narrator (five new
+    templates; the narrator remains v1.0.0 — additive template growth).
+  - A "Screening coverage" panel in Designation-sweep mode, with a one-line
+    pointer from the case Sanctions tab.
+- Scored against `ground_truth.json` (exact-set footprint / covered / gap
+  membership, plus a falsification that flips a regime's ingested status). All
+  existing capability scorecards are byte-identical; no version but `coverage`
+  moved.
+
 ## [1.1.0] - 2026-08-03
 
 ### Added
