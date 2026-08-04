@@ -9,7 +9,7 @@ financial-crime investigations at a crypto exchange. It is not production
 screening, not legal or compliance advice, and not a SAR-filing tool; a human
 always reviews, decides, and files. All data is synthetic or public.
 
-## [Unreleased]
+## [1.1.0] - 2026-08-03
 
 ### Added
 - **Screening coverage-gap check (institution-level).** A read-only assessment
@@ -33,14 +33,10 @@ always reviews, decides, and files. All data is synthetic or public.
     templates; the narrator remains v1.0.0 — additive template growth).
   - A "Screening coverage" panel in Designation-sweep mode, with a one-line
     pointer from the case Sanctions tab.
-- Scored against `ground_truth.json` (exact-set footprint / covered / gap
-  membership, plus a falsification that flips a regime's ingested status). All
-  existing capability scorecards are byte-identical; no version but `coverage`
-  moved.
-
-## [1.1.0] - 2026-08-03
-
-### Added
+  - Scored against `ground_truth.json` (exact-set footprint / covered / gap
+    membership, plus a falsification that flips a regime's ingested status). All
+    existing capability scorecards are byte-identical; no version but `coverage`
+    moved.
 - **Subject-as-seed designation check on the case pipeline.** A read-only check
   runs on the unconditional case backbone (right after risk scoring): it screens
   each case subject and its expansion cluster against the designation lists and
