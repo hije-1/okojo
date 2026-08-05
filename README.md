@@ -394,8 +394,8 @@ methodology doc and doc↔code anti-drift guard (the twelfth such pair).
   proposals-out by design (validated payloads, grounded proposals, an append-only
   audit trail between); production exposure is connector and infrastructure work,
   not a redesign.
-- ML alert auto-closure QA · vendor reconciliation · tokenized-commodity issuance
-  tracing · multilingual OSINT verifier · LE-request/MLAT routing.
+- ML alert auto-closure QA · LE-request/MLAT routing with per-region data-privacy
+  identification (e.g., GDPR).
 
 ## Author
 
