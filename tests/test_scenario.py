@@ -168,13 +168,21 @@ def test_c4_legs_resolve_to_planted_evidence(scenario):
     assert len(pd.read_csv(out / "gas_funding.csv")) > 0, "gas-funding leg"
 
 
-def test_betraying_remarks_reference_real_transactions(scenario):
+def test_betraying_remarks_reference_real_rows(scenario):
     out, _, gt = scenario
-    txs = pd.read_csv(out / "transactions.csv")
-    tx_ids = set(txs["tx_id"])
+    tx_ids = set(pd.read_csv(out / "transactions.csv")["tx_id"])
+    abk_ids = set(pd.read_csv(out / "address_book.csv")["entry_id"])
     assert gt["betraying_remarks"]
     for br in gt["betraying_remarks"]:
-        assert br["tx_id"] in tx_ids
+        # A betraying remark points at its SOURCE record: a transaction remark
+        # (source_kind="transaction") or a customer address-book label
+        # (source_kind="address_book"). Each must resolve to a real row — a
+        # chain transfer has no memo, so the "aggregation wallet" tell lives on
+        # the address book, not a transaction.
+        if br.get("source_kind") == "address_book":
+            assert br["tx_id"] in abk_ids
+        else:
+            assert br["tx_id"] in tx_ids
 
 
 def test_recidivist_cleared_prior_reviews(scenario):

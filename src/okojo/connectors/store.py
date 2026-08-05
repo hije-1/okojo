@@ -50,6 +50,7 @@ TABLES: dict[str, str] = {
     "device_timezones": "device_timezones.csv",
     "kyc_artifact_validity": "kyc_artifact_validity.csv",
     "acknowledgments": "acknowledgments.csv",
+    "address_book": "address_book.csv",
 }
 
 

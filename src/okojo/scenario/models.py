@@ -76,6 +76,29 @@ class Transaction:
     remark: str
     is_structured_round_number: bool
     direction: str           # "deposit" | "withdrawal" | "onchain"
+    # Two-record data model (see docs/scenario-data-model-redesign.md). Every
+    # movement is either the exchange's INTERNAL record (a uid: leg — customer-
+    # attributed, may carry a remark) or the on-chain transaction (address ->
+    # address — never a remark). Withdrawal chain legs settle FROM an omnibus hot
+    # wallet, never a customer address.
+    record_kind: str = "exchange"     # "exchange" | "chain"
+    settlement_ref: str = ""          # exchange row -> the tx_id of its on-chain settlement leg
+    settled_by: str = ""              # chain settlement leg -> the tx_id of the exchange row it settles
+
+
+@dataclass
+class AddressBookEntry:
+    """A customer's saved / whitelisted withdrawal address and their own free-text
+    label for it. This is the ONLY non-transaction home for customer free text —
+    chain records never carry a remark, so an "aggregation wallet" / "client
+    custody" label the customer typed lives here, not on the (memo-less) chain
+    transaction. The Tell Miner reads these labels alongside transaction remarks."""
+
+    entry_id: str
+    uid: int
+    address: str
+    label: str               # customer-typed free text
+    created_ts: str
 
 
 @dataclass

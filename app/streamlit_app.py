@@ -208,17 +208,34 @@ def _str_cite_caption(cites, prefix: str = "source") -> None:
         st.caption(f"{prefix}: " + "; ".join(cites))
 
 
-def _tell_author(conn, tx):
-    """Resolve a remark tell's **author** — the sending side of its transaction —
-    to an account of record. Display-layer only: reads the tx and the address
-    book, never touches the miner or its outputs.
+def _tell_author(conn, tell, tx_by_id):
+    """Resolve a tell's **author** to an account of record. Display-layer only:
+    reads the transaction / address book, never touches the miner or its outputs.
 
-    A tell's ``from_ref`` is either a ``uid:...`` account (the sender of record)
-    or an on-chain address; an address is resolved to its **controller of record
-    in the address book** (``addresses.controller_uid`` — recorded evidence, not
-    an Okojo inference). Returns ``(label, resolved_uid_or_None)`` so the caller
-    can flag rows authored by the current subject.
+    A tell comes from one of two homes for customer free text:
+    * an **exchange-record remark** — attributed to the sending side of its
+      transaction (a ``uid:`` sender, or an on-chain address resolved to its
+      controller of record in the address book); or
+    * a **customer address-book label** — attributed to the customer who SAVED
+      the label (a chain transfer has no memo, so this free text is the
+      customer's own, recorded off-chain).
+
+    Returns ``(label, resolved_uid_or_None)`` so the caller can flag rows
+    authored by the current subject.
     """
+    if getattr(tell, "source_kind", "transaction") == "address_book":
+        entry = next(
+            (e for e in conn.address_book() if str(e["entry_id"]) == tell.tx_id), None)
+        if entry is None:
+            return "unknown", None
+        uid = int(entry["uid"])
+        acct = conn.get_account(uid)
+        name = acct["entity_name"] if acct else "unknown account"
+        addr = str(entry["address"])
+        short = (addr[:6] + "…" + addr[-4:]) if len(addr) > 12 else addr
+        return f"{name} (uid {uid}) — saved-address label for {short}", uid
+
+    tx = tx_by_id.get(tell.tx_id)
     from_ref = str(tx["from_ref"]) if tx is not None else ""
     if from_ref.startswith("uid:"):
         uid = int(from_ref.split(":", 1)[1])
@@ -2014,10 +2031,14 @@ def main() -> None:
         if res.tells:
             tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
             st.caption(
-                "**Reading the table.** Each row is attributed to its remark's "
-                "**author** — the sending side of the transaction; an on-chain "
-                "sending address is resolved to its controller of record in the "
-                "address book. **◆ this subject** marks rows authored by the current "
+                "**Reading the table.** Customer free text lives in two places — an "
+                "**exchange-record remark** (a customer reference / ops note on a "
+                "deposit or withdrawal) and a **customer address-book label** (a "
+                "saved-address note); a chain transfer itself carries neither (no "
+                "memo). Each row is attributed to its **author** — the sending side "
+                "of the transaction (an on-chain sender resolves to its controller "
+                "of record in the address book), or the customer who saved the "
+                "label. **◆ this subject** marks rows authored by the current "
                 "subject (grouped first); the rest are dataset-wide. **Match "
                 "strength** is the RapidFuzz similarity ratio (0–100), shown at or "
                 "above the pinned threshold. The **analyst note (curated)** is, for a "
@@ -2027,7 +2048,7 @@ def main() -> None:
             )
             rows = []
             for h in res.tells:
-                author, author_uid = _tell_author(conn, tx_by_id.get(h.tx_id))
+                author, author_uid = _tell_author(conn, h, tx_by_id)
                 is_subject = author_uid is not None and author_uid == subject_uid
                 rows.append({
                     "_subject": is_subject,

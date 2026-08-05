@@ -40,7 +40,8 @@ Okojo is a research prototype exploring how an agentic AI co-pilot gives investi
 Given a flagged account on **fully synthetic data**, Okojo assembles a unified
 subject profile, expands the account into its network (shared devices, reused
 KYC documents, gas-funding linkage), scores on-chain sanctioned exposure,
-mines free-text remarks for attribution tells, tests the subject's own
+mines free-text customer references — exchange-record remarks and saved
+address-book labels — for attribution tells, tests the subject's own
 RFI answers against the evidence claim by claim, matches the case to the
 relevant FinCEN advisories, and drafts a grounded, self-critiquing Suspicious
 Activity Report — handing the human investigator a decision-ready package
@@ -288,7 +289,7 @@ also recorded in `ground_truth.json` as an answer key for scoring:
 | Logins from a sanctioned jurisdiction interleaved with VPN | `ip_logs.csv` |
 | Structured just-under round-number transfers | `transactions.csv` |
 | Gas-funding that betrays control of a "non-custodial" wallet | `gas_funding.csv` |
-| Withdrawal remarks naming the true controller | `transactions.csv` |
+| Free-text tells naming the true controller — a withdrawal remark, and a customer address-book label | `transactions.csv`, `address_book.csv` |
 | A licensed-trust RFI narrative contradicted by the evidence | `rfi.csv` + `ground_truth.json` |
 | A recidivist account that cleared prior "retain & monitor" reviews | `accounts.csv` |
 | An "internal account, do-not-block" red-herring tag | `accounts.csv` |

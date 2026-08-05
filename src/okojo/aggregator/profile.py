@@ -79,7 +79,11 @@ def _transaction_events(conn: Connectors, subject: Record) -> list[TimelineEvent
             if tx["tx_id"] in seen:
                 continue
             seen.add(tx["tx_id"])
-            remark = f' — remark: "{tx["remark"]}"' if tx.get("remark") else ""
+            # A remark is the exchange's INTERNAL record of the movement (a
+            # customer reference / ops note) — never on-chain data (a TRC-20
+            # transfer has no memo). Labelled so the reader never mistakes it for
+            # chain data.
+            remark = f' — remark (internal record): "{tx["remark"]}"' if tx.get("remark") else ""
             structured = " [structured round-number]" if tx["is_structured_round_number"] else ""
             events.append(TimelineEvent(
                 timestamp=str(tx["timestamp"]),

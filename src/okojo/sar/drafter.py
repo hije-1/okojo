@@ -58,9 +58,21 @@ def _tells_in_closure(
         for n in expansion.graph.nodes if str(n).startswith("addr:")
     }
     tx_refs = {t["tx_id"]: (t["from_ref"], t["to_ref"]) for t in conn.all_transactions()}
+    # Address-book tells have no transaction; their closure membership is the
+    # saved address, plus every address the saving customer controls. This
+    # reproduces exactly the closure refs the pre-redesign chain transaction
+    # carried (its {controller_wallet, saved_address} endpoints), so the tell
+    # surfaces in the same subjects' SARs as before the model change.
+    abk: dict[str, tuple[str, ...]] = {}
+    for e in conn.address_book():
+        controlled = tuple(str(a["address"]) for a in conn.addresses_for(int(e["uid"])))
+        abk[str(e["entry_id"])] = (str(e["address"]),) + controlled
     kept: list[RemarkTell] = []
     for hit in tells:
-        refs = tx_refs.get(hit.tx_id, ())
+        if hit.source_kind == "address_book":
+            refs = abk.get(hit.tx_id, ())
+        else:
+            refs = tx_refs.get(hit.tx_id, ())
         if any(r in acct_refs or r in addrs for r in refs):
             kept.append(hit)
     return kept
@@ -241,15 +253,32 @@ def build_sar(
     # than the subject, the claim SAYS so — citing a network member's evidence
     # is legitimate investigative practice, but the reader must be able to
     # tell whose evidence it is from the claim text alone.
+    abk_owner = {
+        str(e["entry_id"]): (int(e["uid"]), str(e["address"]))
+        for e in conn.address_book()
+    }
     for hit in _tells_in_closure(conn, expansion, tells)[:max_tells]:
-        attribution = _tx_attribution(conn, hit.tx_id, profile.subject_uid)
-        claims.append(SarClaim(
-            element="tell",
-            statement=(
+        if hit.source_kind == "address_book":
+            owner_uid, saved_addr = abk_owner.get(hit.tx_id, (None, ""))
+            who = ""
+            if owner_uid is not None and owner_uid != profile.subject_uid:
+                acct = conn.get_account(owner_uid)
+                who = (f" saved by linked account uid {owner_uid} "
+                       f"({acct['entity_name'] if acct else ''})")
+            elif owner_uid == profile.subject_uid:
+                who = " saved by the subject"
+            statement = (
+                f'A customer-saved address-book label ("{hit.remark}"){who} for '
+                f'address {saved_addr} surfaces a possible attribution tell: {hit.note}.'
+            )
+        else:
+            attribution = _tx_attribution(conn, hit.tx_id, profile.subject_uid)
+            statement = (
                 f'A remark on {hit.tx_id}{attribution} surfaces a possible '
                 f'attribution tell ("{hit.remark}"): {hit.note}.'
-            ),
-            provenance=[hit.provenance],
+            )
+        claims.append(SarClaim(
+            element="tell", statement=statement, provenance=[hit.provenance],
         ))
 
     # ADVISORY — regulatory grounding + the SAR key term to cite. The match's

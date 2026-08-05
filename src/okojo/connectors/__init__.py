@@ -140,11 +140,22 @@ class Connectors:
         )
 
     # -- transactions / remarks / gas -------------------------------------- #
+    # The default transaction accessors return the FLOW/VALUE ledger — exchange
+    # records (uid: legs) and self-hosted chain records — and EXCLUDE hot-wallet
+    # settlement legs (the on-chain shadow of an already-counted withdrawal;
+    # ``settled_by`` non-empty). The omnibus hot wallet has no customer in-edges,
+    # so its legs would only add plumbing to every flow/exposure/graph walk; kept
+    # out here, once, so every downstream consumer reasons over each value
+    # movement exactly once. Use :meth:`settlement_legs` for the shadows.
+    _FLOW_ONLY = "COALESCE(settled_by, '') = ''"
+
     def transactions_touching(self, ref: str) -> list[Record]:
-        """Transactions where ``ref`` (a ``uid:...`` or an address) is either side."""
+        """Flow transactions where ``ref`` (a ``uid:...`` or an address) is either
+        side (settlement shadows excluded)."""
         return self._records(
             "transactions",
-            "SELECT * FROM transactions WHERE from_ref = ? OR to_ref = ? ORDER BY timestamp",
+            f"SELECT * FROM transactions WHERE (from_ref = ? OR to_ref = ?) "
+            f"AND {self._FLOW_ONLY} ORDER BY timestamp",
             [ref, ref],
             lambda r: r["tx_id"],
         )
@@ -153,9 +164,31 @@ class Connectors:
         return self.transactions_touching(f"uid:{uid}")
 
     def all_transactions(self) -> list[Record]:
+        """The flow/value ledger (settlement shadows excluded)."""
         return self._records(
-            "transactions", "SELECT * FROM transactions ORDER BY timestamp", [],
+            "transactions",
+            f"SELECT * FROM transactions WHERE {self._FLOW_ONLY} ORDER BY timestamp", [],
             lambda r: r["tx_id"],
+        )
+
+    def settlement_legs(self) -> list[Record]:
+        """The hot-wallet on-chain settlement legs (``settled_by`` -> the exchange
+        record each settles). Plumbing, not flow — every customer withdrawal
+        settles FROM the omnibus hot wallet, never a customer address."""
+        return self._records(
+            "transactions",
+            "SELECT * FROM transactions WHERE COALESCE(settled_by, '') <> '' ORDER BY tx_id",
+            [],
+            lambda r: r["tx_id"],
+        )
+
+    def address_book(self) -> list[Record]:
+        """Customer saved/whitelisted withdrawal addresses + their customer-typed
+        labels — the only non-transaction home for customer free text (chain
+        records never carry a remark). Fed to the Tell Miner alongside remarks."""
+        return self._records(
+            "address_book", "SELECT * FROM address_book ORDER BY entry_id", [],
+            lambda r: r["entry_id"],
         )
 
     def remarks(self) -> list[Record]:

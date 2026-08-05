@@ -88,6 +88,11 @@ class GroundingResolver:
         # them), a superset for the sweep.
         add(conn.kyc_identity_attributes())
         add(conn.designation_identifiers())
+        # The address book: a tell mined off a customer's saved-address label
+        # cites its address-book entry (customer free text lives here, not on a
+        # memo-less chain transfer). One membership definition — inert for every
+        # claim that cites a transaction remark, additive for address-book tells.
+        add(conn.address_book())
         self._valid = valid
 
     def resolves(self, prov: Provenance) -> bool:

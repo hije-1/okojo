@@ -75,6 +75,7 @@ from .models import (
     Account,
     Acknowledgment,
     Address,
+    AddressBookEntry,
     AdminHold,
     BeneficialOwnership,
     Designation,
@@ -117,6 +118,15 @@ _KYC_EMITTED_ARTIFACTS = {
 
 _BASE58 = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
 _HEX = "0123456789abcdef"
+
+# The single omnibus exchange hot wallet (Q5). Every customer withdrawal settles
+# on-chain FROM here — never from a customer-attributed address (binding domain
+# constraint). Bound to the exchange, never a customer (controller_uid=None). A
+# fixed synthetic literal (the CP/geo precedent — no rng draw), TRX-shaped only.
+# It has no customer in-edges, so it can never launder reachability between
+# customers; its settlement legs are excluded from the flow/exposure ledger.
+_HOT_WALLET_ADDR = "THotWalletOmnibusSettlement0000001"
+_HOT_WALLET_LABEL = "exchange-hot-wallet"
 
 
 # --------------------------------------------------------------------------- #
@@ -752,6 +762,12 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         addresses.append(Address(addr, "TRX", key_to_uid["KINGPIN"], "non-custodial-hop", False))
         address_controllers[addr] = key_to_uid["KINGPIN"]
 
+    # The omnibus exchange hot wallet: the on-chain SOURCE of every withdrawal
+    # settlement (see _HOT_WALLET_ADDR). No controller uid (bound to the exchange,
+    # never a customer); not sanctioned. Emitted once; the settlement legs that
+    # cite it are appended at the very end of generation.
+    addresses.append(Address(_HOT_WALLET_ADDR, "TRX", None, _HOT_WALLET_LABEL, False))
+
     # ---- gas-funding pattern --------------------------------------------- #
     # KINGPIN's wallet funds the gas of the "non-custodial" hops — the tell.
     gas_funds: list[GasFund] = [GasFund(controller_addr["KINGPIN"], h) for h in hop_addrs]
@@ -760,11 +776,23 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     txs: list[Transaction] = []
     structured_tx_ids: list[str] = []
     betraying_remarks: list[dict] = []
+    address_book: list[AddressBookEntry] = []
     tx_counter = 0
 
     def _tx(from_ref, to_ref, amount, remark, direction, structured=False) -> Transaction:
         nonlocal tx_counter
         tx_counter += 1
+        # Record kind is definitional: a uid: leg is the exchange's internal
+        # record (may carry a remark); an address->address leg is a chain record
+        # (never a remark — a TRC-20 transfer has no memo). Invariant #1 enforced
+        # here at generation, so no chain row can ever carry free text.
+        record_kind = "exchange" if str(from_ref).startswith("uid:") else "chain"
+        if record_kind == "chain" and remark:
+            raise ValueError(
+                f"chain record {from_ref}->{to_ref} may not carry a remark "
+                f"(got {remark!r}); customer free text lives on exchange records "
+                "or the address book, never on a memo-less chain transaction."
+            )
         t = Transaction(
             tx_id=f"SIMTX{tx_counter:06d}",
             from_ref=from_ref,
@@ -775,6 +803,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             remark=remark,
             is_structured_round_number=structured,
             direction=direction,
+            record_kind=record_kind,
         )
         txs.append(t)
         return t
@@ -788,20 +817,43 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             _tx(f"uid:{key_to_uid[key]}", controller_addr["TRUST"], STRUCTURED_AMOUNT, "trade settlement", "withdrawal", structured=True)
             structured_tx_ids.append(txs[-1].tx_id)
 
-    # trust -> non-custodial hops (KINGPIN-controlled), one remark betrays control
+    # trust -> non-custodial hops (KINGPIN-controlled). These are self-hosted
+    # chain movements (address -> address) and carry NO remark — a TRC-20
+    # transfer has no memo. The betraying "aggregation wallet" / "client custody"
+    # tells live on the trust's ADDRESS BOOK (customer-typed labels for hop[0] /
+    # hop[1]), built below; the flow the exposure walk needs is unchanged. The
+    # rng.uniform draw is kept so amounts/timestamps regenerate byte-identically.
     for i, h in enumerate(hop_addrs):
-        remark = "aggregation wallet" if i == 0 else ("client custody" if i == 1 else "")
-        t = _tx(controller_addr["TRUST"], h, rng.uniform(3.0e6, 9.0e6), remark, "onchain")
-        if i == 0:
-            betraying_remarks.append({"tx_id": t.tx_id, "address": h, "reveals": "aggregation wallet — not a client address", "controller_uid": key_to_uid["KINGPIN"]})
+        _tx(controller_addr["TRUST"], h, rng.uniform(3.0e6, 9.0e6), "", "onchain")
+
+    # The trust's ADDRESS BOOK: customer-typed labels the trust saved for two of
+    # the "non-custodial" hops. This is where the "aggregation wallet" / "client
+    # custody" tells now live (Q2 ruling: customer address-book labels, not
+    # fabricated exchange rows) — realistic customer free text off-chain, mined by
+    # the Tell Miner alongside transaction remarks. Deterministic ids/timestamp,
+    # no rng draw. The "aggregation wallet" label still reveals the true
+    # controller (KINGPIN behind the "non-custodial" hop), so its betraying-remark
+    # gold re-points here (from a tx_id to the address-book entry_id); "client
+    # custody" is a mined+displayed tell, not a gold betraying_remark (unchanged).
+    _abk_ts = f"{SIM_START.isoformat()}T00:00:00"
+    address_book.append(AddressBookEntry(
+        entry_id="ABK-0001", uid=key_to_uid["TRUST"], address=hop_addrs[0],
+        label="aggregation wallet", created_ts=_abk_ts))
+    address_book.append(AddressBookEntry(
+        entry_id="ABK-0002", uid=key_to_uid["TRUST"], address=hop_addrs[1],
+        label="client custody", created_ts=_abk_ts))
+    betraying_remarks.append({
+        "tx_id": "ABK-0001", "source_kind": "address_book", "address": hop_addrs[0],
+        "reveals": "aggregation wallet — not a client address",
+        "controller_uid": key_to_uid["KINGPIN"]})
 
     # employee funds a hop and labels it with the controller's nickname (betrayal)
     t = _tx(f"uid:{key_to_uid['EMPLOYEE']}", hop_addrs[1], 27_000_000, f"{emp_nick} wallet", "withdrawal")
-    betraying_remarks.append({"tx_id": t.tx_id, "address": hop_addrs[1], "reveals": f'remark "{emp_nick} wallet" names the true controller', "controller_uid": key_to_uid["EMPLOYEE"]})
+    betraying_remarks.append({"tx_id": t.tx_id, "source_kind": "transaction", "address": hop_addrs[1], "reveals": f'remark "{emp_nick} wallet" names the true controller', "controller_uid": key_to_uid["EMPLOYEE"]})
 
     # an "aggregation fee - partner share" remark (an off-book fee-skim tell)
     t = _tx(f"uid:{key_to_uid['RECIDIVIST']}", controller_addr["SHELL_CN"], 4_850_000, "aggregation fee - partner share", "withdrawal")
-    betraying_remarks.append({"tx_id": t.tx_id, "address": controller_addr["SHELL_CN"], "reveals": "remark references an off-book aggregation fee-share arrangement", "controller_uid": key_to_uid["RECIDIVIST"]})
+    betraying_remarks.append({"tx_id": t.tx_id, "source_kind": "transaction", "address": controller_addr["SHELL_CN"], "reveals": "remark references an off-book aggregation fee-share arrangement", "controller_uid": key_to_uid["RECIDIVIST"]})
 
     # hops -> sanctioned endpoints (direct sanctioned exposure)
     sanctioned_exposure_tx_ids: list[str] = []
@@ -815,14 +867,25 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     layering_tx_ids: list[str] = []
     for _ in range(3):
         amt = rng.uniform(1.0e6, 2.0e6)
-        t1 = _tx(controller_addr["TRUST"], controller_addr["SHELL_NZ"], amt, "internal transfer", "onchain")
-        t2 = _tx(controller_addr["SHELL_NZ"], controller_addr["TRUST"], amt * rng.uniform(0.985, 0.999), "internal transfer", "onchain")
+        # Self-hosted chain records (address -> address): no remark. Layering is
+        # detected on the near-equal bidirectional AMOUNTS, never on free text.
+        t1 = _tx(controller_addr["TRUST"], controller_addr["SHELL_NZ"], amt, "", "onchain")
+        t2 = _tx(controller_addr["SHELL_NZ"], controller_addr["TRUST"], amt * rng.uniform(0.985, 0.999), "", "onchain")
         layering_tx_ids.extend([t1.tx_id, t2.tx_id])
 
-    # noise transactions
+    # noise transactions. Each is a customer moving funds out to an external
+    # address (a uid: leg -> address), so all are exchange withdrawals (Q4:
+    # outbound noise modeled as withdrawals; full inbound-deposit modeling stays
+    # out of scope). The direction draw is kept — consumed but overridden — so
+    # every downstream byte stays identical to the pre-redesign RNG stream.
     noise_uids = [a.uid for a in accounts if a.role_in_ring == "noise"]
     for _ in range(30):
-        _tx(f"uid:{rng.choice(noise_uids)}", _tron_addr(rng), rng.uniform(50, 5000), rng.choice(["", "savings", "payment", "trade"]), rng.choice(["deposit", "withdrawal"]))
+        _nuid = rng.choice(noise_uids)
+        _naddr = _tron_addr(rng)
+        _namt = rng.uniform(50, 5000)
+        _nremark = rng.choice(["", "savings", "payment", "trade"])
+        rng.choice(["deposit", "withdrawal"])   # draw preserved for byte-identity; outbound noise is a withdrawal
+        _tx(f"uid:{_nuid}", _naddr, _namt, _nremark, "withdrawal")
 
     # ---- registration-date coherence pass (RNG-free) ---------------------- #
     # registration_date was drawn independently of the activity above, which
@@ -1820,12 +1883,17 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     for key, _name, dealings, _ac, _pa in _CP_PERSONAS:
         for i, dt in enumerate(dealings):
             tx_counter += 1
+            # A customer PAYMENT to the counterparty's service address (a uid: leg
+            # -> external address): an exchange withdrawal/payment (Q4), not an
+            # inbound deposit. Its flow edge (uid -> cp_addr) is unchanged, so
+            # DES-2026-0009 exposure is byte-identical (verified by test).
             txs.append(Transaction(
                 tx_id=f"SIMTX{tx_counter:06d}",
                 from_ref=f"uid:{cp_uid[key]}", to_ref=_CP_ADDRS[0],
                 amount_usdt=round(25_000.0 + i, 2), network="TRX",
                 timestamp=f"{dt}T10:00:00", remark="",
-                is_structured_round_number=False, direction="deposit",
+                is_structured_round_number=False, direction="withdrawal",
+                record_kind="exchange",
             ))
 
     # True DES-0009 exposure, recomputed now that the counterparty transactions
@@ -2008,6 +2076,27 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "coverage_declared_not_ingested_regimes": ["SYN-UN-CONSOLIDATED"],
     }
 
+    # ---- on-chain settlement legs (hot-wallet chain shadows) -------------- #
+    # Every customer withdrawal settles on-chain FROM the omnibus hot wallet
+    # (binding constraint; Q6: emit a shadow for ALL withdrawals). Appended AFTER
+    # all gold is frozen and after the current max SIMTX id (Q3), so no existing
+    # tx_id renumbers and no answer key sees these rows. They are pure settlement
+    # plumbing: excluded from the flow/exposure ledger (the connectors' default
+    # transaction accessors filter them out via ``settled_by``), so every exposure
+    # set, hop count, and dollar figure is byte-identical by construction. RNG-free
+    # (fields copied from the exchange record each settles).
+    for _ex in [t for t in txs if t.record_kind == "exchange"]:
+        tx_counter += 1
+        _shadow = Transaction(
+            tx_id=f"SIMTX{tx_counter:06d}",
+            from_ref=_HOT_WALLET_ADDR, to_ref=_ex.to_ref,
+            amount_usdt=_ex.amount_usdt, network=_ex.network, timestamp=_ex.timestamp,
+            remark="", is_structured_round_number=False, direction="onchain",
+            record_kind="chain", settled_by=_ex.tx_id,
+        )
+        _ex.settlement_ref = _shadow.tx_id
+        txs.append(_shadow)
+
     # ---- write outputs ---------------------------------------------------- #
     def _write(name: str, rows: list) -> None:
         pd.DataFrame([asdict(r) for r in rows]).to_csv(out_dir / name, index=False)
@@ -2038,6 +2127,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     _write("device_timezones.csv", device_timezones)
     _write("kyc_artifact_validity.csv", kyc_artifact_validity)
     _write("acknowledgments.csv", acknowledgments)
+    _write("address_book.csv", address_book)
 
     # RFI: flatten claims to JSON string for the CSV, and keep a rich JSON too
     pd.DataFrame(
@@ -2101,5 +2191,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "counterparty_personas": len(_CP_PERSONAS),
         "counterparty_exposed_uids": len(counterparty_exposed_uids),
         "acknowledgments": len(acknowledgments),
+        "address_book_entries": len(address_book),
+        "settlement_legs": sum(1 for t in txs if t.settled_by),
     }
     return summary

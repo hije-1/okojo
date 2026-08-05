@@ -38,7 +38,13 @@ _ALIAS_THRESHOLD = 88
 
 
 class RemarkTell(BaseModel):
+    # ``tx_id`` is the SOURCE record id: a transaction ``tx_id`` for a remark
+    # mined off an exchange record, or an address-book ``entry_id`` for a label
+    # mined off a customer's saved-address label. ``source_kind`` disambiguates
+    # so callers attribute and cite it correctly (a chain transfer has no memo —
+    # customer free text lives on exchange records or the address book).
     tx_id: str
+    source_kind: str = "transaction"   # "transaction" | "address_book"
     remark: str
     category: str          # "illicit_phrase" | "control_alias"
     matched_terms: list[str]
@@ -66,12 +72,14 @@ def mine_remarks(
         aliases = bb.distinctive_name_tokens()
 
     hits: list[RemarkTell] = []
-    for tx in conn.remarks():
-        remark = str(tx["remark"])
-        low = remark.lower()
-        words = [w for w in (t.strip(".,").lower() for t in remark.split()) if len(w) >= 4]
 
-        # illicit / control phrases — fuzzy partial match against the whole remark
+    def _mine_text(source_id: str, source_kind: str, text: str, provenance: Provenance) -> None:
+        """Match one free-text string (a transaction remark or an address-book
+        label) against the signal phrases and the control aliases."""
+        low = text.lower()
+        words = [w for w in (t.strip(".,").lower() for t in text.split()) if len(w) >= 4]
+
+        # illicit / control phrases — fuzzy partial match against the whole text
         matched_phrases: list[str] = []
         best_phrase = 0.0
         for ph in phrases:
@@ -81,10 +89,11 @@ def mine_remarks(
                 best_phrase = max(best_phrase, s)
         if matched_phrases:
             hits.append(RemarkTell(
-                tx_id=tx["tx_id"], remark=remark, category="illicit_phrase",
-                matched_terms=matched_phrases, score=round(best_phrase, 1),
+                tx_id=source_id, source_kind=source_kind, remark=text,
+                category="illicit_phrase", matched_terms=matched_phrases,
+                score=round(best_phrase, 1),
                 note="; ".join(phrases[ph] for ph in matched_phrases),
-                provenance=tx.provenance,
+                provenance=provenance,
             ))
 
         # control aliases — fuzzy whole-word match (catches nicknames/translit.)
@@ -99,10 +108,19 @@ def mine_remarks(
                     break
         if matched_aliases:
             hits.append(RemarkTell(
-                tx_id=tx["tx_id"], remark=remark, category="control_alias",
-                matched_terms=sorted(set(matched_aliases)), score=round(best_alias, 1),
+                tx_id=source_id, source_kind=source_kind, remark=text,
+                category="control_alias", matched_terms=sorted(set(matched_aliases)),
+                score=round(best_alias, 1),
                 note="remark names a known case entity - possible controller attribution",
-                provenance=tx.provenance,
+                provenance=provenance,
             ))
+
+    # (a) exchange-record remarks (a memo-less chain transfer never carries one).
+    for tx in conn.remarks():
+        _mine_text(str(tx["tx_id"]), "transaction", str(tx["remark"]), tx.provenance)
+    # (b) customer address-book labels — the only non-transaction home for
+    # customer free text (Q2 ruling). Mined with the identical phrase/alias logic.
+    for entry in conn.address_book():
+        _mine_text(str(entry["entry_id"]), "address_book", str(entry["label"]), entry.provenance)
 
     return hits

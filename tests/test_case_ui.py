@@ -371,28 +371,36 @@ def test_tell_author_resolves_the_remark_author_side(conn, trust_uid):
 
     tells = mine_remarks(conn, backbone=build_backbone(conn))
     tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
+    abk_by_id = {str(e["entry_id"]): e for e in conn.address_book()}
 
     subject_authored = 0
     for h in tells:
-        tx = tx_by_id[h.tx_id]
-        label, uid = _tell_author(conn, tx)
-        from_ref = str(tx["from_ref"])
-        if from_ref.startswith("uid:"):
-            # a KYC account sender resolves to itself, name + uid
-            assert uid == int(from_ref.split(":", 1)[1])
-            assert f"uid {uid}" in label
+        label, uid = _tell_author(conn, h, tx_by_id)
+        if h.source_kind == "address_book":
+            # an address-book label attributes to the customer who saved it
+            entry = abk_by_id[h.tx_id]
+            assert uid == int(entry["uid"])
+            assert f"uid {uid}" in label and "saved-address label" in label
         else:
-            # an on-chain sender resolves via the address book's controller_uid
-            addr = conn.get_address(from_ref)
-            expected = addr["controller_uid"] if addr is not None else None
-            if expected is not None:
-                assert uid == int(expected)
-                assert "via address" in label
+            tx = tx_by_id[h.tx_id]
+            from_ref = str(tx["from_ref"])
+            if from_ref.startswith("uid:"):
+                # a KYC account sender resolves to itself, name + uid
+                assert uid == int(from_ref.split(":", 1)[1])
+                assert f"uid {uid}" in label
+            else:
+                # an on-chain sender resolves via the address book's controller_uid
+                addr = conn.get_address(from_ref)
+                expected = addr["controller_uid"] if addr is not None else None
+                if expected is not None:
+                    assert uid == int(expected)
+                    assert "via address" in label
         if uid == trust_uid:
             subject_authored += 1
 
-    # The default subject (the trust) authored at least one tell via its
-    # controller wallet — so the subject-marker path is genuinely exercised.
+    # The default subject (the trust) authored at least one tell — its saved
+    # "aggregation wallet" / "client custody" address-book labels — so the
+    # subject-marker path is genuinely exercised.
     assert subject_authored >= 1
 
 
@@ -406,15 +414,21 @@ def test_tells_scope_marker_tracks_remark_author_p8g(case_app, conn, trust_uid):
     'the scope marker must track the remark-author side, not all rows'.
     """
     from app.streamlit_app import _tell_author
+    from okojo.entity import build_backbone
+    from okojo.remarks.miner import mine_remarks
 
     assert not case_app.exception
     df = _tells_df(case_app)
 
-    # Independently recompute which tells the default subject authored.
+    # Independently recompute which tells the default subject authored. Resolve
+    # each rendered row via its source record (transaction OR address-book
+    # label), the same author logic the table uses.
     tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
+    tell_by_id = {h.tx_id: h for h in mine_remarks(conn, backbone=build_backbone(conn))}
     expected = {
         tx_id for tx_id in df["tx_id"]
-        if _tell_author(conn, tx_by_id.get(tx_id))[1] == trust_uid
+        if tx_id in tell_by_id
+        and _tell_author(conn, tell_by_id[tx_id], tx_by_id)[1] == trust_uid
     }
     assert expected, "the default subject authors ≥1 tell (else the check is vacuous)"
 

@@ -34,7 +34,11 @@ def test_hits_carry_provenance_terms_and_score(conn):
     hits = mine_remarks(conn)
     assert hits
     for h in hits:
-        assert h.provenance.source == "transactions"
+        # Tells are mined off exchange-record remarks AND customer address-book
+        # labels (the two homes for customer free text; a memo-less chain
+        # transfer has neither). Provenance must cite whichever it came from.
+        assert h.provenance.source in ("transactions", "address_book")
+        assert (h.provenance.source == "address_book") == (h.source_kind == "address_book")
         assert h.matched_terms
         assert 0 < h.score <= 100
 
