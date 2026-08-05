@@ -71,13 +71,13 @@ exhaustive, test-guarded inventory.
 
 | Module | Purpose | Key public symbols |
 | --- | --- | --- |
-| `src/okojo/config.py` | Global constants and the deterministic seed the whole synthetic world regenerates from. | `SEED`, `SIM_START`, `SIM_END`, `SYNTHETIC_DIR`, `RING_JURISDICTIONS` |
+| `src/okojo/config.py` | Global constants and the deterministic seed the whole synthetic world regenerates from. | `SEED`, `SIM_START`, `SIM_END`, `SYNTHETIC_DIR`, `RING_JURISDICTIONS`, `jurisdiction_label` |
 | `src/okojo/provenance.py` | The grounding primitive — a fact bound to the record it came from. | `Provenance`, `GroundedFact` |
 | `src/okojo/eval/metrics.py` | Set-based precision / recall / F1 used by every capability eval. | `Score`, `precision`, `recall`, `f1`, `score` |
-| `src/okojo/scenario/models.py` | Typed record shapes for every synthetic table. | `Account`, `Transaction`, `Designation`, `Rfi`, `SdnEntry` (+ 23 more) |
+| `src/okojo/scenario/models.py` | Typed record shapes for every synthetic table. | `Account`, `Transaction`, `AddressBookEntry`, `Designation`, `Rfi`, `SdnEntry` (+ 23 more) |
 | `src/okojo/scenario/generator.py` | Deterministic synthetic-scenario generator (seeded; regenerates byte-identically). | `generate_scenario` |
 | `src/okojo/scenario/_fakelite.py` | Dependency-free stand-in for the Faker subset used, so the generator still runs without Faker. | `FakeLite` |
-| `src/okojo/connectors/store.py` | DuckDB-backed store presenting the synthetic CSVs as mock internal systems. | `Record`, `Store` |
+| `src/okojo/connectors/store.py` | DuckDB-backed store (queried through the `Connectors` read surface) presenting the synthetic CSVs — including `address_book.csv` — as mock internal systems. The flow/value accessors return exchange + self-hosted chain records and exclude hot-wallet settlement legs, so every downstream walk sees each value movement once. | `Record`, `Store`, `Connectors.all_transactions`, `Connectors.settlement_legs`, `Connectors.address_book` |
 | `src/okojo/bootstrap.py` | Boot hook that regenerates the (gitignored) synthetic dataset in-process on a fresh deploy; a no-op when data is already present. | `provision_scenario_dataset`, `ensure_default_scenario_dataset`, `scenario_dataset_present` |
 | `src/okojo/audit/log.py` | Append-only, hash-chained audit log + located chain verification. | `AuditLog`, `verify_records`, `ChainVerification`, `GENESIS_HASH` |
 | `src/okojo/entity/backbone.py` | One canonical, de-duplicated view of every entity in a case. | `EntityBackbone`, `Entity`, `build_backbone` |

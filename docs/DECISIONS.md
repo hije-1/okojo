@@ -504,3 +504,53 @@ ruling in §20 for v1.1.0 and later._
   section, `SECURITY.md`, and the three status surfaces state the split (v1.1.0+ =
   BSL 1.1; v1.0.0 and earlier = MIT) in calibrated terms. GitHub's license
   detector reports BSL-1.1 from this release forward.
+
+## 22. Two-record transaction data model: exchange records vs. chain records
+_Added Day 12 (2026-08-05; rides on v1.1.0, no version move). Ratifies D-079._
+
+- **The problem (a realism flaw, caught on the live demo).** The prior model was
+  one transaction row per value movement, and that single row carried both the
+  on-chain endpoints and a free-text `remark`. A live-demo review saw an on-chain
+  transfer rendered with a customer's free-text note — which a real chain transfer
+  cannot carry (a token transfer is address → address, with no memo field). The
+  one-row model had conflated two different objects: the exchange's **internal**
+  record of a customer's instruction (which legitimately carries free text) and
+  the **on-chain** settlement of it (which never does).
+- **Why the simple fix was rejected under stop-on-drift.** The obvious band-aid —
+  relabel the offending row as internal-only so it may keep its remark — was
+  proven to sever the exposure path the whole scenario turns on: the
+  shell → trust → hop → sanctioned walk depends on that movement being *on-chain*,
+  so demoting it collapsed the exposed set 8 → 3. Under the standing
+  byte-identity discipline that is a stop-and-show, not a quiet edit, so the
+  one-row route was halted and the model fixed properly instead (D-079: fix it
+  right, even across sessions, over any band-aid).
+- **The model (Option 4).** One transaction table gains a `record_kind`
+  discriminator (`"exchange"` | `"chain"`) plus settlement links (`settlement_ref`
+  / `settled_by`). Each value movement is an exchange record (a customer-attributed
+  `uid:` leg, which may carry a remark) and, where it settles on-chain, a chain
+  record (address → address, which may **never** carry a remark — enforced at
+  generation). The author supplied the binding domain constraint from operational
+  experience: customer **withdrawals settle on-chain from a single omnibus hot
+  wallet, never from a customer-attributed address**; a new hot wallet
+  (`addresses.csv`) is the source of every withdrawal settlement leg.
+- **Customer free text moves to its realistic home.** The two betraying tells that
+  used to live on chain remarks relocate to a new `address_book.csv` — the
+  customer's own saved / whitelisted-address labels, the one off-chain place such
+  text plausibly lives. `uid:TRUST` saves the two hops under the labels that give
+  it away. The Tell Miner now reads address-book labels **and** transaction
+  remarks; mined-tell count and recall are unchanged.
+- **Settlement legs are excluded from the walks, so nothing moves by construction.**
+  The connectors' flow / value accessors filter to `settled_by = ''`, so every
+  flow, exposure, and graph walk sees exactly the pre-redesign rows; the omnibus
+  hot wallet (which has no customer in-edges) would only add plumbing. New
+  withdrawal settlement legs are appended after the current max `tx_id`, so no
+  existing id renumbers. Result: every exposure set, hop count, and dollar figure
+  is preserved, and **all capability scorecards are byte-identical**. The single
+  permitted ground-truth change is enumerated: the first betraying-tell pointer
+  re-points from a transaction id to an address-book `entry_id`, gaining a
+  `source_kind`. The account-name determinism canary is untouched.
+- **Guarded going forward.** `tests/test_data_model_invariants.py` pins the model:
+  a chain record may never carry a remark, every settlement leg links back to the
+  exchange record it settles, withdrawals settle from the hot wallet, and the flow
+  accessors exclude settlement legs. The determinism guards continue to cover the
+  changed generator.

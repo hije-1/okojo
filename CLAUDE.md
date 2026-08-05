@@ -243,6 +243,30 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   keys only; account-name canary untouched); no version moved but `coverage`; no
   existing chain moved (new family). 582 green tests (1 skipped: the ST backend).
   The three status surfaces stay at **v1.1** (this rides on the release, no tag).
+- **v1.1 (two-record transaction data model + plain-language narrative): BUILT
+  (rides on v1.1.0, no tag/version move — the coverage-gap precedent).** Two
+  refinements caught on the live demo. (1) The **two-record data model** fixes the
+  memo-on-chain realism flaw: each value movement splits into the exchange's
+  internal record (a customer-attributed `uid:` leg, may carry a remark) and the
+  on-chain transaction (address→address, never a remark), tied by a `record_kind`
+  discriminator + settlement links; withdrawals settle from **one omnibus hot
+  wallet, never a customer address** (a binding domain constraint); customer free
+  text relocates to a new `address_book.csv` of saved-address labels, mined by the
+  Tell Miner alongside remarks (recall unchanged). The connectors' flow accessors
+  **exclude settlement legs**, so every flow/exposure/graph walk sees the
+  pre-redesign rows — **all capability scorecards byte-identical**, one enumerated
+  gold delta (the first betraying-tell pointer re-points to an address-book
+  `entry_id`, gaining `source_kind`). A one-row relabel was proven to sever the
+  exposure path (8→3) and halted under STOP-on-drift (DECISIONS §22 / D-079). (2) A
+  **plain-language reviewer narrative** pass (shared drafter/anomaly templates,
+  every subject): bare uids named everywhere (`uid N (Name)`), the gas funder named
+  from the address table, name-match/address-book tells as plain sentences (miner
+  jargon tags stripped), jurisdiction codes expanded on first use (`Iran (IR)` via
+  a new `config.jurisdiction_label`), and de-jargoned labels — wording/attribution
+  only, no generator/scores/audit/config moved, subject-closure property still at
+  zero. No version moved; account-name canary untouched. 588 green tests (1
+  skipped: the ST backend). The three status surfaces stay at **v1.1** (rides on
+  the release, no tag).
 - **NEXT — v1.0.0 walkthrough (Session D):** a recorded demo/walkthrough of the
   live system — the last Phase-10 item, produced as content on top of the
   release, not a status gate.

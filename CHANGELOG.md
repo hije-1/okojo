@@ -64,6 +64,39 @@ always reviews, decides, and files. All data is synthetic or public.
   the case Tells tab header reads "Tells."
 - A ™ mark on the prominent use of the Okojo name (README title, app header, and
   browser tab title).
+- **Plain-language reviewer narrative (SAR drafts + timeline anomalies).** An
+  across-the-board tightening so an investigator never has to infer who a bare
+  account id is or decode jargon. Shared-device / reused-KYC anomalies and the
+  SAR tell / how / contradiction claims now name each party outright (`uid N
+  (Name)`); the previously unnamed gas funder is named from the address table;
+  name-match and address-book tells read as plain sentences with the miner's
+  internal tag jargon stripped; jurisdiction codes expand on first use (`Iran
+  (IR)`) via a new `config.jurisdiction_label` (invented geo codes deliberately
+  have no entry and never render as a real place); and several labels are
+  de-jargoned (`High severity —`, `combined confidence`, `N finding(s) across M
+  independent source type(s)`). Wording and attribution only — no generator,
+  scores, audit, or config moved; every claim still cites only rows inside the
+  subject's evidence closure, and the grounding and calibration contracts hold.
+
+### Fixed
+- **Two-record transaction data model — the memo-on-chain realism flaw.** The
+  prior one-row model let a single on-chain transfer also carry a customer's
+  free-text remark, which a real chain transfer (address → address, no memo
+  field) cannot. Each value movement is now split into the exchange's internal
+  record (a customer-attributed `uid:` leg, which may carry a remark) and the
+  on-chain transaction (address → address, never a remark), tied by a
+  `record_kind` discriminator and settlement links. Customer withdrawals settle
+  on-chain from a single omnibus hot wallet, never a customer address; these
+  settlement legs are excluded from the flow / value / graph walks, so every
+  exposure set and dollar figure is preserved by construction. Customer free text
+  moves to its realistic home — a new customer address-book table of saved
+  withdrawal-address labels — which the Tell Miner now reads alongside
+  transaction remarks (tell recall unchanged). A one-row relabel was proven to
+  sever the exposure path (the exposed set collapsed 8 → 3) and was rejected
+  under stop-on-drift; the chosen model is byte-identical across every capability
+  scorecard, with a single enumerated ground-truth change (one betraying-tell
+  pointer re-points from a transaction to its address-book entry). The
+  account-name determinism canary is untouched.
 
 ### Notes
 - No capability version was bumped and no new ground-truth keys were added — all
