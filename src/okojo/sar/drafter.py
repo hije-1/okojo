@@ -14,10 +14,12 @@ The Critic loop and FinCEN rubric scoring arrive in Phase 4.
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from ..advisory import AdvisoryMatch
 from ..aggregator import ProfileTimeline
+from ..config import jurisdiction_label
 from ..connectors import Connectors
 from ..network import NetworkExpansion
 from ..provenance import Provenance
@@ -25,6 +27,47 @@ from ..remarks import RemarkTell
 from ..rfi import ContradictionTable
 from .schema import SarClaim, SarDraft, assert_calibrated, assert_grounded
 from .validate import assert_resolvable
+
+
+def _name_uid(conn: Connectors, uid: int) -> str:
+    """'uid N (Entity Name)' — a reviewer should never see a bare account number."""
+    acct = conn.get_account(int(uid))
+    return f"uid {uid} ({acct['entity_name']})" if acct is not None else f"uid {uid}"
+
+
+def _short_addr(addr: str) -> str:
+    return (addr[:8] + "…" + addr[-4:]) if len(addr) > 14 else addr
+
+
+def _plain_note(note: str) -> str:
+    """Strip the miner's parenthetical jargon tags (e.g. '(attribution tell)',
+    '(fee-skim tell)') so the curated rationale reads plainly in the SAR."""
+    return re.sub(r"\s*\([^)]*tell\)", "", note).strip()
+
+
+def _tx_author_uid(conn: Connectors, tx) -> Optional[int]:
+    """The account of record on the SENDING side of a transaction: a ``uid:``
+    sender directly, or an on-chain sending address resolved to its controller
+    of record in the address book. ``None`` if unresolvable."""
+    fr = str(tx["from_ref"])
+    if fr.startswith("uid:"):
+        return int(fr[4:])
+    rec = conn.get_address(fr)
+    if rec is not None and rec["controller_uid"] is not None:
+        return int(rec["controller_uid"])
+    return None
+
+
+def _accounts_named_by(conn: Connectors, matched_terms) -> list[int]:
+    """Accounts whose entity name contains a matched name-token — i.e. the
+    account(s) a control-alias remark names. Evidence-derived (the accounts
+    table), never the answer key."""
+    uids: set[int] = set()
+    for a in conn.all_accounts():
+        nm = str(a["entity_name"]).lower()
+        if any(str(t).lower() in nm for t in matched_terms):
+            uids.add(int(a["uid"]))
+    return sorted(uids)
 
 _DISCLAIMER = (
     "DRAFT — generated from synthetic data for research. A human investigator must "
@@ -76,36 +119,6 @@ def _tells_in_closure(
         if any(r in acct_refs or r in addrs for r in refs):
             kept.append(hit)
     return kept
-
-
-def _tx_attribution(conn: Connectors, tx_id: str, subject_uid: int) -> str:
-    """A short attribution clause for a transaction that is not the subject's
-    own: ' — a transaction of linked account uid N (Name)'. Empty when the
-    transaction touches the subject directly (no clause needed) or when no
-    account owner is resolvable (address-only legs)."""
-    owners: dict[int, str] = {}
-    for t in conn.transactions_touching(f"uid:{subject_uid}"):
-        if t["tx_id"] == tx_id:
-            return ""  # the subject's own transaction — nothing to attribute
-    for t in conn.all_transactions():
-        if t["tx_id"] != tx_id:
-            continue
-        for ref in (t["from_ref"], t["to_ref"]):
-            if str(ref).startswith("uid:"):
-                uid = int(str(ref)[4:])
-            else:
-                rec = conn.get_address(str(ref))
-                if rec is None or rec["controller_uid"] is None:
-                    continue
-                uid = int(rec["controller_uid"])
-            if uid != subject_uid:
-                acct = conn.get_account(uid)
-                owners[uid] = str(acct["entity_name"]) if acct else ""
-        break
-    if not owners:
-        return ""
-    named = ", ".join(f"uid {u} ({n})" for u, n in sorted(owners.items()))
-    return f" — a transaction of linked account(s) {named} —"
 
 
 def _owners_of(conn: Connectors, prov: list[Provenance]) -> set[int]:
@@ -188,13 +201,13 @@ def _attribution_note(
     outside = sorted(u for u in others if u not in net_uids)
     bits = []
     if linked:
-        bits.append(f"records of linked network account(s) {_named(linked)}")
+        bits.append(f"records of linked account(s) in the subject's network — {_named(linked)}")
     if outside:
         bits.append(
-            f"dataset-level screening context from account(s) {_named(outside)} "
-            f"outside the subject's own network"
+            f"dataset-wide screening context from {_named(outside)}, "
+            f"account(s) outside the subject's own network"
         )
-    return " Cited records include " + " and ".join(bits) + "."
+    return " This also draws on " + " and ".join(bits) + "."
 
 
 def build_sar(
@@ -214,17 +227,19 @@ def build_sar(
         element="who",
         statement=(
             f"The subject is account uid {profile.subject_uid} ({profile.subject_name}), "
-            f"a {profile.entity_type} with declared residence {profile.residence_country} "
-            f"and account status '{profile.account_status}'."
+            f"a {profile.entity_type} with declared residence "
+            f"{jurisdiction_label(profile.residence_country)} and account status "
+            f"'{profile.account_status}'."
         ),
         provenance=[subject.provenance],
     ))
 
-    # WHAT — each surfaced anomaly becomes a grounded claim.
+    # WHAT — each surfaced anomaly becomes a grounded claim. The severity leads in
+    # plain words ("High severity — ...") rather than a bracketed tag.
     for anomaly in profile.anomalies:
         claims.append(SarClaim(
             element="what",
-            statement=f"The profile flags [{anomaly.severity}] {anomaly.statement}",
+            statement=f"{anomaly.severity.capitalize()} severity — {anomaly.statement}",
             provenance=list(anomaly.provenance),
         ))
 
@@ -238,11 +253,11 @@ def build_sar(
         claims.append(SarClaim(
             element="network",
             statement=(
-                f"Network expansion from the subject surfaces "
+                f"From the subject, network expansion reaches "
                 f"{len(expansion.reached_account_uids)} linked account(s) within "
-                f"{expansion.max_hops} hop(s) and reaches "
-                f"{len(expansion.sanctioned_addresses_reached)} synthetic-sanctioned "
-                f"address(es), indicating potential downstream exposure for analyst review."
+                f"{expansion.max_hops} hop(s) and touches "
+                f"{len(expansion.sanctioned_addresses_reached)} sanctioned address(es) "
+                f"(synthetic) — potential downstream exposure for analyst review."
             ),
             provenance=[subject.provenance] + sanctioned_prov,
         ))
@@ -257,26 +272,57 @@ def build_sar(
         str(e["entry_id"]): (int(e["uid"]), str(e["address"]))
         for e in conn.address_book()
     }
+    tx_by_id = {t["tx_id"]: t for t in conn.all_transactions()}
+
+    def _name_first(uid: int) -> str:
+        acct = conn.get_account(uid)
+        return f"{acct['entity_name']} (uid {uid})" if acct is not None else f"uid {uid}"
+
+    # Parties are NAMED in prose (derivable from the cited evidence row / the
+    # accounts reference table), never cited as extra rows — so a tell claim
+    # cites only its own source row and never reaches outside the subject's
+    # evidence closure (the P1b subject-closure property). Same discipline as
+    # _attribution_note.
     for hit in _tells_in_closure(conn, expansion, tells)[:max_tells]:
         if hit.source_kind == "address_book":
             owner_uid, saved_addr = abk_owner.get(hit.tx_id, (None, ""))
-            who = ""
-            if owner_uid is not None and owner_uid != profile.subject_uid:
-                acct = conn.get_account(owner_uid)
-                who = (f" saved by linked account uid {owner_uid} "
-                       f"({acct['entity_name'] if acct else ''})")
-            elif owner_uid == profile.subject_uid:
-                who = " saved by the subject"
-            statement = (
-                f'A customer-saved address-book label ("{hit.remark}"){who} for '
-                f'address {saved_addr} surfaces a possible attribution tell: {hit.note}.'
-            )
+            if owner_uid == profile.subject_uid:
+                lead = (f'The subject saved wallet {_short_addr(saved_addr)} in its own '
+                        f'address book under the label "{hit.remark}"')
+            else:
+                lead = (f"A linked account in the subject's network — "
+                        f"{_name_uid(conn, owner_uid)}, not the subject itself — saved wallet "
+                        f'{_short_addr(saved_addr)} in its address book under the label '
+                        f'"{hit.remark}"')
+            statement = f"{lead} — {_plain_note(hit.note)}. Flagged for analyst review."
         else:
-            attribution = _tx_attribution(conn, hit.tx_id, profile.subject_uid)
-            statement = (
-                f'A remark on {hit.tx_id}{attribution} surfaces a possible '
-                f'attribution tell ("{hit.remark}"): {hit.note}.'
-            )
+            tx = tx_by_id.get(hit.tx_id)
+            author = _tx_author_uid(conn, tx) if tx is not None else None
+            if author == profile.subject_uid:
+                who_lead = "The subject"
+            elif author is not None:
+                who_lead = (f"A linked account in the subject's network — "
+                            f"{_name_uid(conn, author)}, not the subject itself —")
+            else:
+                who_lead = "A linked account in the subject's network"
+            if hit.category == "control_alias":
+                named = _accounts_named_by(conn, hit.matched_terms)
+                to_ref = str(tx["to_ref"]) if tx is not None else ""
+                named_full = ", ".join(_name_first(u) for u in named) or "a known case account"
+                named_plain = ", ".join(str(conn.get_account(u)["entity_name"])
+                                        for u in named) or "that account"
+                statement = (
+                    f'{who_lead} paid wallet {_short_addr(to_ref)} and, in its own transfer, '
+                    f'labelled that wallet "{hit.remark}", naming {named_full} as the '
+                    f"wallet's owner. This ties the receiving wallet to {named_plain} rather "
+                    f"than to the independent third party it is presented as. Flagged for "
+                    f"analyst review."
+                )
+            else:
+                statement = (
+                    f'{who_lead} labelled one of its own transfers "{hit.remark}" — '
+                    f"{_plain_note(hit.note)}. Flagged for analyst review."
+                )
         claims.append(SarClaim(
             element="tell", statement=statement, provenance=[hit.provenance],
         ))
@@ -296,7 +342,7 @@ def build_sar(
             element="advisory",
             statement=(
                 f"The subject's case text matches FinCEN Advisory {advisory.advisory_id} "
-                f"on term(s): {', '.join(advisory.matched_terms)}. FinCEN instructs filers to "
+                f"on the terms {', '.join(advisory.matched_terms)}. FinCEN instructs filers to "
                 f"reference key term {advisory.sar_key_term}.{corroboration_note}"
             ),
             provenance=list(advisory.provenance),
@@ -309,8 +355,8 @@ def build_sar(
         claims.append(SarClaim(
             element="rfi",
             statement=(
-                f"The subject's RFI response ({rfi['rfi_id']}) states funds derive from lawful "
-                "trade settlement; this assertion is surfaced alongside the above evidence for "
+                f"In RFI {rfi['rfi_id']}, the subject states its funds derive from lawful trade "
+                "settlement. This assertion is surfaced alongside the evidence above for "
                 "analyst review."
             ),
             provenance=[rfi.provenance],
@@ -328,11 +374,12 @@ def build_sar(
                 element="contradiction",
                 statement=(
                     f"RFI {contradictions.rfi_id} claim {adj.claim_id} asserts: "
-                    f'"{adj.claim_text}" The retrieved evidence is inconsistent with that '
-                    f"assertion on {len(adj.sources)} independent source(s) "
-                    f"({', '.join(adj.sources)}; evidence weight {adj.confidence:.2f}): "
-                    + " ".join(r.statement for r in adj.rebuttals)
-                    + " This contradiction is surfaced for analyst review."
+                    f'"{adj.claim_text}" {len(adj.rebuttals)} finding(s) across '
+                    f"{len(adj.sources)} independent source type(s) are inconsistent with "
+                    f"that assertion (combined confidence {adj.confidence:.2f}): "
+                    + " ".join(f"({i}) {r.statement}"
+                               for i, r in enumerate(adj.rebuttals, 1))
+                    + " Surfaced for analyst review."
                     # drafter-owned attribution: whose records the rebuttals cite
                     + _attribution_note(conn, expansion, profile.subject_uid, all_prov)
                 ),
@@ -411,7 +458,10 @@ def _where_claim(conn: Connectors, profile: ProfileTimeline) -> Optional[SarClai
     )
     return SarClaim(
         element="where",
-        statement=f"The subject declares residence in {profile.residence_country}.{geo_note}",
+        statement=(
+            f"The subject declares residence in "
+            f"{jurisdiction_label(profile.residence_country)}.{geo_note}"
+        ),
         provenance=prov,
     )
 
@@ -447,14 +497,18 @@ def _predicate_claim(
 def _how_claim(
     conn: Connectors, profile: ProfileTimeline, expansion: NetworkExpansion,
 ) -> Optional[SarClaim]:
-    """HOW — the concrete mechanism(s) evidenced (structured / gas-funding / reused-KYC)."""
+    """HOW — the concrete mechanism(s) evidenced (structured / gas-funding /
+    reused-KYC), each stated plainly and naming any party involved."""
     prov: list[Provenance] = []
-    mechs: list[str] = []
+    parts: list[str] = []
 
     struct = [t for t in conn.transactions_for_uid(profile.subject_uid)
               if t.get("is_structured_round_number")]
     if struct:
-        mechs.append("structured round-number transfers")
+        parts.append(
+            f"{len(struct)} transfer(s) to or from the subject are structured just under "
+            f"round numbers, a pattern ordinary trade settlement does not produce."
+        )
         prov.extend(t.provenance for t in struct)
 
     if expansion.gas_funding_links:
@@ -462,35 +516,47 @@ def _how_claim(
             (g["funder_address"], g["funded_address"]): g.provenance
             for g in conn.gas_funds()
         }
-        gas_ps = [
-            gas_prov[(link["funder_address"], link["funded_address"])]
-            for link in expansion.gas_funding_links
+        links = [
+            link for link in expansion.gas_funding_links
             if (link["funder_address"], link["funded_address"]) in gas_prov
         ]
-        if gas_ps:
-            mechs.append("gas-funding linkage unmasking non-custodial hops")
-            prov.extend(gas_ps)
+        if links:
+            prov.extend(gas_prov[(link["funder_address"], link["funded_address"])]
+                        for link in links)
+            # Name the controller in prose (derived from the address table); the
+            # claim cites the gas-funding rows only, staying inside closure.
+            funder_uids = sorted({
+                int(rec["controller_uid"])
+                for link in links
+                if (rec := conn.get_address(str(link["funder_address"]))) is not None
+                and rec["controller_uid"] is not None
+            })
+            named = ", ".join(_name_uid(conn, u) for u in funder_uids) or "a third-party wallet"
+            parts.append(
+                f"The 'non-custodial' hop wallet(s) the subject paid had their transaction "
+                f"fees (gas) paid by a wallet controlled by {named}, tying those supposedly "
+                f"independent hops back to that account."
+            )
 
     subject = conn.get_account(profile.subject_uid)
     kyc_id = subject.get("kyc_doc_id") if subject is not None else None
     if kyc_id:
         shared = conn.accounts_with_kyc(kyc_id)
         if len(shared) > 1:
-            mechs.append("reused KYC documentation across accounts")
+            others = ", ".join(_name_uid(conn, int(a["uid"])) for a in shared
+                               if int(a["uid"]) != profile.subject_uid)
+            parts.append(
+                f"The subject's KYC document is reused to open separate account(s) "
+                f"({others}) — the same paperwork behind supposedly distinct entities."
+            )
             prov.extend(a.provenance for a in shared)
 
     if not prov:
         return None
-    prov = _dedup(prov)
     return SarClaim(
         element="how",
-        statement=(
-            f"The activity exhibits {', '.join(mechs)} (mechanism surfaced for "
-            f"analyst review)."
-            # whose records evidence the mechanism, when not the subject's own
-            + _attribution_note(conn, expansion, profile.subject_uid, prov)
-        ),
-        provenance=prov,
+        statement="How the activity operates: " + " ".join(parts) + " Surfaced for analyst review.",
+        provenance=_dedup(prov),
     )
 
 

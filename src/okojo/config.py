@@ -30,5 +30,25 @@ RING_JURISDICTIONS: tuple[str, ...] = ("AE", "TR", "HK", "NZ", "CN")
 SANCTIONED_JURISDICTION: str = "IR"
 SANCTIONED_CITY: str = "Tehran"
 
+# Human-readable names for the jurisdiction codes the scenario uses, so
+# reviewer-facing surfaces (SAR draft, timeline) can read "Iran (IR)" rather
+# than a bare code — no guessing games. REAL codes only; invented / ISO
+# user-assigned codes (the geo territory's QZ / XV) deliberately have NO entry,
+# so they render as the bare code and never as a real place (DECISIONS D-026).
+JURISDICTION_NAMES: dict[str, str] = {
+    "AE": "United Arab Emirates", "TR": "Türkiye", "HK": "Hong Kong",
+    "NZ": "New Zealand", "CN": "China", "IR": "Iran",
+    "US": "United States", "GB": "United Kingdom", "DE": "Germany",
+    "SG": "Singapore", "BR": "Brazil", "ZA": "South Africa",
+}
+
+
+def jurisdiction_label(code: str) -> str:
+    """``"Iran (IR)"`` for a known code; the bare code otherwise. Invented codes
+    (the geo territory's QZ / XV) fall through to the code and never render as a
+    real place (DECISIONS D-026)."""
+    name = JURISDICTION_NAMES.get(str(code))
+    return f"{name} ({code})" if name else str(code)
+
 # A structured "just-under" round number typical of structuring typologies.
 STRUCTURED_AMOUNT: float = 1_999_999.0

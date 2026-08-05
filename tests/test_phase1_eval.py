@@ -21,15 +21,17 @@ def test_phase1_capability_scorecard(conn, trust_uid, ground_truth, tmp_path, ca
         uid for uids in ground_truth["shared_devices"].values()
         if trust_uid in uids for uid in uids if uid != trust_uid
     }
-    # derive the co-users the aggregator named from its shared-device statements
+    # derive the co-users the aggregator flagged from the shared-device anomaly's
+    # PROVENANCE (the device rows it cites), not its prose — the grounded, wording-
+    # independent source (device row_key is "<fingerprint>:uid:<n>").
     flagged_uids: set[int] = set()
     for a in res.profile.anomalies:
         if a.code == "shared_device_fingerprint":
-            for tok in a.statement.replace(",", " ").split():
-                if tok.startswith("uid:"):
-                    digits = tok[4:].strip(".")
-                    if digits.isdigit():
-                        flagged_uids.add(int(digits))
+            for p in a.provenance:
+                if p.source == "devices":
+                    tail = p.row_key.rsplit(":", 1)[-1]
+                    if tail.isdigit():
+                        flagged_uids.add(int(tail))
     shared_recall = (
         len(gt_shared_uids & flagged_uids) / len(gt_shared_uids) if gt_shared_uids else 1.0
     )

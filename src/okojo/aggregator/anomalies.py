@@ -14,12 +14,18 @@ from typing import Optional
 
 from pydantic import BaseModel
 
-from ..config import SANCTIONED_JURISDICTION
+from ..config import SANCTIONED_JURISDICTION, jurisdiction_label
 from ..connectors import Connectors, Record
 from ..provenance import Provenance
 
 # Share of logins that are VPN above which we flag elevated anonymisation.
 _VPN_ELEVATION_THRESHOLD = 0.30
+
+
+def _name_uid(conn: Connectors, uid: int) -> str:
+    """'uid N (Entity Name)' — so a reviewer never sees a bare account number."""
+    acct = conn.get_account(int(uid))
+    return f"uid {uid} ({acct['entity_name']})" if acct is not None else f"uid {uid}"
 
 
 class Anomaly(BaseModel):
@@ -62,8 +68,9 @@ def detect_geo_ip_mismatch(conn: Connectors, subject: Record) -> list[Anomaly]:
             code="sanctioned_jurisdiction_ip",
             severity="high",
             statement=(
-                f"{len(sanctioned_hits)} non-VPN login(s) geolocate to sanctioned jurisdiction "
-                f"{SANCTIONED_JURISDICTION}, inconsistent with declared residence {residence}."
+                f"{len(sanctioned_hits)} non-VPN login(s) came from IP addresses in "
+                f"{jurisdiction_label(SANCTIONED_JURISDICTION)}, a sanctioned jurisdiction, "
+                f"inconsistent with the declared residence of {jurisdiction_label(residence)}."
             ),
             provenance=[residence_prov] + [h.provenance for h in sanctioned_hits],
         ))
@@ -72,8 +79,8 @@ def detect_geo_ip_mismatch(conn: Connectors, subject: Record) -> list[Anomaly]:
             code="geo_ip_residence_mismatch",
             severity="medium",
             statement=(
-                f"{len(other_mismatch)} non-VPN login(s) geolocate outside declared residence "
-                f"{residence}."
+                f"{len(other_mismatch)} non-VPN login(s) came from IP addresses outside the "
+                f"declared residence of {jurisdiction_label(residence)}."
             ),
             provenance=[residence_prov] + [h.provenance for h in other_mismatch],
         ))
@@ -107,7 +114,7 @@ def detect_reused_kyc(conn: Connectors, subject: Record) -> list[Anomaly]:
     others = [r for r in sharers if r["uid"] != uid]
     if not others:
         return []
-    names = ", ".join(f"uid:{r['uid']}" for r in others)
+    names = ", ".join(_name_uid(conn, r["uid"]) for r in others)
     doc_prov = Provenance(source="kyc_docs", row_key=doc_id, detail="shared KYC document")
     return [Anomaly(
         code="reused_kyc_document",
@@ -129,12 +136,13 @@ def detect_shared_device(conn: Connectors, subject: Record) -> list[Anomaly]:
         co_users = [r for r in on_device if r["uid"] != uid]
         if not co_users:
             continue
-        names = ", ".join(f"uid:{r['uid']}" for r in co_users)
+        names = ", ".join(_name_uid(conn, r["uid"]) for r in co_users)
         out.append(Anomaly(
             code="shared_device_fingerprint",
             severity="high",
             statement=(
-                f"Device fingerprint {fp[:12]}... is shared with account(s) {names}."
+                f"the subject shares a login device (fingerprint {fp[:12]}...) with "
+                f"account(s) {names}."
             ),
             provenance=[dev.provenance] + [r.provenance for r in co_users],
         ))

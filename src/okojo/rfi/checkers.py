@@ -293,8 +293,8 @@ def check_onchain(
             out.append(Rebuttal(
                 source="onchain",
                 statement=(
-                    f"Value moved by the subject reaches a synthetic-sanctioned "
-                    f"address in {len(path)} hop(s), which the stated lawful-trade "
+                    f"Value moved by the subject reaches a sanctioned address "
+                    f"(synthetic) in {len(path)} hop(s), which the stated lawful-trade "
                     f"origin does not account for."
                 ),
                 strength=W_ONCHAIN_SANCTIONED_EXPOSURE,
@@ -326,11 +326,25 @@ def check_onchain(
             }
         ]
         if gas:
+            # Name the wallet's controller outright — no vague "third party" for a
+            # reviewer to chase. Derived from the address table; the rebuttal cites
+            # the gas-funding rows only (staying inside the subject's closure).
+            funder_uids = sorted({
+                int(rec["controller_uid"])
+                for g in gas
+                if (rec := conn.get_address(str(g["funder_address"]))) is not None
+                and rec["controller_uid"] is not None
+            })
+            named_parts = []
+            for u in funder_uids:
+                acct = conn.get_account(u)
+                named_parts.append(f"uid {u} ({acct['entity_name']})" if acct else f"uid {u}")
+            named = ", ".join(named_parts) or "a third-party wallet"
             out.append(Rebuttal(
                 source="onchain",
                 statement=(
-                    f"{len(gas)} address(es) the subject paid out to had their gas "
-                    f"funded by a third party's wallet, indicating those hops were "
+                    f"{len(gas)} wallet(s) the subject paid had their transaction fees "
+                    f"(gas) paid by a wallet controlled by {named}, so those hops were "
                     f"not independent of the network."
                 ),
                 strength=W_ONCHAIN_GAS_FUNDED_HOP,
