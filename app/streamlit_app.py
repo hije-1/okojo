@@ -1949,7 +1949,15 @@ def main() -> None:
         st.subheader("Network expansion")
         st.caption(
             "Gold ★ = subject · red ▲ = synthetic-sanctioned endpoint · orange = ring account · "
-            "blue = address. Edges: purple = shared device, green = reused KYC, red dashed = gas-funding."
+            "blue = address. Edges: purple = shared device, green = reused KYC, "
+            "solid dark-red = controls the gas-funding wallet (attribution), "
+            "red dashed = gas top-up (funder wallet → funded wallets)."
+        )
+        st.caption(
+            "Provenance: on-chain links and controller attribution are derived from "
+            "the institution's blockchain-intelligence feed (synthetic). Gas is an "
+            "address-level, native-coin (TRX) event — an exchange account cannot pay "
+            "on-chain gas; it controls the wallet that tops up the funded wallets."
         )
         expand_stop = next(
             (d for d in reversed(res.decisions) if d.decision_id == "expand_hop"),
@@ -1988,9 +1996,11 @@ def main() -> None:
             controllers = sorted({l["controller_uid"] for l in gas_links})
             who = ", ".join(f"uid {c} · {names.get(c, c)}" for c in controllers)
             st.warning(
-                f"**Gas-funding collapse** — {len(gas_links)} “non-custodial” hop(s) "
-                f"attributed to their gas funder ({who}). A wallet is not independent of "
-                "whoever pays its gas."
+                f"**Gas-funding attribution** — {len(gas_links)} “non-custodial” hop(s) "
+                f"had their on-chain gas topped up (native-coin TRX) by a wallet "
+                f"controlled by {who}. A self-hosted wallet is not independent of "
+                "whoever funds its gas — tying those supposedly independent hops back "
+                "to that controller."
             )
             gdf = pd.DataFrame([
                 {"funder_address": l["funder_address"], "funded_address": l["funded_address"],

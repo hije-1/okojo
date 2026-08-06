@@ -56,9 +56,86 @@ _EDGE_STYLE = {
     "controls": ("#cbd5e1", False),
     "shared_device": ("#7c3aed", False),
     "reused_kyc": ("#16a34a", False),
-    "gas_funding": ("#dc2626", True),  # dashed — the controller tell
-    "gas_control": ("#b91c1c", True),  # dashed — controller-collapse attribution
+    "gas_funding": ("#dc2626", True),  # dashed — the observed on-chain top-up
+    # gas_control is an INTERNAL attribution/reachability construct (account ->
+    # funded hop), never drawn: an off-chain exchange account cannot pay on-chain
+    # gas, so rendering it would draw an impossible edge. See iter_render_edges.
+    "gas_control": ("#b91c1c", True),
 }
+
+# On-chain edge types, for the render invariant: a gas top-up is a native-coin
+# (TRX) transfer settled at the address level, so it MUST originate at an on-chain
+# address, never at an account node (an off-chain ledger entry cannot pay gas).
+# Transaction edges are deliberately NOT in this set: a uid-leg transaction is the
+# exchange's internal ledger record (two-record data model), legitimately
+# account-attributed, and is not an on-chain settlement.
+_ON_CHAIN_RENDER_ETYPES = {"gas_funding"}
+
+# Emphasis style for the ONE controls edge that lands on a gas-funding wallet:
+# step 1 of the gas-funding inference (this account controls the wallet that funds
+# the hops' gas). Solid (attribution) so it reads distinctly from the dashed
+# on-chain gas observation — the "attribution vs observation" split.
+_GAS_ATTRIB_STYLE = ("#b91c1c", False)
+
+
+def iter_render_edges(graph):
+    """Yield ``(src, dst, etype, color, dashes, title)`` for every edge to DRAW.
+
+    The gas-funding inference is rendered as the real three-step chain that
+    already lives in the graph — never as the account-sourced collapse:
+
+        account  --(controls, attribution)-->  funder wallet
+                 --(gas top-up TRX, observed)-->  funded wallets
+
+    So the internal ``gas_control`` edge (account -> funded hop) is deliberately
+    NOT drawn: an off-chain exchange account cannot pay on-chain gas, and drawing
+    it would source an impossible on-chain edge at the account node. ``gas_control``
+    stays in the graph purely as a reachability/attribution construct (the account
+    still reaches the sanctioned endpoints via controls -> funder -> gas_funding),
+    so every network metric is unchanged; it simply never reaches the render.
+    """
+    funder_nodes = {
+        u for u, _, d in graph.edges(data=True) if d.get("etype") == "gas_funding"
+    }
+    for u, v, data in graph.edges(data=True):
+        etype = data.get("etype", "transaction")
+        if etype == "gas_control":
+            continue  # internal attribution construct — never rendered (see above)
+        if etype == "controls":
+            if v in funder_nodes:
+                # Step 1: the account controls the wallet that funds the hops' gas.
+                color, dashes = _GAS_ATTRIB_STYLE
+                yield u, v, etype, color, dashes, (
+                    "controls — this account controls the gas-funding wallet "
+                    "(attribution)"
+                )
+                continue
+            if graph.nodes[v].get("addr_label") == "non-custodial-hop":
+                # An account's control of a "non-custodial" hop is the HIDDEN truth
+                # the gas-funding BETRAYS — it must be shown as the inference (the
+                # funder wallet's gas top-up reaches the hop), never pre-drawn as a
+                # controls edge that asserts the conclusion and points the account
+                # straight at the hop. Suppressed from the render so the account
+                # never sources an edge to a funded hop. The control still lives in
+                # the graph (reachability/exposure unchanged); it simply is not
+                # rendered as an established fact.
+                continue
+        color, dashes = _EDGE_STYLE.get(etype, ("#8a8a8a", False))
+        title = etype
+        if etype == "gas_funding":
+            # A native-coin (TRX) top-up. On Tron a TRC-20 USDT transfer burns
+            # Energy; an unstaked address must hold TRX to pay it, so the top-up
+            # funds the receiving address's own outbound transfer. Kept
+            # qualitative — no fee constants (Tron fees are governance-mutable).
+            title = (
+                "gas top-up (TRX) — funds the Energy the receiving address burns "
+                "to send its TRC-20 USDT"
+            )
+        elif etype == "transaction" and data.get("amount") is not None:
+            title = f"transaction: {data['amount']:,.0f} USDT"
+            if data.get("remark"):
+                title += f' — "{data["remark"]}"'
+        yield u, v, etype, color, dashes, title
 
 
 def _node_style(data: dict) -> tuple[str, str, str]:
@@ -114,14 +191,7 @@ def render(expansion: NetworkExpansion, out_path: Union[str, Path], height: str 
             node_kwargs["color"] = color
         net.add_node(nid, label=str(data.get("label", nid)), shape=shape, title=title, **node_kwargs)
 
-    for u, v, data in expansion.graph.edges(data=True):
-        etype = data.get("etype", "transaction")
-        color, dashes = _EDGE_STYLE.get(etype, ("#8a8a8a", False))
-        title = etype
-        if etype == "transaction" and data.get("amount") is not None:
-            title = f"transaction: {data['amount']:,.0f} USDT"
-            if data.get("remark"):
-                title += f' — "{data["remark"]}"'
+    for u, v, _etype, color, dashes, title in iter_render_edges(expansion.graph):
         net.add_edge(u, v, color=color, dashes=dashes, title=title)
 
     # NB: pyvis's own write_html opens the file with the platform locale codec
