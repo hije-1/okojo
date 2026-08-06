@@ -97,6 +97,19 @@ always reviews, decides, and files. All data is synthetic or public.
   scorecard, with a single enumerated ground-truth change (one betraying-tell
   pointer re-points from a transaction to its address-book entry). The
   account-name determinism canary is untouched.
+- **Gas-funding rendered at the address level (network-graph realism).** The
+  network graph collapsed the gas-funding inference onto the subject's
+  exchange-account node — drawing edges from the account to the funded
+  "non-custodial" wallets, which is impossible: gas is paid at the address level
+  in native coin, and an off-chain custodial account cannot pay on-chain gas for
+  a self-hosted wallet. The graph now renders the inference as three cited
+  steps — the account *controls* the funder wallet (attribution), and the funder
+  wallet *tops up* the funded wallets' gas (an observed native-coin TRX
+  transfer) — with the account never sourcing an on-chain edge and the
+  attribution edge visually distinct from the gas observation. Render-only: the
+  underlying data was already address → address, so every network metric,
+  exposure set, and capability scorecard is byte-identical, and the account-name
+  determinism canary is untouched.
 
 ### Notes
 - No capability version was bumped and no new ground-truth keys were added — all
