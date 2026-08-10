@@ -301,7 +301,8 @@ _WT_SWEEP = {
     ),
     "geo": (
         "Walkthrough. This check runs when a designation names a territory, "
-        "where there is no name list to screen. The system weighs location "
+        "where there is no name list to screen. Qazrun Free Zone is a fictional "
+        "territory, invented for this scenario. The system weighs location "
         "signals account by account: logins, documents, addresses, declared "
         "residence. With DES-2026-0008 selected, expand both accounts shown. "
         "One carries six signals pointing into the territory and draws a "
@@ -329,7 +330,9 @@ _WT_SWEEP = {
         "The customer base is mapped three ways — residence, document-issuing "
         "country, nationality — and compared against the enabled list sources. "
         "The findings: jurisdictions the customer base touches with no list "
-        "coverage, and list sources declared but not ingested. The assessment "
+        "coverage, and list sources declared but not ingested. XV is a fictional "
+        "jurisdiction code, invented for this scenario so the assessment has a "
+        "genuine gap to surface. The assessment "
         "writes its own hash-chained audit trail, shown below the findings."
     ),
     "audit": (
