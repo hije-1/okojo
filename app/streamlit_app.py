@@ -119,6 +119,250 @@ _ROLE_LABEL = {
     "noise": "Ordinary",
 }
 
+# ---------------------------------------------------------------------------- #
+# Guided walkthrough — a display-only narrative layer over both modes.
+#
+# A sidebar toggle (ON by default) shows a fixed, Jennifer-approved narrative
+# band at the top of every tab, plus a mode intro above each tab bar. The ONLY
+# behaviour this layer adds is the toggle: no computed value, pipeline call,
+# audit write, or data read happens here. The prose is FROZEN — it is rendered
+# verbatim and must never be reworded here. It leads with its own "Walkthrough"
+# / "Guided walkthrough" label, so the band needs no separate label chip. Blue
+# is chrome-only in this app (see the semantic-colour note above), and the
+# walkthrough is chrome — so the band's blue accent carries no data meaning.
+# ---------------------------------------------------------------------------- #
+_WT_KEY = "guided_walkthrough"
+
+_WT_CASE_INTRO = (
+    "Guided walkthrough. Okojo is a research prototype: an agentic co-pilot "
+    "that prepares a financial-crime investigation for a human decision-maker. "
+    "It assembles evidence, tests it, drafts the report, and records every step "
+    "on a tamper-evident log. Work the tabs left to right. A subject is already "
+    "selected. Everything shown is fully synthetic: every person, company, "
+    "account, and address was generated for this demonstration, and nothing "
+    "done here files anything. This guide can be turned off in the sidebar."
+)
+
+_WT_CASE = {
+    "timeline": (
+        "Walkthrough — start here. The subject's activity as one chronological "
+        "narrative: account events, logins, and transactions in the order they "
+        "occurred. What matters here is the sequence — the anomalies pinned at "
+        "the exact moments they happened, with surrounding activity visible "
+        "around them. The flagged items at the top are the reason this case "
+        "exists; each is also shown inline, in context. Every row carries a "
+        "source pointer. That rule holds across the entire system: nothing is "
+        "asserted without the record behind it."
+    ),
+    "network": (
+        "Walkthrough. The subject expanded into its cluster. The graph draws "
+        "every connection type the evidence supports: shared login devices, "
+        "reused KYC documents, transactions with their amounts, controls links "
+        "between an account and its wallets, and gas funding between wallets. "
+        "Hover over any arrow — each one states what it represents and cites the "
+        "record behind it; hover a node for its role in the cluster. The "
+        "on-chain connections, transfers and gas funding, represent a "
+        "hypothetical ingestion of external blockchain intelligence, generated "
+        "synthetically for this demonstration. On gas funding specifically: a "
+        "wallet must hold TRX, the Tron network's native coin, to transact, so "
+        "one wallet supplying TRX to several others is a recorded on-chain "
+        "funding pattern. The attribution step and the on-chain transfers are "
+        "drawn as separate connections, each inspectable."
+    ),
+    "sanctions": (
+        "Walkthrough. The top section is this subject's own screening posture. "
+        "The headline states whether the subject matches any designation name, "
+        "variant, or designated address — here, No designation match. The "
+        "entries labeled Fund-flow exposure directly beneath it record a "
+        "separate fact: this subject's funds reach designated parties even "
+        "though its name matches nothing, each entry stating the designation, "
+        "the list type, timing, the tainted amount, and its source records. The "
+        "territory line and the network notices complete the posture: location "
+        "signals, and hits elsewhere in the subject's cluster rather than on the "
+        "subject itself. Below that, the screens run ledger-wide: every account "
+        "name fuzzy-matched against the designation list, and every account's "
+        "graded on-chain exposure. Expand \"show the math\" under either one — "
+        "each match score and exposure grade decomposes into named factors you "
+        "can check. To see the name screen resolve differently, switch the "
+        "subject in the sidebar to Evgenii Zhukovsky and return to this tab; a "
+        "transliterated spelling that exact matching misses resolves, with "
+        "corroboration, to a designation match. Switch the subject back "
+        "afterward."
+    ),
+    "tells": (
+        "Walkthrough. Customer free text is mined as evidence. This screen "
+        "reads every remark and saved-address label in the dataset, not only "
+        "this subject's, and surfaces phrases that match case entities and "
+        "known typologies. Each tell is attributed to the person who wrote it "
+        "and cites the record it came from. The two rows marked as this "
+        "subject's own come from its address book: saved wallets labeled "
+        "\"aggregation wallet\" and \"client custody.\" Customer-typed text has "
+        "two homes in this system — payment remarks on exchange records and "
+        "saved-address labels — and both are screened."
+    ),
+    "rfi": (
+        "Walkthrough. The customer's written response to the institution's "
+        "questions. The checker decomposes the response into individual factual "
+        "claims and tests each against the records: the corporate registry, the "
+        "customer's prior answers, the ledger, the device data. Expand claim "
+        "C2, the assertion of no relationship with the other company. Three "
+        "sources contradict it, and each rebuttal shows its evidence: the "
+        "registry names a shared director, the customer's own earlier answer "
+        "differs, and the ledger shows transfers in both directions. The "
+        "checker proposes findings for review. It does not declare verdicts."
+    ),
+    "advisory": (
+        "Walkthrough. Regulators publish advisories describing specific "
+        "typologies. This tab matches the case text against them: terms from "
+        "the subject's own written answer, petroleum and bitumen among them, "
+        "align with a published FinCEN advisory, corroborated by structured "
+        "signals shown on screen. The output at the bottom is the exact key "
+        "term the eventual report must cite. The signals that fired are listed "
+        "so the match can be judged directly."
+    ),
+    "decisions": (
+        "Walkthrough. The agent's decision record. The agent can make exactly "
+        "eight kinds of decision — a closed set, nothing outside it. This case "
+        "fired five, one of them twice: expand the network another hop (it did, "
+        "then stopped at the cap), pull a second advisory, re-question the "
+        "customer, judge whether the evidence is sufficient to draft, and judge "
+        "whether the draft clears the bar. Open any decision: each is a fixed "
+        "rule over the evidence, producing the same result for the same case "
+        "every time, and each is stamped into the audit log with its reason."
+    ),
+    "sar": (
+        "Walkthrough. The draft report, under one rule: it may only state what "
+        "it can cite. Every numbered claim carries a source pointer that must "
+        "resolve to a real evidence record; if any pointer fails, the entire "
+        "draft fails rather than shipping an unsupported sentence. Below the "
+        "draft, a fixed critic grades the narrative against the regulator's "
+        "rubric before a person sees it. A draft that cannot reach full "
+        "coverage is flagged for an analyst, not padded. Nothing on this tab "
+        "files anything; filing is a human action."
+    ),
+    "audit": (
+        "Walkthrough. Every access, decision, and draft from this case sits on "
+        "one running hash chain: each record's hash folds in the hash of the "
+        "record before it, so editing, deleting, or reordering anything breaks "
+        "every subsequent link and verification fails. Above the raw chain, the "
+        "same history renders in plain language — one fixed sentence per "
+        "record, each citing its record. No model writes that narrative. The "
+        "final step is yours: use the reviewer panel to record Approve or "
+        "Review Needed, with a written reason. Your decision is appended to "
+        "this session's own copy of the chain and hashed like every other "
+        "record; the underlying demo data is untouched, and Review Needed "
+        "records your judgment without re-running anything."
+    ),
+}
+
+_WT_SWEEP_INTRO = (
+    "Guided walkthrough — the second half. A designation names a person, "
+    "company, place, or service as sanctioned. When one lands, the question "
+    "becomes institution-wide: how exposed is the ledger, right now. This mode "
+    "answers that across every account. Work the tabs left to right. Different "
+    "designations exercise different checks — DES-2026-0001 shows a fund-flow "
+    "sweep, DES-2026-0005 an identity case, DES-2026-0008 a territory, "
+    "DES-2026-0009 a designated counterparty — and a tab with no findings for "
+    "the selected designation states that plainly. The sidebar also offers a "
+    "simulated list-feed update: load the malformed example payload and it is "
+    "rejected before anything is stored, with the parser error shown above "
+    "these tabs. Everything in this mode proposes and drafts. Nothing executes."
+)
+
+_WT_SWEEP = {
+    "triage": (
+        "Walkthrough. Select a designation in the sidebar. This tab shows the "
+        "exposure: how many accounts, how directly, how much value, ordered "
+        "most severe first, every row cited. Name and identity hits appear in "
+        "the same worksheet — including transliteration-variant matches, each "
+        "carrying its corroboration status: confirmed against published "
+        "identifiers, or a possible match held for human review. A resolved "
+        "false positive never becomes a row. When the selected designation is a "
+        "foreign early-warning list, a notice above the worksheet names the "
+        "specific list source and states what that means: a risk signal "
+        "surfaced for human review, not a binding obligation. Two further "
+        "details: the worksheet separates activity before the designation from "
+        "activity after it, and the hold-status reconciliation below compares "
+        "two internal systems that should agree on whether an account is "
+        "blocked. Here they disagree, and the discrepancy is surfaced rather "
+        "than either side being trusted. Select DES-2026-0005 to see a "
+        "corroborated variant hit surface as a worksheet row."
+    ),
+    "identity": (
+        "Walkthrough. A name match is a question, not an answer. This tab shows "
+        "the resolution work behind the worksheet row: the spelling variant "
+        "that matched, the corroboration against published identifiers rather "
+        "than the spelling alone, and what the confirmed identity connects to — "
+        "a company under the person's control, an officer of record with no "
+        "identity footprint, control transferred after the listing date. The "
+        "proximity ring below lists possible associates with the signals that "
+        "placed them there; accounts with no signal are not included. These are "
+        "leads for a human reviewer, not conclusions."
+    ),
+    "geo": (
+        "Walkthrough. This check runs when a designation names a territory, "
+        "where there is no name list to screen. The system weighs location "
+        "signals account by account: logins, documents, addresses, declared "
+        "residence. With DES-2026-0008 selected, expand both accounts shown. "
+        "One carries six signals pointing into the territory and draws a "
+        "proposed full block with escalation. The other rests on a single hit, "
+        "an expired document, and one VPN slip; the totality cannot resolve it, "
+        "and the proposal is to ask the customer, with the request drafted and "
+        "never sent. Two rules are enforced: VPN use marks obfuscation, never "
+        "location, and an expired document is never treated as evidence of "
+        "presence."
+    ),
+    "counterparty": (
+        "Walkthrough. This check runs when a designated party is a service the "
+        "customers used. With DES-2026-0009 selected, the tab proposes a next "
+        "step per customer — lift the temporary restriction, hold, or begin "
+        "offboarding — each with cited reasoning. Two guarantees: the customer "
+        "notification draft, which you can expand, passes a tipping-off check "
+        "that permits naming only the public designation and nothing about any "
+        "investigation; and no hold can be lifted by this software. An unblock "
+        "is only ever a proposal for a reviewer, and a test in the codebase "
+        "verifies that no automatic route exists."
+    ),
+    "coverage": (
+        "Walkthrough. A standing question above any single designation: do the "
+        "screening lists this institution runs cover where its customers are? "
+        "The customer base is mapped three ways — residence, document-issuing "
+        "country, nationality — and compared against the enabled list sources. "
+        "The findings: jurisdictions the customer base touches with no list "
+        "coverage, and list sources declared but not ingested. The assessment "
+        "writes its own hash-chained audit trail, shown below the findings."
+    ),
+    "audit": (
+        "Walkthrough. The sweep writes its own hash chain, separate from the "
+        "case files. This tab shows it for the selected designation: every "
+        "check, decision, and draft, verified end to end, with the same "
+        "plain-language narrative as the case side. Both modes are held to one "
+        "standard: every action on a tamper-evident chain, every claim "
+        "traceable to a record, every consequential decision made by a person."
+    ),
+}
+
+
+def _walkthrough(text: str) -> None:
+    """Render one Jennifer-approved guided-walkthrough narrative band, gated on
+    the sidebar toggle (ON by default). Display-only: no computed value,
+    pipeline call, audit write, or data read — the prose is fixed and the only
+    behaviour this layer adds is the toggle. The band is styled to stand apart
+    from app output; the approved text is rendered verbatim (it leads with its
+    own "Walkthrough" / "Guided walkthrough" label, so no separate label chip
+    is added). The approved prose carries no HTML-special characters, so it is
+    inserted raw — which also lets AppTest assert the text verbatim."""
+    if not st.session_state.get(_WT_KEY, True):
+        return
+    st.markdown(
+        "<div style='border-left:4px solid #2563eb;"
+        "background:rgba(37,99,235,0.07);border-radius:0 6px 6px 0;"
+        "padding:0.7rem 1rem;margin:0 0 1rem;font-size:0.9rem;"
+        "line-height:1.55;'>"
+        f"{text}</div>",
+        unsafe_allow_html=True,
+    )
+
 # On-chain risk score reason codes / decomposition kind -> plain language for
 # the compliance officer. Display-only: the raw slugs remain the model's tested
 # contract (RiskScore.reasons / ScoreDecomposition.kind), so this map never
@@ -1395,6 +1639,9 @@ def _render_sweep_mode(conn: Connectors) -> None:
 
     names = {a["uid"]: a["entity_name"] for a in conn.all_accounts()}
 
+    # Guided-walkthrough mode intro, above the tab bar (toggle-gated).
+    _walkthrough(_WT_SWEEP_INTRO)
+
     # Six tabs, in the order a sanctions-team member works a designation. This is
     # display relocation only: every section moves verbatim into its tab, and
     # each render function still computes over the same sweep result.
@@ -1403,6 +1650,7 @@ def _render_sweep_mode(conn: Connectors) -> None:
         ["Triage", "Identity", "Geo", "Counterparty", "Coverage", "Audit"])
 
     with tab_triage:
+        _walkthrough(_WT_SWEEP["triage"])
         c1, c2, c3, c4, c5 = st.columns(5)
         c1.metric("Exposed accounts", len(res.exposure.exposed))
         c2.metric("Direct", len(res.exposure.direct_uids()))
@@ -1532,12 +1780,14 @@ def _render_sweep_mode(conn: Connectors) -> None:
             st.info("No escalations drafted for this designation.")
 
     with tab_identity:
+        _walkthrough(_WT_SWEEP["identity"])
         # Part II. Empty state names both facts: nothing found for this
         # designation, and it renders only when a designation resolves an identity.
         if not _render_identity_resolution(res, names):
             st.info("No identity-resolution findings for this designation.")
 
     with tab_geo:
+        _walkthrough(_WT_SWEEP["geo"])
         # Part III. Empty state names both facts: nothing found, and geo
         # triangulation runs for territory designations.
         if not _render_geo_triangulation(res, names):
@@ -1547,6 +1797,7 @@ def _render_sweep_mode(conn: Connectors) -> None:
             )
 
     with tab_counterparty:
+        _walkthrough(_WT_SWEEP["counterparty"])
         # Part IV. Empty state names both facts: nothing found, and the lifecycle
         # runs for counterparty-service designations.
         if not _render_counterparty_lifecycle(res, names):
@@ -1556,11 +1807,13 @@ def _render_sweep_mode(conn: Connectors) -> None:
             )
 
     with tab_coverage:
+        _walkthrough(_WT_SWEEP["coverage"])
         # The institution-level screening coverage-gap panel — independent of the
         # picked designation; it moves off the page foot into its own tab.
         _render_coverage_panel(conn)
 
     with tab_audit:
+        _walkthrough(_WT_SWEEP["audit"])
         # -- package + audit ------------------------------------------------ #
         st.markdown("#### Decision-ready package & audit trail")
         if res.package_path and res.package_path.exists():
@@ -1789,6 +2042,14 @@ def main() -> None:
         mode = st.radio(
             "Mode", ["Case investigation", "Designation sweep"], key="app_mode",
         )
+        # Guided-walkthrough toggle: ON by default, rendered once here (before
+        # either mode branches) so both modes read the same session-state flag.
+        # The only behaviour this layer adds is this switch.
+        st.toggle(
+            "Guided walkthrough", value=True, key=_WT_KEY,
+            help="Show the guided-tour narrative at the top of each tab. "
+                 "Turn off for a clean view.",
+        )
         st.markdown("---")
     if mode == "Designation sweep":
         _render_sweep_mode(conn)
@@ -1896,6 +2157,9 @@ def main() -> None:
 
     names = {a["uid"]: a["entity_name"] for a in accounts}
 
+    # Guided-walkthrough mode intro, above the tab bar (toggle-gated).
+    _walkthrough(_WT_CASE_INTRO)
+
     # Tabs run left-to-right in component order (Profile/Timeline → Network →
     # Sanctions → Tells → RFI → Advisory → Decisions → SAR → Audit); st.tabs has
     # no default-tab option, so case mode lands on the subject's Timeline.
@@ -1907,6 +2171,7 @@ def main() -> None:
 
     # -- Sanctions (gating control: watchlist name-match + on-chain exposure) -- #
     with tab_sanctions:
+        _walkthrough(_WT_CASE["sanctions"])
         st.subheader("Sanctions & watchlist screening")
         st.caption(
             "The gating compliance control, checked first: does any account match a "
@@ -2029,6 +2294,7 @@ def main() -> None:
 
     # -- Timeline ---------------------------------------------------------- #
     with tab_timeline:
+        _walkthrough(_WT_CASE["timeline"])
         st.subheader(f"{res.subject_name} — anomaly-flagged timeline")
         if res.profile.anomalies:
             for a in res.profile.anomalies:
@@ -2090,6 +2356,7 @@ def main() -> None:
 
     # -- Network ----------------------------------------------------------- #
     with tab_network:
+        _walkthrough(_WT_CASE["network"])
         st.subheader("Network expansion")
         st.caption(
             "Gold ★ = subject · red ▲ = synthetic-sanctioned endpoint · orange = ring account · "
@@ -2172,6 +2439,7 @@ def main() -> None:
 
     # -- Tells ------------------------------------------------------------- #
     with tab_tells:
+        _walkthrough(_WT_CASE["tells"])
         st.subheader("Tells")
         st.caption(
             "Free-text transaction remarks fuzzy-matched (RapidFuzz) against "
@@ -2242,10 +2510,12 @@ def main() -> None:
 
     # -- RFI --------------------------------------------------------------- #
     with tab_rfi:
+        _walkthrough(_WT_CASE["rfi"])
         _render_rfi(res.rfi, res.contradictions, res.rfi_decomposition)
 
     # -- Advisory ---------------------------------------------------------- #
     with tab_advisory:
+        _walkthrough(_WT_CASE["advisory"])
         st.subheader("Regulatory advisory match")
         st.caption(
             "Scope: US / FinCEN advisories → SAR. "
@@ -2308,10 +2578,12 @@ def main() -> None:
 
     # -- Decisions (bounded agency + case-graph memory) --------------------- #
     with tab_decisions:
+        _walkthrough(_WT_CASE["decisions"])
         _render_decisions(res)
 
     # -- SAR draft --------------------------------------------------------- #
     with tab_sar:
+        _walkthrough(_WT_CASE["sar"])
         st.subheader("Grounded, self-critiquing SAR draft")
         if res.sar is None:
             # The sufficiency gate referred the case to a human: no draft was
@@ -2386,6 +2658,7 @@ def main() -> None:
 
     # -- Audit trail ------------------------------------------------------- #
     with tab_audit:
+        _walkthrough(_WT_CASE["audit"])
         st.subheader("Tamper-evident audit trail")
         st.caption(
             "Every access, tool call, decision, and stamp — hash-chained: each "
