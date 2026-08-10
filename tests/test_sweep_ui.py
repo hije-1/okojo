@@ -840,3 +840,36 @@ def test_triage_dismissed_variant_never_surfaces(sweep_app_identity):
 def _CORROBORATION_LABEL_import():
     from app.streamlit_app import _CORROBORATION_LABEL
     return _CORROBORATION_LABEL
+
+
+def test_triage_early_warning_fires_for_signal_exposure(sweep_app_identity):
+    """DES-0003 is a foreign signal list with FLOW exposure (no variant identity
+    row): the early-warning banner still heads the worksheet, naming the list."""
+    at = _select(sweep_app_identity, "DES-2026-0003")
+    assert not at.exception
+    triage = _tab_text(_tabs_by_label(at)["Triage"])
+    assert "Early-warning signal list" in triage
+    from okojo.sweep import LIST_SOURCE_REGISTRY
+    assert LIST_SOURCE_REGISTRY["SYN-FOREIGN-NCT"]["name"] in triage
+    assert "not a binding obligation" in triage
+
+
+def test_triage_early_warning_fires_for_exact_name_match(sweep_app_identity):
+    """DES-0004 is a name-only foreign signal listing (exact match, no
+    corroboration): the banner fires and the identity match is called out
+    without a corroboration grade."""
+    at = _select(sweep_app_identity, "DES-2026-0004")
+    assert not at.exception
+    triage = _tab_text(_tabs_by_label(at)["Triage"])
+    assert "Early-warning signal list" in triage
+    assert 500000001 in _worksheet_uids(at)
+    assert "name match to the designated party" in triage
+
+
+def test_triage_no_early_warning_for_territory_signal(sweep_app_identity):
+    """DES-0008 is kind=signal but a TERRITORY (findings live in the Geo tab, not
+    the worksheet): the foreign-list early-warning banner must NOT fire in Triage."""
+    at = _select(sweep_app_identity, "DES-2026-0008")
+    assert not at.exception
+    triage = _tab_text(_tabs_by_label(at)["Triage"])
+    assert "Early-warning signal list" not in triage

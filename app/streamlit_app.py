@@ -1443,33 +1443,39 @@ def _render_sweep_mode(conn: Connectors) -> None:
             st.info("No accounts surfaced for this designation.")
 
         # -- early-warning signal-list notice (cross-list early warning) ----- #
-        # A foreign national-list designation is a timestamped RISK SIGNAL, not a
-        # binding obligation of this synthetic exchange. When the sweep resolves
-        # an identity to such a list — including a transliteration-variant hit
-        # the exact screen would miss — surface it here in Triage, corroboration-
-        # graded and cited, so a reviewer working the worksheet cannot miss a
-        # cross-list early-warning match. Dismissed collisions never reach here
-        # (they never become worksheet rows).
-        signal_id_rows = [r for r in res.worksheet if r.corroboration_outcome]
-        if d.obligation_vs_signal == "signal" and signal_id_rows:
-            # Name the specific list source, not just "a foreign list": the
-            # registry carries a human-readable name per regime, and the
-            # designation carries its program + regime codes.
-            regime_name = LIST_SOURCE_REGISTRY.get(d.source_regime, {}).get(
-                "name", "Foreign national list")
+        # A foreign list-source designation is a timestamped RISK SIGNAL, not a
+        # binding obligation of this synthetic exchange. Whenever the picked
+        # designation is such a signal list (a known list-source regime — never a
+        # territory, whose findings live in the Geo tab) AND the sweep surfaced
+        # anything, head the worksheet with the calibrated standing so a reviewer
+        # cannot read a signal-list finding as an obligation. Then call out any
+        # name / transliteration-variant identity matches, corroboration-graded
+        # and cited. Dismissed collisions never reach here (they never become
+        # worksheet rows), and a signal list that surfaced nothing shows no notice.
+        regime_meta = LIST_SOURCE_REGISTRY.get(d.source_regime)
+        if d.obligation_vs_signal == "signal" and regime_meta and res.worksheet:
             st.warning(
-                f"**Early-warning signal list — {regime_name}.** This designation "
-                f"is a timestamped **risk signal** (regime `{d.source_regime}`, "
-                f"program `{d.program}`, list type `{d.list_type}`), listed since "
-                f"{d.listed_since} — not a binding obligation of this exchange. The "
-                "identity match(es) below are surfaced for **human review**; no hold "
-                "is proposed on a signal listing."
+                f"**Early-warning signal list — {regime_meta['name']}.** This "
+                f"designation is a timestamped **risk signal** (regime "
+                f"`{d.source_regime}`, program `{d.program}`, list type "
+                f"`{d.list_type}`), listed since {d.listed_since} — not a binding "
+                "obligation of this exchange. Findings for this designation are "
+                "surfaced for **human review**; no hold is proposed on a signal "
+                "listing."
             )
-            for r in signal_id_rows:
+            id_rows = [r for r in res.worksheet
+                       if r.recommended_action == "flags_name_match_for_identity_review"]
+            for r in id_rows:
+                if r.corroboration_outcome:
+                    kind = "transliteration-variant name match"
+                    grade = (" — **" + _CORROBORATION_LABEL.get(
+                        r.corroboration_outcome, r.corroboration_outcome) + "**")
+                else:
+                    kind = "name match"
+                    grade = ""
                 st.markdown(
                     f"- **uid {r.uid}** ({names.get(r.uid, r.entity_name)}) — "
-                    f"**{_CORROBORATION_LABEL.get(r.corroboration_outcome, r.corroboration_outcome)}** "
-                    "· transliteration-variant name match to the designated party"
+                    f"{kind} to the designated party{grade}"
                 )
                 _source_caption(r.provenance)
 
