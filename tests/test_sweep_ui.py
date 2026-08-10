@@ -664,3 +664,115 @@ def test_coverage_panel_narrates_its_own_chain(sweep_app):
     """The coverage assessment's own chain is narrated (read-only, grounded)."""
     text = _all_text(sweep_app)
     assert "Completed the coverage assessment" in text
+
+
+# --- Six-tab layout (session 1 of the launch split) -------------------------
+#
+# Designation-sweep mode is split into six tabs, in a fixed order. This is
+# display relocation only — every section moved verbatim into its tab. These
+# checks pin the tab bar, the per-tab content, the honest empty-state lines, and
+# the fail-closed rejection's mode-level (above-the-tabs) placement.
+
+_EXPECTED_TABS = ["Triage", "Identity", "Geo", "Counterparty", "Coverage", "Audit"]
+
+
+def _tab_text(tab):
+    """Every rendered text surface WITHIN one tab (markdown/caption/warning/info
+    + expander labels and their children), flattened. Scoped to the tab block, so
+    it does not bleed across tabs."""
+    parts = []
+    for coll in (tab.markdown, tab.caption, tab.warning, tab.info):
+        parts.extend(el.value for el in coll)
+    for exp in tab.expander:
+        parts.append(exp.label)
+        for child in (exp.markdown, exp.caption):
+            parts.extend(el.value for el in child)
+    return "\n".join(parts)
+
+
+def _tabs_by_label(at):
+    return {t.label: t for t in at.tabs}
+
+
+def test_sweep_mode_renders_six_tabs_in_exact_order(sweep_app):
+    """The tab bar carries exactly the six labels, in the fixed launch order."""
+    assert not sweep_app.exception
+    assert [t.label for t in sweep_app.tabs] == _EXPECTED_TABS
+
+
+def test_each_tab_renders_for_a_designation_that_populates_it(sweep_app_identity):
+    """Every one of the six tabs renders its section for a designation that
+    populates it: Triage/Coverage/Audit for any designation, Identity for
+    DES-0005, Geo for the territory DES-0008, Counterparty for the VASP DES-0009."""
+    # DES-0005 populates Triage, Identity, Coverage, Audit.
+    at = _select(sweep_app_identity, "DES-2026-0005")
+    assert not at.exception
+    tabs = _tabs_by_label(at)
+    assert set(tabs) == set(_EXPECTED_TABS)
+    # Triage: the metrics row and the worksheet both live here.
+    assert "Exposed accounts" in {m.label for m in tabs["Triage"].metric}
+    assert "Remediation worksheet" in _tab_text(tabs["Triage"])
+    assert "Hold-status reconciliation" in _tab_text(tabs["Triage"])
+    assert "Escalation drafts" in _tab_text(tabs["Triage"])
+    assert "Identity resolution" in _tab_text(tabs["Identity"])
+    assert "Screening coverage (institution-level)" in _tab_text(tabs["Coverage"])
+    assert "Decision-ready package & audit trail" in _tab_text(tabs["Audit"])
+
+    # DES-0008 (territory) populates Geo.
+    at = _select(sweep_app_identity, "DES-2026-0008")
+    assert "Geo triangulation" in _tab_text(_tabs_by_label(at)["Geo"])
+
+    # DES-0009 (counterparty service) populates Counterparty.
+    at = _select(sweep_app_identity, "DES-2026-0009")
+    assert ("Counterparty-designation lifecycle"
+            in _tab_text(_tabs_by_label(at)["Counterparty"]))
+
+
+def test_geo_tab_shows_empty_state_for_non_territory_designation(sweep_app_identity):
+    """A non-territory designation (DES-0001) shows the honest Geo empty-state
+    line stating BOTH facts — nothing found AND when the check applies — and
+    renders no geo dossier content."""
+    at = _select(sweep_app_identity, "DES-2026-0001")
+    assert not at.exception
+    geo = _tabs_by_label(at)["Geo"]
+    geo_info = " ".join(i.value for i in geo.info)
+    assert "no geographic findings" in geo_info          # nothing found
+    assert "territory designations" in geo_info           # when it applies
+    assert "Geo triangulation" not in _tab_text(geo)      # no populated content
+
+
+def test_geo_tab_populated_for_territory_has_no_empty_state(sweep_app_identity):
+    """The territory designation (DES-0008) populates Geo, so the empty-state
+    line is absent."""
+    at = _select(sweep_app_identity, "DES-2026-0008")
+    geo = _tabs_by_label(at)["Geo"]
+    assert "Geo triangulation" in _tab_text(geo)
+    assert not any("no geographic findings" in i.value for i in geo.info)
+
+
+def test_identity_and_counterparty_tabs_show_empty_states(sweep_app_identity):
+    """A plain domestic designation (DES-0001) leaves Identity and Counterparty
+    empty, so each shows its honest empty-state line."""
+    at = _select(sweep_app_identity, "DES-2026-0001")
+    tabs = _tabs_by_label(at)
+    id_info = " ".join(i.value for i in tabs["Identity"].info)
+    assert "No identity-resolution findings" in id_info
+    cp_info = " ".join(i.value for i in tabs["Counterparty"].info)
+    assert "No counterparty-lifecycle findings" in cp_info
+    assert "counterparty-service designations" in cp_info
+
+
+def test_malformed_payload_rejection_renders_above_the_tabs(sweep_app_simulate):
+    """The fail-closed rejection is a MODE-LEVEL surface: parsing returns before
+    any tab is created, so no tab body can hide it (a rejection behind a tab is
+    unacceptable for a fail-closed feature)."""
+    at = sweep_app_simulate
+    at.button(key="sweep_load_malformed").click().run()
+    assert not at.exception
+    errs = " ".join(e.value for e in at.error).lower()
+    assert "rejected (fail-closed)" in errs
+    # No tab bar exists on the rejection path, so the error cannot be nested in
+    # a tab body — it renders at mode level.
+    assert not at.tabs
+    # Restore the shared module-scoped fixture to the valid payload.
+    at.button(key="sweep_load_valid").click().run()

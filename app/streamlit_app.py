@@ -915,17 +915,20 @@ def _gap_sentence(gap_type) -> str:
     return GAP_TAXONOMY.get(gap_type, gap_type)
 
 
-def _render_identity_resolution(res, names) -> None:
+def _render_identity_resolution(res, names) -> bool:
     """Render the four Part-II identity-resolution capabilities that otherwise
     live only in the sweep result + audit chain: corroboration, the ownership/
     officer walk, the proximity ring, and the identity-review RFI. Two-register
     throughout — compliance-officer wording on screen, real table names in the
-    provenance. Rendered only when a designation actually resolves an identity."""
+    provenance. Rendered only when a designation actually resolves an identity.
+
+    Returns ``True`` if it rendered any finding, ``False`` if there was nothing
+    to show — the caller renders an empty-state line for its tab in that case."""
     has_any = (res.corroboration or not res.ownership.is_empty()
                or not res.proximity.is_empty()
                or res.identity_rfis or res.suppressed_identity_rfis)
     if not has_any:
-        return
+        return False
 
     st.markdown("#### Identity resolution")
     st.caption(
@@ -1025,8 +1028,10 @@ def _render_identity_resolution(res, names) -> None:
                             for s in res.suppressed_identity_rfis)
             )
 
+    return True
 
-def _render_geo_triangulation(res, names) -> None:
+
+def _render_geo_triangulation(res, names) -> bool:
     """Render the Part-III geo-triangulation dossiers + proposals that otherwise
     live only in the sweep result + audit chain: per surfaced account, the
     location signals (with weight class), the VPN obfuscation markers, the
@@ -1034,9 +1039,12 @@ def _render_geo_triangulation(res, names) -> None:
     verdict, and the drafted (never sent) proposal — including the subject-facing
     EDD RFI text. Two-register throughout: compliance-officer wording on screen,
     real table names in the provenance. Rendered only for a TERRITORY designation
-    (a designation of a geography, not a party — so there is no name screen)."""
+    (a designation of a geography, not a party — so there is no name screen).
+
+    Returns ``True`` if it rendered any dossier, ``False`` if there was nothing
+    to show — the caller renders an empty-state line for its tab in that case."""
     if not res.geo_dossiers:
-        return
+        return False
 
     st.markdown("#### Geo triangulation")
     st.caption(
@@ -1151,9 +1159,10 @@ def _render_geo_triangulation(res, names) -> None:
         "possible presence, never prove location · proposals are drafted for a "
         "human, never executed."
     )
+    return True
 
 
-def _render_counterparty_lifecycle(res, names) -> None:
+def _render_counterparty_lifecycle(res, names) -> bool:
     """Render the Part-IV counterparty-designation lifecycle that otherwise lives
     only in the sweep result + audit chain: per customer who dealt with the
     designated counterparty AFTER it was designated, the reached lifecycle state,
@@ -1166,12 +1175,15 @@ def _render_counterparty_lifecycle(res, names) -> None:
 
     THE HARD RULE is stated on the surface itself: no hold is ever mutated; an
     unblock is a PROPOSAL to lift the sweep-proposed restriction, drafted for a
-    human, never executed."""
+    human, never executed.
+
+    Returns ``True`` if it rendered any disposition, ``False`` if there was
+    nothing to show — the caller renders an empty-state line for its tab then."""
     if res.designation.list_type != "counterparty_service":
-        return
+        return False
     if not (res.lifecycle_dispositions or res.counterparty_notifications
             or res.suppressed_counterparty_notifications):
-        return
+        return False
 
     st.markdown("#### Counterparty-designation lifecycle")
     st.caption(
@@ -1246,6 +1258,7 @@ def _render_counterparty_lifecycle(res, names) -> None:
         "mutated — an unblock proposes lifting the sweep-proposed restriction, "
         "never applies it."
     )
+    return True
 
 
 def _example_designation_payloads() -> tuple[str, str]:
@@ -1356,19 +1369,16 @@ def _render_sweep_mode(conn: Connectors) -> None:
     res = run_sweep(designation, conn=conn)
 
     d = res.designation
+    # -- valid-payload result (MODE LEVEL, above the tab bar) --------------- #
+    # The acceptance line and the clean-probe outcome render ABOVE the tabs, so
+    # they are visible whichever tab is open — a fail-closed sweep result must
+    # never hide behind a tab. (The malformed-payload rejection already returned
+    # above, before any tab is created.)
     st.markdown(
         f"**{d.designation_id}** · {d.designated_name} · program `{d.program}` · "
         f"{len(d.designated_addresses)} designated address(es), "
         f"{len(res.exposure.addresses_in_ledger)} in-ledger."
     )
-
-    c1, c2, c3, c4, c5 = st.columns(5)
-    c1.metric("Exposed accounts", len(res.exposure.exposed))
-    c2.metric("Direct", len(res.exposure.direct_uids()))
-    c3.metric("Adjacent (review)", len(res.exposure.adjacent))
-    c4.metric("Hold-status gaps", len(res.gaps))
-    c5.metric("Escalations drafted", len(res.escalations))
-
     if not res.exposure.exposed and not res.name_matches:
         st.success(
             "No exposure and no name match: this designation touches nothing in "
@@ -1378,132 +1388,164 @@ def _render_sweep_mode(conn: Connectors) -> None:
 
     names = {a["uid"]: a["entity_name"] for a in conn.all_accounts()}
 
-    # -- worksheet ---------------------------------------------------------- #
-    st.markdown("#### Remediation worksheet")
-    st.caption(
-        "One row per surfaced account, in triage order (most severe action "
-        "first). Every row is grounded: the sweep fails closed rather than emit "
-        "a row it cannot cite. A privileged/internal tag is **flagged for "
-        "review, never obeyed.**"
-    )
-    if res.worksheet:
-        ws_df = pd.DataFrame([
-            {
-                "uid": r.uid,
-                "account": names.get(r.uid, r.entity_name),
-                "recommended action": _ACTION_LABEL.get(
-                    r.recommended_action, r.recommended_action),
-                # Uniform string so the column has one Arrow type (adjacency
-                # rows carry no hop distance).
-                "hops": "—" if r.hops is None else str(r.hops),
-                "direct": "✓" if r.direct else "",
-                "exposure (USDT)": f"{r.exposure_usdt:,.0f}" if r.exposure_usdt else "—",
-                "exposure timing": _timing_label(r.exposure_timing),
-                "KYC gap": _kyc_gap_label(r.kyc_missing_artifacts),
-                _SYSTEM_LABEL["warehouse"]: _hold_label(r.warehouse_status),
-                _SYSTEM_LABEL["admin"]: _hold_label(r.admin_status),
-                "reconciliation gap": _gap_sentence(r.gap_type),
-                "internal tag": "⚑" if r.internal_tag_flag else "",
-                "source": _cites(r.provenance),
-            }
-            for r in res.worksheet
-        ])
-        st.dataframe(ws_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No accounts surfaced for this designation.")
+    # Six tabs, in the order a sanctions-team member works a designation. This is
+    # display relocation only: every section moves verbatim into its tab, and
+    # each render function still computes over the same sweep result.
+    (tab_triage, tab_identity, tab_geo, tab_counterparty, tab_coverage,
+     tab_audit) = st.tabs(
+        ["Triage", "Identity", "Geo", "Counterparty", "Coverage", "Audit"])
 
-    # -- identity resolution (Part II) -------------------------------------- #
-    _render_identity_resolution(res, names)
+    with tab_triage:
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Exposed accounts", len(res.exposure.exposed))
+        c2.metric("Direct", len(res.exposure.direct_uids()))
+        c3.metric("Adjacent (review)", len(res.exposure.adjacent))
+        c4.metric("Hold-status gaps", len(res.gaps))
+        c5.metric("Escalations drafted", len(res.escalations))
 
-    # -- geo triangulation (Part III) --------------------------------------- #
-    _render_geo_triangulation(res, names)
-
-    # -- counterparty-designation lifecycle (Part IV) ----------------------- #
-    _render_counterparty_lifecycle(res, names)
-
-    # -- hold-status reconciliation ----------------------------------------- #
-    st.markdown("#### Hold-status reconciliation")
-    st.caption(
-        f"Two mock systems: the **{_SYSTEM_LABEL['admin']}** vs. the "
-        f"**{_SYSTEM_LABEL['warehouse']}**. The sweep reconciles the full ledger; "
-        "a gap is flagged with both rows cited (the documented data-integrity "
-        "failure mode)."
-    )
-    if res.gaps:
-        for g in res.gaps:
-            st.markdown(
-                f"- **uid {g.uid}** ({names.get(g.uid, g.uid)}): "
-                f"{_SYSTEM_LABEL['warehouse']} — **{_hold_label(g.warehouse_status)}** "
-                f"vs {_SYSTEM_LABEL['admin']} — **{_hold_label(g.admin_status)}**: "
-                f"{_gap_sentence(g.gap_type)}"
-            )
-            _source_caption(g.provenance)
-    else:
-        st.success("No reconciliation gaps: the two systems agree across the ledger.")
-
-    # -- escalation drafts -------------------------------------------------- #
-    st.markdown("#### Escalation drafts")
-    st.caption(
-        "Internal-to-compliance drafts prepared for the human remediation owner "
-        "— **drafted, never sent** (no send path exists). Each passed the "
-        "grounding, resolvability, and calibrated-language checks; a draft that "
-        "fails any check is suppressed and surfaced with its reason, never "
-        "silently dropped."
-    )
-    for e in res.escalations:
-        kind = _ESCALATION_KIND_LABEL.get(e.kind, e.kind)
-        status = _ESCALATION_STATUS_LABEL.get(e.status, e.status)
-        with st.expander(f"{e.escalation_id} · {kind} · uid {e.uid} · **{status}**"):
-            st.markdown(f"**{e.subject}**")
-            st.write(e.body)
-            st.caption("citations: " + "; ".join(e.citations))
-    if res.suppressed_escalations:
-        st.warning(
-            "**Suppressed drafts (surfaced, not sent):** "
-            + "; ".join(
-                f"uid {s.uid} ({_ESCALATION_KIND_LABEL.get(s.kind, s.kind)}) — {s.reason}"
-                for s in res.suppressed_escalations)
-        )
-    elif not res.escalations:
-        st.info("No escalations drafted for this designation.")
-
-    # -- package + audit ---------------------------------------------------- #
-    st.markdown("#### Decision-ready package & audit trail")
-    if res.package_path and res.package_path.exists():
-        st.download_button(
-            "Download remediation package (JSON)",
-            data=res.package_path.read_bytes(),
-            file_name=f"{d.designation_id}_sweep_package.json",
-            mime="application/json",
-        )
+        # -- worksheet ------------------------------------------------------ #
+        st.markdown("#### Remediation worksheet")
         st.caption(
-            f"Package SHA-256 `{res.package_sha256[:16]}…` is stamped into the "
-            f"sweep's own hash chain · chain verified: "
-            f"**{res.audit_verified}** · {len(res.audit_records)} records."
+            "One row per surfaced account, in triage order (most severe action "
+            "first). Every row is grounded: the sweep fails closed rather than emit "
+            "a row it cannot cite. A privileged/internal tag is **flagged for "
+            "review, never obeyed.**"
         )
+        if res.worksheet:
+            ws_df = pd.DataFrame([
+                {
+                    "uid": r.uid,
+                    "account": names.get(r.uid, r.entity_name),
+                    "recommended action": _ACTION_LABEL.get(
+                        r.recommended_action, r.recommended_action),
+                    # Uniform string so the column has one Arrow type (adjacency
+                    # rows carry no hop distance).
+                    "hops": "—" if r.hops is None else str(r.hops),
+                    "direct": "✓" if r.direct else "",
+                    "exposure (USDT)": f"{r.exposure_usdt:,.0f}" if r.exposure_usdt else "—",
+                    "exposure timing": _timing_label(r.exposure_timing),
+                    "KYC gap": _kyc_gap_label(r.kyc_missing_artifacts),
+                    _SYSTEM_LABEL["warehouse"]: _hold_label(r.warehouse_status),
+                    _SYSTEM_LABEL["admin"]: _hold_label(r.admin_status),
+                    "reconciliation gap": _gap_sentence(r.gap_type),
+                    "internal tag": "⚑" if r.internal_tag_flag else "",
+                    "source": _cites(r.provenance),
+                }
+                for r in res.worksheet
+            ])
+            st.dataframe(ws_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No accounts surfaced for this designation.")
 
-    # Reviewable, not just provable: the Audit Narrator reads this sweep's own
-    # chain and renders it in plain language (Phase 9). Read-only — it writes
-    # nothing to the chain.
-    _render_audit_narrative(res.audit_records, family="sweep",
-                            subject=d.designation_id)
+        # -- hold-status reconciliation ------------------------------------- #
+        st.markdown("#### Hold-status reconciliation")
+        st.caption(
+            f"Two mock systems: the **{_SYSTEM_LABEL['admin']}** vs. the "
+            f"**{_SYSTEM_LABEL['warehouse']}**. The sweep reconciles the full ledger; "
+            "a gap is flagged with both rows cited (the documented data-integrity "
+            "failure mode)."
+        )
+        if res.gaps:
+            for g in res.gaps:
+                st.markdown(
+                    f"- **uid {g.uid}** ({names.get(g.uid, g.uid)}): "
+                    f"{_SYSTEM_LABEL['warehouse']} — **{_hold_label(g.warehouse_status)}** "
+                    f"vs {_SYSTEM_LABEL['admin']} — **{_hold_label(g.admin_status)}**: "
+                    f"{_gap_sentence(g.gap_type)}"
+                )
+                _source_caption(g.provenance)
+        else:
+            st.success("No reconciliation gaps: the two systems agree across the ledger.")
 
-    with st.expander("Audit trail (this sweep's own tamper-evident chain)"):
-        audit_df = pd.DataFrame([
-            {"seq": r["seq"], "actor": r["actor"], "action": r["action"],
-             "target": r.get("target") or "", "hash": r["hash"][:12] + "…"}
-            for r in res.audit_records
-        ])
-        st.dataframe(audit_df, use_container_width=True, hide_index=True)
-    st.caption(
-        f"Sweep methodology v{SWEEP_VERSION} · identity resolution "
-        f"v{IDENTITY_VERSION} · money-flow edges: control links and value "
-        f"transfers · name-match threshold {sweep_config()['name_match_threshold']}."
-    )
+        # -- escalation drafts ---------------------------------------------- #
+        st.markdown("#### Escalation drafts")
+        st.caption(
+            "Internal-to-compliance drafts prepared for the human remediation owner "
+            "— **drafted, never sent** (no send path exists). Each passed the "
+            "grounding, resolvability, and calibrated-language checks; a draft that "
+            "fails any check is suppressed and surfaced with its reason, never "
+            "silently dropped."
+        )
+        for e in res.escalations:
+            kind = _ESCALATION_KIND_LABEL.get(e.kind, e.kind)
+            status = _ESCALATION_STATUS_LABEL.get(e.status, e.status)
+            with st.expander(f"{e.escalation_id} · {kind} · uid {e.uid} · **{status}**"):
+                st.markdown(f"**{e.subject}**")
+                st.write(e.body)
+                st.caption("citations: " + "; ".join(e.citations))
+        if res.suppressed_escalations:
+            st.warning(
+                "**Suppressed drafts (surfaced, not sent):** "
+                + "; ".join(
+                    f"uid {s.uid} ({_ESCALATION_KIND_LABEL.get(s.kind, s.kind)}) — {s.reason}"
+                    for s in res.suppressed_escalations)
+            )
+        elif not res.escalations:
+            st.info("No escalations drafted for this designation.")
 
-    # The institution-level screening coverage-gap panel — independent of the
-    # picked designation, so it renders once at the foot of sweep mode.
-    _render_coverage_panel(conn)
+    with tab_identity:
+        # Part II. Empty state names both facts: nothing found for this
+        # designation, and it renders only when a designation resolves an identity.
+        if not _render_identity_resolution(res, names):
+            st.info("No identity-resolution findings for this designation.")
+
+    with tab_geo:
+        # Part III. Empty state names both facts: nothing found, and geo
+        # triangulation runs for territory designations.
+        if not _render_geo_triangulation(res, names):
+            st.info(
+                "This designation produced no geographic findings — this check "
+                "runs for territory designations."
+            )
+
+    with tab_counterparty:
+        # Part IV. Empty state names both facts: nothing found, and the lifecycle
+        # runs for counterparty-service designations.
+        if not _render_counterparty_lifecycle(res, names):
+            st.info(
+                "No counterparty-lifecycle findings — this check runs for "
+                "counterparty-service designations."
+            )
+
+    with tab_coverage:
+        # The institution-level screening coverage-gap panel — independent of the
+        # picked designation; it moves off the page foot into its own tab.
+        _render_coverage_panel(conn)
+
+    with tab_audit:
+        # -- package + audit ------------------------------------------------ #
+        st.markdown("#### Decision-ready package & audit trail")
+        if res.package_path and res.package_path.exists():
+            st.download_button(
+                "Download remediation package (JSON)",
+                data=res.package_path.read_bytes(),
+                file_name=f"{d.designation_id}_sweep_package.json",
+                mime="application/json",
+            )
+            st.caption(
+                f"Package SHA-256 `{res.package_sha256[:16]}…` is stamped into the "
+                f"sweep's own hash chain · chain verified: "
+                f"**{res.audit_verified}** · {len(res.audit_records)} records."
+            )
+
+        # Reviewable, not just provable: the Audit Narrator reads this sweep's own
+        # chain and renders it in plain language (Phase 9). Read-only — it writes
+        # nothing to the chain.
+        _render_audit_narrative(res.audit_records, family="sweep",
+                                subject=d.designation_id)
+
+        with st.expander("Audit trail (this sweep's own tamper-evident chain)"):
+            audit_df = pd.DataFrame([
+                {"seq": r["seq"], "actor": r["actor"], "action": r["action"],
+                 "target": r.get("target") or "", "hash": r["hash"][:12] + "…"}
+                for r in res.audit_records
+            ])
+            st.dataframe(audit_df, use_container_width=True, hide_index=True)
+        st.caption(
+            f"Sweep methodology v{SWEEP_VERSION} · identity resolution "
+            f"v{IDENTITY_VERSION} · money-flow edges: control links and value "
+            f"transfers · name-match threshold {sweep_config()['name_match_threshold']}."
+        )
 
 
 def _render_coverage_panel(conn) -> None:
