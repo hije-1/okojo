@@ -1722,6 +1722,18 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         for did, data in _DESIGNATION_IDENTIFIER_DATA.items()
         if data[4] == "possible_match_needs_human"
     }
+    # Part II worksheet-coverage answer key: which transliteration-variant
+    # candidates SHOULD surface as a remediation-worksheet row. A corroborated
+    # true hit and a possible-match-needs-human both earn a review-tier row; a
+    # name_only_dismissed candidate is a RESOLVED same-name collision and must
+    # NEVER become a row (a designation with only a dismissal is deliberately
+    # absent here). build_worksheet recomputes this independently from the
+    # variant screen + corroboration, so the eval is a real check.
+    variant_worksheet_rows = {
+        did: [identity_customer_uid[did]]
+        for did, data in _DESIGNATION_IDENTIFIER_DATA.items()
+        if data[4] in ("corroborated_true_hit", "possible_match_needs_human")
+    }
 
     # ---- Part III (U1b): geo-triangulation personas + sibling tables ------- #
     # The seven planted personas for the TERRITORY designation, appended AFTER
@@ -2014,6 +2026,11 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         # candidate uid(s) that earn a subject-facing identity-verification
         # request — exactly the possible_match_needs_human candidates.
         "identity_review_rfi_uids": identity_review_rfi_uids,
+        # Part II worksheet-coverage answer key: per designation, the variant
+        # candidate uid(s) that SHOULD surface as a remediation-worksheet row
+        # (corroborated_true_hit + possible_match_needs_human; a dismissed
+        # collision never appears). build_worksheet recomputes independently.
+        "variant_worksheet_rows": variant_worksheet_rows,
         # Part II (T3) beneficial-owner + officer walk answer keys, all hung off
         # the DES-2026-0005 resolved party. ``ownership_propagated_uids`` are the
         # companies owned at/above OWNERSHIP_CONTROL_THRESHOLD (review-tier

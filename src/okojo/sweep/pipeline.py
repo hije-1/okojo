@@ -528,7 +528,8 @@ def run_sweep(
         # 4. Triage worksheet — grounded fail-closed (build raises rather than
         # emit a row that cannot cite real evidence). Name-screen hits feed the
         # review-tier identity rows (additive foreign-list coverage).
-        worksheet = build_worksheet(conn, designation, exposure, gaps, name_matches)
+        worksheet = build_worksheet(conn, designation, exposure, gaps, name_matches,
+                                    variant_matches, corroboration)
         actions: dict[str, int] = {}
         for row in worksheet:
             actions[row.recommended_action] = actions.get(row.recommended_action, 0) + 1

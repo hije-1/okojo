@@ -1418,6 +1418,10 @@ def _render_sweep_mode(conn: Connectors) -> None:
                     "account": names.get(r.uid, r.entity_name),
                     "recommended action": _ACTION_LABEL.get(
                         r.recommended_action, r.recommended_action),
+                    # Set only on transliteration-variant identity rows; blank
+                    # for exposure / adjacency / exact-name rows.
+                    "corroboration": _CORROBORATION_LABEL.get(
+                        r.corroboration_outcome, "") if r.corroboration_outcome else "",
                     # Uniform string so the column has one Arrow type (adjacency
                     # rows carry no hop distance).
                     "hops": "—" if r.hops is None else str(r.hops),
@@ -1436,6 +1440,31 @@ def _render_sweep_mode(conn: Connectors) -> None:
             st.dataframe(ws_df, use_container_width=True, hide_index=True)
         else:
             st.info("No accounts surfaced for this designation.")
+
+        # -- early-warning signal-list notice (cross-list early warning) ----- #
+        # A foreign national-list designation is a timestamped RISK SIGNAL, not a
+        # binding obligation of this synthetic exchange. When the sweep resolves
+        # an identity to such a list — including a transliteration-variant hit
+        # the exact screen would miss — surface it here in Triage, corroboration-
+        # graded and cited, so a reviewer working the worksheet cannot miss a
+        # cross-list early-warning match. Dismissed collisions never reach here
+        # (they never become worksheet rows).
+        signal_id_rows = [r for r in res.worksheet if r.corroboration_outcome]
+        if d.obligation_vs_signal == "signal" and signal_id_rows:
+            st.warning(
+                "**Early-warning signal list.** This designation is a foreign "
+                f"national-list **risk signal** (listed since {d.listed_since}), "
+                "not a binding obligation of this exchange. The identity match(es) "
+                "below are surfaced for **human review** — no hold is proposed on a "
+                "signal listing."
+            )
+            for r in signal_id_rows:
+                st.markdown(
+                    f"- **uid {r.uid}** ({names.get(r.uid, r.entity_name)}) — "
+                    f"**{_CORROBORATION_LABEL.get(r.corroboration_outcome, r.corroboration_outcome)}** "
+                    "· transliteration-variant name match to the designated party"
+                )
+                _source_caption(r.provenance)
 
         # -- hold-status reconciliation ------------------------------------- #
         st.markdown("#### Hold-status reconciliation")

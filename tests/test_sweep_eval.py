@@ -330,3 +330,72 @@ def test_sweep_eval_insider_linkage_scorecard(
     assert insiders == gold == [ring["EMPLOYEE"]]
     assert ring["EMPLOYEE"] not in generic  # promoted OUT of the generic band
     assert scorecard["insider_distinct_from_generic"]
+
+
+# --------------------------------------------------------------------------- #
+# Part II — variant identity rows reach the Triage worksheet (the early-warning
+# gap fix). A transliteration-variant hit on a foreign early-warning signal list
+# must surface as a review-tier worksheet row, gated by corroboration:
+# corroborated_true_hit in; possible_match_needs_human in and MARKED;
+# name_only_dismissed NEVER a row (a resolved same-name collision is not a
+# remediation item). The answer key is the hand-authored ``variant_worksheet_rows``
+# (derived from the definitional corroboration classification, independent of the
+# worksheet code) — so this is a real check, not a circular one.
+# --------------------------------------------------------------------------- #
+
+
+def test_sweep_eval_variant_worksheet_coverage_scorecard(
+    conn, ground_truth, tmp_path, capsys
+):
+    from okojo.sweep import designation_from_record
+
+    gold = ground_truth["variant_worksheet_rows"]           # {DES: [uid, ...]}
+    corr_gold = ground_truth["corroboration_outcomes"]       # {DES: {str(uid): outcome}}
+
+    # Every designation that carries a corroboration classification (the variant
+    # designations 0005/0006 corroborated/possible + 0007's dismissal collision).
+    variant_dids = sorted(corr_gold)
+
+    per_designation = {}
+    dismissed_rows = []          # any dismissed candidate that WRONGLY became a row
+    for did in variant_dids:
+        des = designation_from_record(conn.get_designation(did))
+        res = run_sweep(des, out_dir=tmp_path / did, conn=conn)
+        variant_rows = {r.uid: r for r in res.worksheet
+                        if r.corroboration_outcome is not None}
+        per_designation[did] = sorted(variant_rows)
+        # a dismissed candidate must never appear as a row
+        for uid_str, outcome in corr_gold[did].items():
+            if outcome == "name_only_dismissed" and int(uid_str) in variant_rows:
+                dismissed_rows.append((did, int(uid_str)))
+
+    # possible-match rows carry the marker; corroborated rows carry theirs.
+    des6 = designation_from_record(conn.get_designation("DES-2026-0006"))
+    res6 = run_sweep(des6, out_dir=tmp_path / "d6mark", conn=conn)
+    possible = [r for r in res6.worksheet
+                if r.corroboration_outcome == "possible_match_needs_human"]
+
+    scorecard = {
+        "variant_worksheet_rows": per_designation,
+        "matches_gold": {did: (per_designation[did] == sorted(gold.get(did, [])))
+                         for did in variant_dids},
+        "dismissed_became_row": dismissed_rows,
+        "possible_match_marked": bool(possible)
+        and all("human review needed" in r.statement for r in possible),
+    }
+    with capsys.disabled():
+        print("\nPhase 8 sweep scorecard (variant identity worksheet coverage):")
+        for k, v in scorecard.items():
+            print(f"  {k}: {v}")
+
+    # corroborated_true_hit + possible_match_needs_human surface, per gold.
+    for did in variant_dids:
+        assert per_designation[did] == sorted(gold.get(did, [])), did
+    # DES-0005 corroborated true hit is a row; DES-0006 possible-match is a row.
+    assert per_designation["DES-2026-0005"] == [500000024]
+    assert per_designation["DES-2026-0006"] == [500000026]
+    # DES-0007's dismissed collision (uid 500000028) NEVER becomes a row.
+    assert per_designation["DES-2026-0007"] == []
+    assert dismissed_rows == []
+    # the possible-match row is MARKED for human review (calibrated, in statement).
+    assert scorecard["possible_match_marked"]

@@ -776,3 +776,61 @@ def test_malformed_payload_rejection_renders_above_the_tabs(sweep_app_simulate):
     assert not at.tabs
     # Restore the shared module-scoped fixture to the valid payload.
     at.button(key="sweep_load_valid").click().run()
+
+
+# --- Variant identity rows in Triage (the early-warning gap fix) -------------
+#
+# A transliteration-variant hit on a foreign early-warning signal list now
+# surfaces in the Triage tab: as a worksheet row AND as a corroboration-graded
+# early-warning notice. DES-0005 = corroborated true hit; DES-0006 =
+# possible-match (marked); DES-0007's dismissed collision never appears.
+
+
+def _worksheet_uids(at):
+    try:
+        df = _worksheet_df(at)
+    except AssertionError:
+        return set()  # empty worksheet renders an info line, not a dataframe
+    return {int(u) for u in df["uid"]}
+
+
+def test_triage_surfaces_corroborated_variant_early_warning(sweep_app_identity):
+    at = _select(sweep_app_identity, "DES-2026-0005")
+    assert not at.exception
+    tabs = _tabs_by_label(at)
+    triage = _tab_text(tabs["Triage"])
+    # the corroborated variant hit is now a worksheet row (was absent before)
+    assert 500000024 in _worksheet_uids(at)
+    # and the early-warning notice renders in Triage, corroboration-graded
+    assert "Early-warning signal list" in triage
+    assert "risk signal" in triage and "not a binding obligation" in triage
+    assert "500000024" in triage
+    assert _CORROBORATION_LABEL_import()["corroborated_true_hit"] in triage
+
+
+def test_triage_marks_possible_match_variant(sweep_app_identity):
+    at = _select(sweep_app_identity, "DES-2026-0006")
+    assert not at.exception
+    tabs = _tabs_by_label(at)
+    triage = _tab_text(tabs["Triage"])
+    assert 500000026 in _worksheet_uids(at)
+    assert "Early-warning signal list" in triage
+    # the possible match is MARKED for human review (not asserted as confirmed)
+    assert _CORROBORATION_LABEL_import()["possible_match_needs_human"] in triage
+    assert "corroborated_true_hit" not in triage  # no raw slug
+
+
+def test_triage_dismissed_variant_never_surfaces(sweep_app_identity):
+    """DES-0007's dismissed same-name collision (uid 500000028) is a resolved
+    false positive: it is NOT a worksheet row and triggers no early-warning."""
+    at = _select(sweep_app_identity, "DES-2026-0007")
+    assert not at.exception
+    tabs = _tabs_by_label(at)
+    triage = _tab_text(tabs["Triage"])
+    assert 500000028 not in _worksheet_uids(at)
+    assert "Early-warning signal list" not in triage
+
+
+def _CORROBORATION_LABEL_import():
+    from app.streamlit_app import _CORROBORATION_LABEL
+    return _CORROBORATION_LABEL

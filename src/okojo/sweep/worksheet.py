@@ -66,6 +66,11 @@ class WorksheetRow(BaseModel):
     exposure_timing: Optional[str] = None   # pre_designation | post_designation | timeless_control
     kyc_missing_artifacts: list[str] = []
     staff_account: bool = False
+    # Set only on transliteration-variant identity rows (Part II): the
+    # corroboration outcome that admitted the row — ``corroborated_true_hit`` or
+    # ``possible_match_needs_human`` (a ``name_only_dismissed`` variant never
+    # becomes a row). ``None`` for every exposure / adjacency / exact-name row.
+    corroboration_outcome: Optional[str] = None
     recommended_action: str        # one of ACTION_VOCABULARY
     statement: str
     provenance: list[Provenance]
@@ -105,7 +110,12 @@ def _action_for(row_kind: str, is_signal: bool, gap_type: Optional[str],
         if warehouse_status == "blocked" and admin_status == "blocked":
             return "proposes_confirm_existing_hold"
         return "proposes_designation_hold_review"
-    if row_kind == "name_match":
+    if row_kind in ("name_match", "variant_match"):
+        # A name-only foreign-list match — exact or transliteration variant — is a
+        # review-tier identity row. Variant rows reuse this action deliberately (no
+        # new vocabulary → sweep_config / SWEEP_VERSION unchanged); the row's
+        # corroboration_outcome + statement carry the corroborated-vs-possible
+        # nuance.
         return "flags_name_match_for_identity_review"
     if is_staff and "shared_device" in (link_types or []):
         return "flags_insider_staff_device_overlap"
@@ -137,7 +147,8 @@ def _statement(row_kind: str, entity_name: str, designation: Designation,
                link_types: Optional[list[str]] = None,
                exposure_timing: Optional[str] = None,
                kyc_missing: Optional[list[str]] = None,
-               is_staff_device_overlap: bool = False) -> str:
+               is_staff_device_overlap: bool = False,
+               corroboration_outcome: Optional[str] = None) -> str:
     """Calibrated row narrative — asserts only facts the row's pointers back.
 
     Signal-type output uses risk-signal language and never asserts a legal
@@ -176,6 +187,27 @@ def _statement(row_kind: str, entity_name: str, designation: Designation,
             f"{designation.listed_since}); no domestic designation exists and no "
             "flow exposure was found; surfaced for identity review."
         ]
+    elif row_kind == "variant_match":
+        # A transliteration-variant identity row on a foreign early-warning
+        # signal list. Calibrated: an early-warning signal, never an obligation
+        # of this synthetic exchange; the corroboration status is stated plainly
+        # and the row is always surfaced for a human, never actioned.
+        base = (
+            f"{entity_name}: customer name is a transliteration variant of an "
+            f"individual on {designation.source_regime}'s national list ({did}, an "
+            f"early-warning signal listed since {designation.listed_since}, not a "
+            "designation obligation)"
+        )
+        if corroboration_outcome == "corroborated_true_hit":
+            parts = [base + "; the published identifiers corroborate the match; no "
+                     "flow exposure was found; surfaced for human review."]
+        elif corroboration_outcome == "possible_match_needs_human":
+            parts = [base + "; published identifiers neither corroborate nor "
+                     "dismiss the match — a possible match, human review needed; "
+                     "no flow exposure was found."]
+        else:
+            parts = [base + "; no flow exposure was found; surfaced for "
+                     "identity review."]
     elif is_staff_device_overlap:
         links = " and ".join((link_types or [])).replace("_", " ")
         parts = [
@@ -208,6 +240,8 @@ def build_worksheet(
     exposure: ExposureResult,
     gaps: list[StatusGap],
     name_matches: Optional[list] = None,
+    variant_name_matches: Optional[list] = None,
+    corroboration: Optional[list] = None,
 ) -> list[WorksheetRow]:
     """Build, triage, and fail-closed-validate the remediation worksheet.
 
@@ -216,6 +250,15 @@ def build_worksheet(
     or non-flow adjacency — the additive foreign-list identity coverage. A match
     that is already exposed (e.g. the domestic live name matching an exposed
     shell) adds no row, so a domestic worksheet is byte-unchanged.
+
+    ``variant_name_matches`` (the transliteration-variant screen output) add the
+    same review-tier identity coverage for variant hits, gated by ``corroboration``
+    (the per-candidate decisions): a ``corroborated_true_hit`` or a
+    ``possible_match_needs_human`` surfaces as a row (the latter marked via its
+    ``corroboration_outcome`` + statement); a ``name_only_dismissed`` variant is a
+    RESOLVED false positive and NEVER becomes a remediation row. A designation
+    with no variant hits (every domestic and most foreign designations) is
+    byte-unchanged.
     """
     is_signal = designation.obligation_vs_signal == "signal"
     wh = {int(r["uid"]): r for r in conn.warehouse_holds()}
@@ -265,7 +308,8 @@ def build_worksheet(
     def _add(uid: int, entity_name: str, *, row_kind: str,
              hops: Optional[int], direct: bool, exposure_usdt: float,
              base_provenance: list[Provenance],
-             link_types: Optional[list[str]] = None) -> None:
+             link_types: Optional[list[str]] = None,
+             corroboration_outcome: Optional[str] = None) -> None:
         # Ring accounts always carry a hold row in both systems (unchanged). A
         # Part-IV counterparty-review-subject can be flow-exposed yet carry no
         # hold row (review subjects are outside the hold tables' coverage set):
@@ -321,6 +365,7 @@ def build_worksheet(
             exposure_timing=timing,
             kyc_missing_artifacts=kyc_missing,
             staff_account=is_staff,
+            corroboration_outcome=corroboration_outcome,
             recommended_action=action,
             statement=_statement(
                 row_kind, entity_name, designation, hops, direct, exposure_usdt,
@@ -328,6 +373,7 @@ def build_worksheet(
                 gap.gap_type if gap else None, tag_flag, link_types,
                 exposure_timing=timing, kyc_missing=kyc_missing,
                 is_staff_device_overlap=insider,
+                corroboration_outcome=corroboration_outcome,
             ),
             provenance=prov,
         ))
@@ -348,6 +394,37 @@ def build_worksheet(
             continue
         _add(m.uid, m.entity_name, row_kind="name_match", hops=None, direct=False,
              exposure_usdt=0.0, base_provenance=list(m.provenance))
+
+    # Transliteration-variant identity rows (Part II): corroboration-gated. A
+    # dismissed variant (identifiers actively differ — a resolved same-name
+    # collision) is NEVER a remediation row; a corroborated or possible-match
+    # variant surfaces for human review. Grounded on the variant hit's own
+    # provenance PLUS the KYC + designation-identifier rows the corroboration
+    # decision compared (so the "identifiers corroborate / do not corroborate"
+    # claim resolves).
+    corr_by_uid = {}
+    for rec in (corroboration or []):
+        cand = rec.evidence.get("candidate_uid")
+        if cand is not None:
+            corr_by_uid[int(cand)] = rec
+    already = {r.uid for r in rows}
+    id_rec = conn.designation_identifier_for(designation.designation_id)
+    for m in (variant_name_matches or []):
+        if m.uid in already:
+            continue
+        rec = corr_by_uid.get(m.uid)
+        outcome = rec.outcome if rec is not None else None
+        if outcome == "name_only_dismissed":
+            continue
+        prov = list(m.provenance)
+        if rec is not None:
+            kyc_rec = conn.kyc_identity_attributes_for(m.uid)
+            if kyc_rec is not None:
+                prov.append(kyc_rec.provenance)
+            if id_rec is not None:
+                prov.append(id_rec.provenance)
+        _add(m.uid, m.entity_name, row_kind="variant_match", hops=None, direct=False,
+             exposure_usdt=0.0, base_provenance=prov, corroboration_outcome=outcome)
 
     rows.sort(key=lambda r: (
         ACTION_VOCABULARY.index(r.recommended_action),

@@ -210,10 +210,25 @@ per row, from the published vocabulary:
 | exposed | has a reconciliation gap | `flags_reconciliation_gap` (the hold state must be trued up before any new action is meaningful) |
 | exposed | blocked in both systems | `proposes_confirm_existing_hold` |
 | exposed | otherwise | `proposes_designation_hold_review` |
-| name-match | foreign name-only listing, no flow | `flags_name_match_for_identity_review` |
+| name-match | foreign name-only listing, no flow (exact screen) | `flags_name_match_for_identity_review` |
+| variant-match | transliteration-variant hit on a foreign early-warning signal list, corroboration-gated | `flags_name_match_for_identity_review` |
 | adjacent | staff-register account with a device overlap | `flags_insider_staff_device_overlap` (a conflict-of-interest finding, severe) |
 | adjacent | carries an internal tag | `flags_internal_tag_for_review` (the tag is itself a finding — flagged, never obeyed) |
 | adjacent | otherwise | `flags_for_review_non_flow_linkage` |
+
+**Variant identity rows are corroboration-gated.** A transliteration-variant
+hit (the same layer that catches the Cyrillic/Arabic evasion the exact screen
+misses) reaches the worksheet only through its corroboration decision: a
+`corroborated_true_hit` or a `possible_match_needs_human` surfaces as a
+review-tier row (the latter carrying its `corroboration_outcome` so the Triage
+tab can mark it "human review needed"); a `name_only_dismissed` variant — a
+resolved same-name collision where the published identifiers actively differ —
+is a cleared false positive and **never** becomes a remediation row. Both
+outcomes reuse the `flags_name_match_for_identity_review` action deliberately,
+so the action vocabulary — and therefore `sweep_config` / `SWEEP_VERSION` — is
+unchanged; the corroboration grade rides on the row, not on a new action. This
+closes an early-warning gap: a corroborated variant hit on a foreign signal
+list now surfaces in the Triage worksheet, not only in the Identity view.
 
 **Triage order** is the published `(action_severity, -exposure_usdt, hops,
 uid)` — severity is the action's position in the vocabulary; adjacency rows
