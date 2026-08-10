@@ -42,6 +42,7 @@ from okojo.coverage import COVERAGE_VERSION, run_coverage_audit
 from okojo.identity import IDENTITY_VERSION, OWNERSHIP_CONTROL_THRESHOLD
 from okojo.sweep import (
     GAP_TAXONOMY,
+    LIST_SOURCE_REGISTRY,
     SWEEP_VERSION,
     Designation,
     DesignationParseError,
@@ -1451,12 +1452,18 @@ def _render_sweep_mode(conn: Connectors) -> None:
         # (they never become worksheet rows).
         signal_id_rows = [r for r in res.worksheet if r.corroboration_outcome]
         if d.obligation_vs_signal == "signal" and signal_id_rows:
+            # Name the specific list source, not just "a foreign list": the
+            # registry carries a human-readable name per regime, and the
+            # designation carries its program + regime codes.
+            regime_name = LIST_SOURCE_REGISTRY.get(d.source_regime, {}).get(
+                "name", "Foreign national list")
             st.warning(
-                "**Early-warning signal list.** This designation is a foreign "
-                f"national-list **risk signal** (listed since {d.listed_since}), "
-                "not a binding obligation of this exchange. The identity match(es) "
-                "below are surfaced for **human review** — no hold is proposed on a "
-                "signal listing."
+                f"**Early-warning signal list — {regime_name}.** This designation "
+                f"is a timestamped **risk signal** (regime `{d.source_regime}`, "
+                f"program `{d.program}`, list type `{d.list_type}`), listed since "
+                f"{d.listed_since} — not a binding obligation of this exchange. The "
+                "identity match(es) below are surfaced for **human review**; no hold "
+                "is proposed on a signal listing."
             )
             for r in signal_id_rows:
                 st.markdown(

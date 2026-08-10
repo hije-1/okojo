@@ -806,6 +806,12 @@ def test_triage_surfaces_corroborated_variant_early_warning(sweep_app_identity):
     assert "risk signal" in triage and "not a binding obligation" in triage
     assert "500000024" in triage
     assert _CORROBORATION_LABEL_import()["corroborated_true_hit"] in triage
+    # the notice NAMES the specific list source (registry name + program + regime),
+    # not a generic "foreign list"
+    from okojo.sweep import LIST_SOURCE_REGISTRY
+    assert LIST_SOURCE_REGISTRY["SYN-FOREIGN-NCT"]["name"] in triage
+    assert "SYNTHETIC-NCT-STYLE" in triage
+    assert "SYN-FOREIGN-NCT" in triage
 
 
 def test_triage_marks_possible_match_variant(sweep_app_identity):
