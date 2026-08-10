@@ -282,6 +282,16 @@ def _decision_render(rec: dict) -> str:
     return f"Recorded the bounded decision '{did}'."
 
 
+def _disposition_render(rec: dict) -> str:
+    d = _json_dict(rec.get("detail")) or {}
+    disp = d.get("disposition") or "a disposition"
+    sha = d.get("package_sha256") or ""
+    out = f"A human reviewer recorded {disp} on the case package"
+    if sha:
+        out = f"{out} ({sha[:12]}…)"
+    return _period(f"{out}; rationale recorded")
+
+
 def _packaged_render(rec: dict) -> str:
     d = _json_dict(rec.get("detail")) or {}
     tgt = rec.get("target") or d.get("package") or "the package"
@@ -373,6 +383,12 @@ CASE_TEMPLATES: dict[tuple, _Template] = {
     ("sar_critic", "human_fallback"): _phrase(
         "action", "Flagged residual gaps for human review", detail=True, target=True),
     ("case_packager", "packaged"): _Template("action", _packaged_render),
+    # A human reviewer's disposition on the finished package — a decision
+    # written INTO the chain (v1). The forced-add template for the new record
+    # type: a faithful 1:1 reading grounded to the record's own (seq, hash) and
+    # calibrated (no BANNED_TERMS). Additive template growth → NARRATOR stays
+    # 1.0.0, per the sweep/coverage precedent.
+    ("human_reviewer", "reviewer_disposition"): _Template("action", _disposition_render),
 }
 
 # --------------------------------------------------------------------------- #

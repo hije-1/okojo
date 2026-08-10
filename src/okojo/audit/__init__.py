@@ -10,6 +10,26 @@ access, vanishing records).
 
 from __future__ import annotations
 
-from .log import GENESIS_HASH, AuditLog, ChainVerification, verify_records
+from .log import (
+    GENESIS_HASH,
+    REVIEWER_ACTION,
+    REVIEWER_ACTOR,
+    REVIEWER_DISPOSITIONS,
+    AuditLog,
+    ChainVerification,
+    DispositionError,
+    build_reviewer_disposition_record,
+    verify_records,
+)
 
-__all__ = ["AuditLog", "GENESIS_HASH", "ChainVerification", "verify_records"]
+__all__ = [
+    "AuditLog",
+    "GENESIS_HASH",
+    "ChainVerification",
+    "verify_records",
+    "build_reviewer_disposition_record",
+    "DispositionError",
+    "REVIEWER_ACTOR",
+    "REVIEWER_ACTION",
+    "REVIEWER_DISPOSITIONS",
+]

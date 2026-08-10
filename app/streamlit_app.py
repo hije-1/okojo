@@ -15,6 +15,7 @@ from __future__ import annotations
 import difflib
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
@@ -24,6 +25,11 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from okojo.advisory import RETRIEVAL_VERSION, retrieval_config
+from okojo.audit import (
+    REVIEWER_DISPOSITIONS,
+    build_reviewer_disposition_record,
+    verify_records,
+)
 from okojo.bootstrap import ensure_default_scenario_dataset
 from okojo.casegraph import CaseGraphStore
 from okojo.connectors import Connectors
@@ -1668,6 +1674,49 @@ def _render_coverage_panel(conn) -> None:
     )
 
 
+# The reviewer label written into a sandbox disposition. The public demo has no
+# accounts, so every visitor's decision is attributed to this generic
+# session-scoped label — not a claimed identity.
+_REVIEWER_LABEL = "Demo reviewer (this browser session)"
+
+
+def _record_disposition(
+    *,
+    canonical_records,
+    subject_uid,
+    package_sha256,
+    packaged_seq,
+    sandbox_key,
+    rationale_key,
+    disposition,
+) -> None:
+    """Widget callback: append one reviewer disposition to the SESSION sandbox.
+
+    Session-local by construction — it mutates only ``st.session_state`` and
+    calls the pure, disk-free builder, so the canonical chain bytes on disk are
+    never written (invariant iii). The required-rationale gate is re-checked
+    here (the buttons are also ``disabled`` when the box is empty), so an
+    empty rationale can never produce a record (invariant i).
+    """
+    rationale = st.session_state.get(rationale_key, "")
+    if not rationale.strip():
+        return
+    sandbox = list(st.session_state.get(sandbox_key, []))
+    effective = list(canonical_records) + sandbox
+    record = build_reviewer_disposition_record(
+        effective,
+        subject_uid=subject_uid,
+        package_sha256=package_sha256,
+        disposition=disposition,
+        rationale=rationale,
+        reviewer=_REVIEWER_LABEL,
+        timestamp=datetime.now(timezone.utc).isoformat(),
+        packaged_seq=packaged_seq,
+    )
+    sandbox.append(record)
+    st.session_state[sandbox_key] = sandbox
+
+
 def _render_audit_narrative(records, *, family: str, subject=None) -> None:
     """Render the read-only Audit Narrator's two-register narrative over one
     hash chain: plain sentences on screen, the cited ``(seq, hash)`` provenance
@@ -1795,7 +1844,18 @@ def main() -> None:
         )
 
     subject_uid = st.session_state.subject_uid
-    res = run_case(subject_uid, conn=conn, max_hops=max_hops)
+    # Run the case ONCE per (subject, hop-depth) per session and reuse it across
+    # reruns. The audit chain carries real wall-clock timestamps, so a fresh run
+    # on every rerun would re-hash the whole chain — and the package SHA — on
+    # each interaction. The session-local reviewer-disposition sandbox (Audit
+    # trail tab) chains a human decision onto this chain and re-verifies it, so
+    # the base must stay byte-stable between reruns; caching pins it. Switching
+    # subject or hop depth is a fresh investigation — a new run, a clean sandbox.
+    _run_key = (subject_uid, max_hops)
+    if st.session_state.get("_case_run_key") != _run_key:
+        st.session_state["_case_res"] = run_case(subject_uid, conn=conn, max_hops=max_hops)
+        st.session_state["_case_run_key"] = _run_key
+    res = st.session_state["_case_res"]
 
     # -- header metrics ---------------------------------------------------- #
     # The Advisory tile carries the one long value in the row (an advisory id
@@ -2336,11 +2396,24 @@ def main() -> None:
             "the hashes themselves — verify any link by eye: row *n*'s `prev_hash` "
             "equals row *n−1*'s `hash`."
         )
-        if res.audit_verified:
+        # A human reviewer's disposition is written INTO this same chain, in a
+        # session-local sandbox (see the "Reviewer decision" panel below). The
+        # effective chain = the canonical records read from disk + any sandbox
+        # dispositions this session recorded; it re-verifies and re-narrates
+        # live. With no sandbox disposition the effective chain IS the canonical
+        # chain, so this surface is byte-identical until a decision is recorded.
+        sandbox_key = f"case_dispositions::{res.subject_uid}::{res.package_sha256}"
+        sandbox = list(st.session_state.get(sandbox_key, []))
+        effective_records = list(res.audit_records) + sandbox
+        effective_verified = (
+            verify_records(effective_records).ok if sandbox else res.audit_verified
+        )
+
+        if effective_verified:
             st.success(
                 "Hash chain verified — the log is intact and append-only "
-                f"(chain tip `{res.audit_records[-1]['hash'][:16]}…`, "
-                f"{len(res.audit_records)} records)."
+                f"(chain tip `{effective_records[-1]['hash'][:16]}…`, "
+                f"{len(effective_records)} records)."
             )
         else:
             st.error("Hash chain FAILED verification — the log was tampered with.")
@@ -2348,7 +2421,7 @@ def main() -> None:
         # Reviewable, not just provable: the Audit Narrator reads this very chain
         # and renders a plain-language, citation-backed account of what the agent
         # did, in order (Phase 9). Read-only — it writes nothing to the chain.
-        _render_audit_narrative(res.audit_records, family="case",
+        _render_audit_narrative(effective_records, family="case",
                                 subject=f"uid:{res.subject_uid}")
 
         st.markdown("**Raw hash chain**")
@@ -2357,7 +2430,7 @@ def main() -> None:
              "action": r["action"], "target": r.get("target"), "detail": r.get("detail"),
              "provenance": "; ".join(r["provenance"]) if r.get("provenance") else None,
              "prev_hash": r["prev_hash"], "hash": r["hash"]}
-            for r in res.audit_records
+            for r in effective_records
         ])
         st.dataframe(audit_df, use_container_width=True, hide_index=True)
 
@@ -2377,6 +2450,58 @@ def main() -> None:
                 mime="application/json",
             )
             st.caption(f"SHA-256: `{res.package_sha256}`")
+
+            # -- Reviewer decision (session-local sandbox) --------------------- #
+            # A human reviewer's decision on the finished package, written INTO
+            # the chain beside it. Two dispositions (ruling); recorded and
+            # surfaced only — re-runs nothing, changes no case state.
+            packaged_rec = next(
+                (r for r in res.audit_records
+                 if r.get("actor") == "case_packager" and r.get("action") == "packaged"),
+                None,
+            )
+            packaged_seq = packaged_rec["seq"] if packaged_rec else None
+
+            st.markdown("---")
+            st.subheader("Reviewer decision")
+            st.caption(
+                "Session-local sandbox: this decision appends to THIS session's "
+                "copy of the chain — re-verified and re-narrated above, live — "
+                "and the canonical demo data on disk is never written. Recorded "
+                "and surfaced only: it re-runs nothing and changes no case state."
+            )
+            rationale_key = f"disp_rationale::{res.subject_uid}"
+            rationale = st.text_area(
+                "Rationale (required)",
+                key=rationale_key,
+                placeholder="Why this decision? A rationale is required to record it.",
+            )
+            ready = bool(rationale.strip())
+            cols = st.columns(len(REVIEWER_DISPOSITIONS))
+            for col, disp in zip(cols, REVIEWER_DISPOSITIONS):
+                col.button(
+                    disp,
+                    key=f"disp_{disp}::{res.subject_uid}",
+                    disabled=not ready,
+                    use_container_width=True,
+                    on_click=_record_disposition,
+                    kwargs=dict(
+                        canonical_records=res.audit_records,
+                        subject_uid=res.subject_uid,
+                        package_sha256=res.package_sha256,
+                        packaged_seq=packaged_seq,
+                        sandbox_key=sandbox_key,
+                        rationale_key=rationale_key,
+                        disposition=disp,
+                    ),
+                )
+            if not ready:
+                st.caption("Enter a rationale to enable the buttons.")
+            if sandbox:
+                st.success(
+                    f"{len(sandbox)} reviewer decision(s) recorded in this "
+                    "session's sandbox chain — see the re-verified narrative above."
+                )
 
 
 if __name__ == "__main__":

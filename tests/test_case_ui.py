@@ -444,3 +444,83 @@ def test_tells_scope_marker_tracks_remark_author_p8g(case_app, conn, trust_uid):
                       len(scopes))
     assert all("this subject" in str(s) for s in scopes[:first_wide]), \
         "subject-authored rows must be grouped first"
+
+
+# --------------------------------------------------------------------------- #
+# Reviewer decision panel (Audit trail tab) — a human decision on the chain     #
+# --------------------------------------------------------------------------- #
+def _disposition_buttons(at):
+    from okojo.audit import REVIEWER_DISPOSITIONS
+    return [b for b in at.button if b.label in REVIEWER_DISPOSITIONS]
+
+
+def test_reviewer_decision_panel_renders_with_rationale_gate(case_app):
+    """The panel renders at the foot of the Audit tab: the header, the sandbox
+    caption, and both ruled dispositions as buttons — DISABLED at load, because
+    the rationale box is empty (the gate). No disposition is in the narrative
+    until a decision is recorded (this read-only fixture records none)."""
+    from okojo.audit import REVIEWER_DISPOSITIONS
+
+    assert not case_app.exception
+    md = [el.value for el in case_app.markdown]
+    caps = [el.value for el in case_app.caption]
+    heads = [el.value for el in case_app.subheader]
+
+    assert any("Reviewer decision" in h for h in heads), "reviewer-decision header missing"
+    assert any("Session-local sandbox" in c and "never written" in c for c in caps), \
+        "the session-sandbox caption must state the canonical data is untouched"
+
+    buttons = _disposition_buttons(case_app)
+    assert {b.label for b in buttons} == set(REVIEWER_DISPOSITIONS), \
+        "both ruled dispositions must render as buttons"
+    assert all(b.disabled for b in buttons), \
+        "an empty rationale must leave the buttons disabled (the gate)"
+    assert any("Enter a rationale to enable" in c for c in caps)
+
+    # nothing recorded yet → no disposition line in the plain-language narrative
+    assert not any("A human reviewer recorded" in m for m in md)
+
+
+def test_reviewer_decision_records_into_the_narrative(data_dir):
+    """End-to-end in a fresh app: type a rationale, the buttons enable, click
+    Approve, and the disposition renders into the re-verified plain-language
+    narrative — live, in the session sandbox."""
+    AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
+
+    import streamlit as st
+    import okojo.connectors.store as store_mod
+
+    mp = pytest.MonkeyPatch()
+    mp.setattr(store_mod, "SYNTHETIC_DIR", data_dir)
+    st.cache_resource.clear()
+    try:
+        at = AppTest.from_file(str(_APP), default_timeout=90)
+        at.run()  # default == case investigation
+        assert not at.exception
+
+        uid = at.session_state["subject_uid"]
+
+        # gate: buttons disabled while the rationale is empty
+        assert all(b.disabled for b in _disposition_buttons(at))
+
+        at.text_area(key=f"disp_rationale::{uid}").set_value(
+            "Corroborated exposure; escalating for a second look.").run()
+        buttons = _disposition_buttons(at)
+        assert buttons and not any(b.disabled for b in buttons), \
+            "a non-empty rationale must enable the disposition buttons"
+
+        # record "Review Needed" and confirm it lands in the narrative, cited
+        next(b for b in _disposition_buttons(at) if b.label == "Review Needed").click().run()
+        assert not at.exception
+
+        md = [el.value for el in at.markdown]
+        line = next((m for m in md if "A human reviewer recorded Review Needed" in m), None)
+        assert line is not None, "the disposition must render into the plain-language narrative"
+        assert "rationale recorded" in line
+
+        # the sandbox chain re-verified (the intact-chain success banner still shows)
+        oks = [el.value for el in at.success]
+        assert any("Hash chain verified" in o for o in oks)
+    finally:
+        mp.undo()
+        st.cache_resource.clear()

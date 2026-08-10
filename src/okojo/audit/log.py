@@ -29,6 +29,23 @@ _PAYLOAD_FIELDS = (
     "seq", "timestamp", "actor", "action", "target", "detail", "provenance", "prev_hash",
 )
 
+# Reviewer disposition — a human decision written INTO the same tamper-evident
+# chain as the agent's work (v1). The two dispositions are fixed by ruling; a
+# disposition is *recorded and surfaced only* — it re-runs nothing and mutates
+# no case state. The record is the feature.
+REVIEWER_ACTOR = "human_reviewer"
+REVIEWER_ACTION = "reviewer_disposition"
+REVIEWER_DISPOSITIONS = ("Approve", "Review Needed")
+
+
+class DispositionError(ValueError):
+    """Raised when a reviewer disposition is malformed.
+
+    Fires on an unknown disposition or an empty/whitespace-only rationale — the
+    required-rationale gate is enforced here, at the point the record is built,
+    so an ungrounded human decision can never enter the chain (invariant i).
+    """
+
 
 @dataclass(frozen=True)
 class ChainVerification:
@@ -140,6 +157,74 @@ class AuditLog:
     def verify_chain_located(self) -> ChainVerification:
         """Verify the chain and report *where* it first breaks (read-only)."""
         return verify_records(self.read_all())
+
+
+def build_reviewer_disposition_record(
+    records: Iterable[dict],
+    *,
+    subject_uid: int,
+    package_sha256: str,
+    disposition: str,
+    rationale: str,
+    reviewer: str,
+    timestamp: str,
+    packaged_seq: Optional[int] = None,
+) -> dict:
+    """Compute the next hash-chained record for a human reviewer's disposition.
+
+    Pure and disk-free, the write-path analogue of :func:`verify_records`: it
+    reads an already-read chain (a list of record dicts) and returns a NEW
+    record chained onto the tip, writing to NO file. The session-sandbox path
+    (the public demo) uses this to append a disposition to a *session-local copy*
+    of a chain — the canonical bytes on disk are never touched (invariant iii).
+
+    The payload carries everything a reviewer decision needs: the subject uid,
+    the package SHA-256 being decided on, the disposition, the required free-text
+    rationale, a reviewer label, and the timestamp — hash-chained like every
+    other record. ``rationale`` is REQUIRED: an empty or whitespace-only
+    rationale raises :class:`DispositionError`, so the record cannot be built
+    (invariant i). ``disposition`` must be one of :data:`REVIEWER_DISPOSITIONS`.
+
+    When ``packaged_seq`` is given, the record cites the ``packaged`` chain
+    record whose SHA-256 it decides on (grounding provenance); the record's own
+    ``(seq, hash)`` is what the Audit Narrator grounds each sentence to.
+    """
+    if disposition not in REVIEWER_DISPOSITIONS:
+        raise DispositionError(
+            f"disposition must be one of {REVIEWER_DISPOSITIONS}, got {disposition!r}")
+    clean_rationale = " ".join((rationale or "").split())
+    if not clean_rationale:
+        raise DispositionError("a reviewer disposition requires a non-empty rationale")
+
+    records = list(records)
+    prev_hash = str(records[-1]["hash"]) if records else GENESIS_HASH
+    seq = (int(records[-1]["seq"]) + 1) if records else 1
+    provenance: ProvenanceArg = None
+    if packaged_seq is not None:
+        provenance = [Provenance(
+            source="audit_chain", row_key=f"seq:{packaged_seq}",
+            detail="the packaged record whose SHA-256 this disposition decides on",
+        )]
+    payload = {
+        "seq": seq,
+        "timestamp": timestamp,
+        "actor": REVIEWER_ACTOR,
+        "action": REVIEWER_ACTION,
+        "target": f"uid:{subject_uid}",
+        "detail": json.dumps(
+            {
+                "subject_uid": subject_uid,
+                "package_sha256": package_sha256,
+                "disposition": disposition,
+                "rationale": clean_rationale,
+                "reviewer": reviewer,
+            },
+            sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+        ),
+        "provenance": _as_citations(provenance),
+        "prev_hash": prev_hash,
+    }
+    return dict(payload, hash=AuditLog._digest(payload))
 
 
 def verify_records(records: Iterable[dict]) -> ChainVerification:
