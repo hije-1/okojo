@@ -79,7 +79,7 @@ exhaustive, test-guarded inventory.
 | `src/okojo/scenario/_fakelite.py` | Dependency-free stand-in for the Faker subset used, so the generator still runs without Faker. | `FakeLite` |
 | `src/okojo/connectors/store.py` | DuckDB-backed store (queried through the `Connectors` read surface) presenting the synthetic CSVs — including `address_book.csv` — as mock internal systems. The flow/value accessors return exchange + self-hosted chain records and exclude hot-wallet settlement legs, so every downstream walk sees each value movement once. | `Record`, `Store`, `Connectors.all_transactions`, `Connectors.settlement_legs`, `Connectors.address_book` |
 | `src/okojo/bootstrap.py` | Boot hook that regenerates the (gitignored) synthetic dataset in-process on a fresh deploy; a no-op when data is already present. | `provision_scenario_dataset`, `ensure_default_scenario_dataset`, `scenario_dataset_present` |
-| `src/okojo/audit/log.py` | Append-only, hash-chained audit log + located chain verification. | `AuditLog`, `verify_records`, `ChainVerification`, `GENESIS_HASH` |
+| `src/okojo/audit/log.py` | Append-only, hash-chained audit log + located chain verification. Also the pure, disk-free builder for the human reviewer-disposition record (actor `human_reviewer`, action `reviewer_disposition`) that a person appends to a case chain to record an Approve / Review Needed decision on the finished package. | `AuditLog`, `verify_records`, `ChainVerification`, `GENESIS_HASH`, `build_reviewer_disposition_record`, `REVIEWER_DISPOSITIONS`, `DispositionError` |
 | `src/okojo/entity/backbone.py` | One canonical, de-duplicated view of every entity in a case. | `EntityBackbone`, `Entity`, `build_backbone` |
 
 ## Entry point A — the case pipeline (components 1–8)
@@ -124,7 +124,7 @@ exhaustive, test-guarded inventory.
 | `src/okojo/sweep/designation.py` | Fail-closed designation parsing and designated-name screening. | `parse_designation`, `match_designated_name`, `Designation` |
 | `src/okojo/sweep/exposure.py` | Reverse-BFS exposure walker over the full ledger (by flow + hop distance). | `sweep_exposure`, `ExposureResult`, `ExposedAccount` |
 | `src/okojo/sweep/verify.py` | Two-system sanctions-hold reconciliation (block-status gaps). | `verify_block_status`, `StatusGap` |
-| `src/okojo/sweep/worksheet.py` | The triaged, grounded, fail-closed remediation worksheet. | `build_worksheet`, `WorksheetRow`, `assert_worksheet_resolvable` |
+| `src/okojo/sweep/worksheet.py` | The triaged, grounded, fail-closed remediation worksheet — name and transliteration-variant identity hits share one worksheet, variant rows corroboration-gated (a corroborated or a held possible-match hit surfaces, the latter marked for human review; a dismissed same-name collision never becomes a row). | `build_worksheet`, `WorksheetRow`, `assert_worksheet_resolvable` |
 | `src/okojo/sweep/escalations.py` | Internal escalation drafts — drafted, validated, never sent. | `draft_escalations`, `EscalationDraft` |
 | `src/okojo/sweep/identity_rfi.py` | The identity-review RFI (the first subject-facing surface). | `draft_identity_review_rfis`, `IdentityReviewRfi` |
 | `src/okojo/sweep/geo.py` | Geo-triangulation wiring for the sweep. | `run_geo_triangulation`, `territory_profile` |
@@ -150,5 +150,5 @@ exhaustive, test-guarded inventory.
 | Module | Purpose | Key public symbols |
 | --- | --- | --- |
 | `src/okojo/narrator/narrator.py` | Phase 9 — the grounded, read-only summarizer that turns a hash chain into plain-language sentences. Writes to no chain. | `narrate_chain`, `narrate_chain_batch`, `narrator_config`, `NARRATOR_VERSION` |
-| `app/streamlit_app.py` | The Streamlit demo UI over both entry points and both audit chains. | `get_connectors`, `main` |
+| `app/streamlit_app.py` | The Streamlit demo UI over both entry points and both audit chains — case mode (nine component tabs) and Designation-sweep mode (six investigator-flow tabs), a foot-of-Audit-tab reviewer-decision panel that appends a disposition to a session-local chain copy, and a sidebar-toggled guided-walkthrough narrative layer (`_walkthrough`, ON by default) rendering fixed, verbatim narrative bands above each tab bar and at the top of every tab. | `get_connectors`, `main` |
 | `scripts/generate_scenario.py` | CLI entry point that regenerates the synthetic dataset and prints a summary. | `main` |

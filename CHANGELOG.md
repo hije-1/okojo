@@ -51,8 +51,39 @@ always reviews, decides, and files. All data is synthetic or public.
     and any list that is visibly absent).
   - One unconditional `designation_check/screened` proof-of-screening record per
     case, embedding the corroboration outcome and any mismatched fields.
+- **Reviewer disposition on the case audit chain.** A human reviewer's decision
+  on the finished case package — *Approve* or *Review Needed*, with a required
+  written rationale — is written *into* the same tamper-evident hash chain as the
+  agent's work, so the record carries not just what the agent prepared but what
+  the person decided.
+  - A new audit record type (actor `human_reviewer`, action `reviewer_disposition`)
+    built by a pure, disk-free `build_reviewer_disposition_record`; recorded and
+    surfaced only — it re-runs nothing and changes no case state.
+  - On the public demo the decision appends to a session-local copy of the chain
+    that re-verifies and re-narrates live, while the canonical data on disk is
+    never written; with no decision recorded the surface is byte-identical to the
+    canonical chain.
+  - Narrated by the read-only Audit Narrator (one additive template; the narrator
+    remains v1.0.0), and surfaced in a "Reviewer decision" panel at the foot of
+    the case Audit-trail tab (both buttons disabled until a rationale is entered).
+  - Verified by invariant, not a gold key (a human decision has no predetermined
+    correct answer): required rationale, session-chain re-verification,
+    canonical-bytes byte-identity, a grounded + calibrated narrator line, and a
+    demonstrated falsification. Deferred as out of v1 scope: approve-with-changes,
+    sweep-side dispositions, timeout/default-to-hold, reviewer-authority tiers.
+- **Guided walkthrough — a narrative tour over both modes.** A sidebar toggle
+  (on by default) shows a fixed narrative band above each mode's tab bar and at
+  the top of every tab, walking a first-time reviewer through what each surface
+  shows and why. The only behaviour it adds is the toggle: no computed value,
+  pipeline call, audit write, or data read happens in a walkthrough band, and
+  with the toggle off the app is its pre-walkthrough self. The narrative text is
+  asserted verbatim in the tests, so it cannot silently drift.
 
 ### Changed
+- **Designation-sweep mode split into six investigator-flow tabs** (Triage,
+  Identity, Geo, Counterparty, Coverage, Audit) — a display relocation only:
+  every section moved verbatim into its tab, each still computing over the same
+  sweep result.
 - **License changed to the Business Source License 1.1** for v1.1.0 and later:
   source-available; non-production use (research, evaluation, demonstration) is
   free, production or commercial use requires a license from the Licensor, and
@@ -79,6 +110,19 @@ always reviews, decides, and files. All data is synthetic or public.
   subject's evidence closure, and the grounding and calibration contracts hold.
 
 ### Fixed
+- **Early-warning Triage gap — a corroborated variant hit reaches the worksheet.**
+  A corroborated transliteration-variant identity hit on a foreign early-warning
+  signal list previously surfaced only in the sweep's Identity view, never in the
+  Triage worksheet a reviewer works first. Name and variant identity hits now
+  share one worksheet, variant rows corroboration-gated: a corroborated hit or a
+  held possible-match hit surfaces (the latter marked for human review), while a
+  dismissed same-name collision — a resolved false positive — never becomes a
+  remediation row. A foreign early-warning designation also carries a Triage
+  notice that names the specific list source and frames every finding as a risk
+  signal for human review, not a binding obligation. The fix carries its own
+  worksheet-coverage answer key and a demonstrated falsification; it reuses the
+  existing action vocabulary, so no config, version, or unrelated scorecard moved
+  (the intended DES-0005 / DES-0006 worksheet delta is the only behavioral change).
 - **Two-record transaction data model — the memo-on-chain realism flaw.** The
   prior one-row model let a single on-chain transfer also carry a customer's
   free-text remark, which a real chain transfer (address → address, no memo
@@ -112,9 +156,16 @@ always reviews, decides, and files. All data is synthetic or public.
   determinism canary is untouched.
 
 ### Notes
-- No capability version was bumped and no new ground-truth keys were added — all
-  capability scorecards are byte-identical to v1.0.0. By design, each case audit
-  chain gains the one new proof-of-screening record.
+- The additions after the v1.1.0 tag ride on the release without a new tag. The
+  only new capability version is `coverage_config` (COVERAGE 1.0.0, for the
+  coverage-gap check); every other capability version is frozen, and all
+  pre-existing capability scorecards remain byte-identical (the only intended
+  scored deltas are the additive designation-check and Triage variant-worksheet
+  gold keys). Ground-truth changes are additive keys plus one enumerated pointer
+  re-target (the two-record data model); the account-name determinism canary is
+  untouched throughout. By design, each case audit chain gains the one
+  proof-of-screening record, and a recorded reviewer disposition appends only to
+  the demo's session-local chain copy (the canonical on-disk chain is unchanged).
 
 ## [1.0.0] - 2026-07-31
 

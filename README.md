@@ -20,8 +20,11 @@
 > case subject against the designation lists and surfaces the posture on the
 > Sanctions tab, and a screening coverage-gap check that measures the customer
 > base's whole geographic footprint against the enabled list-source regimes and
-> surfaces the mismatch as a standing, cited signal. Fully synthetic data, built in
-> the open. See the [CHANGELOG](CHANGELOG.md) and [Status & roadmap](#status--roadmap).
+> surfaces the mismatch as a standing, cited signal. The latest v1.1 additions
+> write a human reviewer's Approve / Review Needed decision into the case audit
+> chain and add a toggle-able guided walkthrough over both modes. Fully synthetic
+> data, built in the open. See the [CHANGELOG](CHANGELOG.md) and
+> [Status & roadmap](#status--roadmap).
 
 ## The Problem
 
@@ -363,8 +366,8 @@ Continuous integration (regenerate + test on every push) landed as its first sli
 integration (regenerate + full suite on every push), a security pass (bandit +
 pip-audit as dev tooling, GitHub private vulnerability reporting), a
 snippet-level SCA scan, a full code-systems map with a completeness tripwire, the
-Python-3.12 deploy pins, and the cloud-hosted live demo. The one remaining launch
-item is a recorded walkthrough of the finished system.
+Python-3.12 deploy pins, and the cloud-hosted live demo. The finished-system
+walkthrough ships as the in-app guided-walkthrough layer described below.
 
 **v1.1 (complete) — subject-as-seed designation check.** The case pipeline runs a
 read-only designation check on its unconditional backbone: it screens each case
@@ -387,6 +390,36 @@ hash-chained audit trail (a new chain family). Surfaced as a "Screening coverage
 panel in sweep mode, with a one-line pointer from the case Sanctions tab. Its
 regime → jurisdiction coverage policy is a new versioned config with its own
 methodology doc and doc↔code anti-drift guard (the twelfth such pair).
+
+**v1.1 (complete) — reviewer disposition on the case audit chain.** A human
+reviewer's decision on the finished case package — *Approve* or *Review Needed*,
+with a required written rationale — is written *into* the same tamper-evident
+hash chain as the agent's work, closing the loop so the record carries not just
+what the agent prepared but what the person decided. It is recorded and surfaced
+only: it re-runs nothing and changes no case state. On the public demo the
+decision appends to a session-local copy of the chain that re-verifies and
+re-narrates live, while the canonical demo data on disk is never written. It is a
+new audit record type narrated by the read-only Audit Narrator (the narrator
+remains v1.0.0 — additive template growth), and it surfaces in a "Reviewer
+decision" panel at the foot of the case Audit-trail tab.
+
+**v1.1 (complete) — early-warning Triage fix + six-tab sweep view.**
+Designation-sweep mode is organised into six investigator-flow tabs (Triage,
+Identity, Geo, Counterparty, Coverage, Audit) — a display relocation only, each
+section moved verbatim into its tab. And a corroborated transliteration-variant
+identity hit on a foreign early-warning signal list now reaches the **Triage
+worksheet** a reviewer works first, not only the Identity view: variant matches
+feed the worksheet corroboration-gated (a corroborated or a held possible-match
+hit surfaces, the latter marked for human review; a dismissed same-name
+collision never becomes a remediation row).
+
+**v1.1 (complete) — guided walkthrough.** A guided-tour narrative layer over both
+modes, for reviewers meeting the system for the first time: a sidebar toggle (on
+by default) shows a fixed narrative band above each mode's tab bar and at the top
+of every tab, walking the reader through what each surface shows and why. The
+only behaviour it adds is the toggle — no computed value, pipeline call, audit
+write, or data read happens in a walkthrough band, and with the toggle off the
+app is its pre-walkthrough self.
 
 **Roadmap (post-v1.0):**
 

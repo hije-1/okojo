@@ -267,9 +267,40 @@ This file is your standing context. Read `docs/Build-Plan.md` before coding and
   zero. No version moved; account-name canary untouched. 588 green tests (1
   skipped: the ST backend). The three status surfaces stay at **v1.1** (rides on
   the release, no tag).
-- **NEXT — v1.0.0 walkthrough (Session D):** a recorded demo/walkthrough of the
-  live system — the last Phase-10 item, produced as content on top of the
-  release, not a status gate.
+- **v1.1 (demo-facing polish — six-tab sweep, reviewer disposition, guided
+  walkthrough): BUILT (rides on v1.1.0, no tag/version move).** Three
+  launch-prep refinements, all display-first and additive. (1) **Designation-
+  sweep mode split into six investigator-flow tabs** (Triage · Identity · Geo ·
+  Counterparty · Coverage · Audit) — display relocation only, every section
+  moved verbatim into its tab (D-084). (2) **Reviewer disposition on the case
+  hash chain (v1)** — a human's Approve / Review Needed decision on the finished
+  package is written INTO the same tamper-evident chain as the agent's work: a
+  new `("human_reviewer", "reviewer_disposition")` record type built by a pure,
+  disk-free `build_reviewer_disposition_record`, required rationale, recorded +
+  surfaced only (re-runs nothing); on the public demo it appends to a
+  session-local sandbox copy that re-verifies + re-narrates live while the
+  canonical on-disk bytes are never written; narrated by one additive template
+  (**NARRATOR stays 1.0.0**). Verified by invariant (no gold key — a human
+  decision has no predetermined answer). DECISIONS §23 / D-083. (3) The
+  **early-warning Triage gap fix**: a corroborated transliteration-variant hit on
+  a foreign signal list now reaches the **Triage worksheet** a reviewer works
+  first (not only the Identity view), corroboration-gated (corroborated or
+  possible-match surfaces; a dismissed same-name collision never becomes a row),
+  with its own worksheet-coverage answer key + a falsification. DECISIONS §24 /
+  D-081. (4) A **guided-walkthrough narrative layer** over both modes: a sidebar
+  toggle (ON by default) shows a fixed, Jennifer-approved narrative band above
+  each tab bar and at the top of every tab; the only behaviour it adds is the
+  toggle — no computed value, pipeline call, audit write, or data read (D-085).
+  **All capability scorecards byte-identical** (the intended DES-0005/0006
+  worksheet delta is the only behavioral change; additive gold key only);
+  account-name canary untouched; frozen sweep registry untouched; case-chain
+  tips moved by design only where the disposition sandbox appends. 622 green
+  tests (1 skipped: the ST backend). The three status surfaces stay at **v1.1**
+  (rides on the release, no tag).
+- **NEXT — v1.0.0 walkthrough (Session D):** the finished-system walkthrough now
+  ships as the **in-app guided-walkthrough layer** above (Jennifer's ruling: the
+  guided layer replaces the recorded video; D-085), produced as content on top of
+  the release, not a status gate.
 
 ## Where the plan and rationale live
 - `docs/Build-Plan.md` — authoritative, dated, phase-by-phase plan (~20 wks @ 20h/wk). Follow it.

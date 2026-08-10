@@ -554,3 +554,87 @@ _Added Day 12 (2026-08-05; rides on v1.1.0, no version move). Ratifies D-079._
   exchange record it settles, withdrawals settle from the hot wallet, and the flow
   accessors exclude settlement legs. The determinism guards continue to cover the
   changed generator.
+
+## 23. Reviewer disposition: a human decision written onto the case hash chain
+_Added 2026-08-10 (rides on v1.1.0, no version move). Ratifies D-083._
+
+- **Why it exists.** The audit chain recorded everything the *agent* did, but the
+  loop closed one record short: what the *human reviewer* decided about the finished
+  package lived nowhere on the tamper-evident record. D-083 directed that the
+  reviewer's decision be written into the same hash chain as the agent's work, so
+  the chain carries not just what was prepared but what was decided — the centerpiece
+  audit trail (D-012) made whole at the point of human judgment.
+- **A new record type, deliberately minimal (v1).** One record: actor
+  `human_reviewer`, action `reviewer_disposition`, exactly two dispositions —
+  `Approve` and `Review Needed` — a **required** free-text rationale, and provenance
+  citing the `packaged` record it decides on. It is **recorded and surfaced only**:
+  it re-runs nothing and changes no case state. The record *is* the feature.
+- **The builder is pure and disk-free.** `build_reviewer_disposition_record` is the
+  write-path analogue of `verify_records`: it reads an in-memory chain and returns
+  the next hash-chained record, writing nothing. It raises `DispositionError` on an
+  empty/whitespace rationale or an unknown disposition (fail-closed at the boundary).
+- **Public-demo sandbox — the canonical bytes are never written.** On the shared
+  demo a decision appends to a **session-local copy** of the chain that re-verifies
+  and re-narrates live in front of the visitor, while the canonical on-disk chain is
+  never mutated. With zero recorded dispositions the effective chain *is* the
+  canonical chain, so the surface is byte-identical until a decision is made. This
+  is why the base case run is cached per `(subject, hop-depth)`: the chain carries
+  real wall-clock timestamps, so a fresh run each rerun would re-hash the whole
+  chain (and the package SHA), and a recorded disposition would no longer match the
+  chain it was appended to.
+- **Narrated, not modeled.** The Audit Narrator gains one additive template that
+  reads the record 1:1 (grounded to its own `(seq, hash)`, calibrated, no banned
+  terms). Additive template growth is content, not config, so **NARRATOR stays
+  1.0.0** and the narrator anti-drift guard is untouched. The methodology's "the
+  case chain the compiled pipeline writes" is likewise unchanged: the disposition is
+  a human append in-session, not something the pipeline writes.
+- **Verification is by invariant, not a gold key.** A human decision has no
+  predetermined correct answer, so there is no scored P/R/F1 here; instead the tests
+  pin the properties — rationale required, the session chain re-verifies after an
+  append, the canonical on-disk bytes are byte-identical after many sandbox
+  dispositions, the narrator line is templated + grounded + calibrated for both
+  dispositions, and a falsification (a tampered rationale breaks verification at that
+  seq; an ungrounded disposition line is rejected fail-closed).
+- **Scoped out of v1 (recorded, not built).** Approve-with-changes; sweep-side
+  dispositions; timeout / default-to-hold; reviewer-authority tiers. And ruling 7
+  (case-graph recidivism *citing* prior human decisions) was halted and referred to
+  the author rather than decided: the record is readable as a prior-review outcome
+  by construction, but wiring the recidivism consumer would need cross-session
+  persistence and a `CaseGraphStore` / `CASEGRAPH_VERSION` change with cross-case
+  blast radius wider than v1 warrants. The author ruled **Option A** — leave the
+  record readable, no consumer wired for v1 — leaving that a candidate future slice.
+
+## 24. Variant identity hits belong in the Triage worksheet (early-warning gap)
+_Added 2026-08-10 (rides on v1.1.0, no version move). Ratifies D-081._
+
+- **The gap.** A corroborated transliteration-variant identity hit on a foreign
+  early-warning signal list surfaced only in the sweep's **Identity** view — never
+  in the **Triage** worksheet a reviewer works first. A real early-warning signal
+  that only appears on a secondary tab is a signal a reviewer can miss; the
+  worksheet is the first surface, so the hit has to reach it.
+- **The fix, and why the permanent form over the bridge.** A display-only bridge
+  (echo the Identity finding onto Triage) was on offer; the author ruled the
+  permanent worksheet fix instead (D-081). Name and variant identity hits now share
+  **one** worksheet: `build_worksheet` takes the transliteration-variant screen
+  output and routes it through the same grounded, fail-closed row builder as exact
+  name matches, with a `variant_match` row kind.
+- **Corroboration is the gate — and it decides the row, not a new action.** Which
+  variant hits become rows is derived from each candidate's corroboration outcome
+  against published identifiers, never from the spelling alone: a
+  `corroborated_true_hit` surfaces as a row; a `possible_match_needs_human` surfaces
+  too, carrying its `corroboration_outcome` so Triage can mark it "human review
+  needed"; a `name_only_dismissed` variant — a resolved false positive — **never**
+  becomes a remediation row. The row reuses the existing early-warning action
+  (`flags_name_match_for_identity_review`); the corroboration grade rides on the
+  row, so no new action verb, config, or version is introduced.
+- **Framed as a signal, not an obligation.** When the selected designation is a
+  foreign early-warning list, a Triage notice names the specific list source and
+  states plainly that the finding is a risk signal surfaced for human review, not a
+  binding listing obligation — the calibrated-language rule (D-014) applied to the
+  designation *kind*.
+- **Guarded, and scoped to one intended delta.** The fix ships its own
+  worksheet-coverage answer key and a demonstrated falsification; it reuses the
+  existing vocabulary and moves no unrelated capability, so the only behavioral
+  change is the intended DES-2026-0005 / DES-2026-0006 worksheet delta. The frozen
+  sweep `LIST_SOURCE_REGISTRY` is read, never duplicated; the sweep methodology doc
+  is updated in lockstep (its variant-row row-kind and corroboration gate table).
