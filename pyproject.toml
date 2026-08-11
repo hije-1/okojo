@@ -1,0 +1,53 @@
+# Packaging for Okojo — makes the engine pip-installable (src layout) so downstream
+# projects can declare it as a git-pinned dependency. Packaging only: this file adds
+# NO behavior. Runtime pins mirror requirements.txt exactly; pytest is a dev extra
+# (it lives under the "# Tests" heading in requirements.txt — a test tool, not runtime).
+#
+# Version note: the authoritative release record is CHANGELOG.md (latest 1.1.0); this
+# release cuts the next patch, 1.1.1, for the packaging addition. src/okojo/__init__.py
+# still carries __version__ = "0.0.1", an unused attribute (imported nowhere); it is left
+# untouched here because src/ is frozen for this packaging slice.
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "okojo"
+version = "1.1.1"
+description = "Okojo — an agentic crypto-investigations co-pilot (synthetic-data research prototype)."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { file = "LICENSE" }
+authors = [{ name = "Jennifer Hicks" }]
+
+# Runtime dependencies — mirrored exactly from requirements.txt (test tooling excluded).
+dependencies = [
+    "Faker==30.8.2",
+    "pandas==2.2.3",
+    "networkx==3.4.2",
+    "pyvis==0.3.2",
+    "rapidfuzz==3.10.1",
+    "duckdb==1.1.3",
+    "pydantic==2.9.2",
+    "numpy==2.5.1",
+    "langgraph==1.0.10",
+    "streamlit==1.54.0",
+]
+
+[project.optional-dependencies]
+# The pytest pin from requirements.txt ("# Tests"). Optional real-embeddings backend
+# (sentence-transformers / torch) stays in requirements-embeddings.txt, out of scope here.
+dev = ["pytest==9.0.3"]
+
+[project.urls]
+Homepage = "https://github.com/hije-1/okojo"
+Changelog = "https://github.com/hije-1/okojo/blob/main/CHANGELOG.md"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+# The advisory RAG corpus is loaded at runtime via Path(__file__).parent / "corpus".
+# It is data, not code, so setuptools would otherwise drop it from the wheel.
+"okojo.advisory" = ["corpus/*.md"]

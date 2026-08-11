@@ -9,6 +9,18 @@ financial-crime investigations at a crypto exchange. It is not production
 screening, not legal or compliance advice, and not a SAR-filing tool; a human
 always reviews, decides, and files. All data is synthetic or public.
 
+## [1.1.1] - 2026-08-11
+
+### Added
+- **Packaging (`pyproject.toml`).** Okojo is now pip-installable from a source
+  checkout under its existing `src/` layout, so downstream projects can declare
+  it as a git-pinned dependency. Packaging only — **zero behavior change**:
+  runtime pins mirror `requirements.txt` exactly, `pytest` is exposed as a `dev`
+  extra, and the advisory RAG corpus (`src/okojo/advisory/corpus/*.md`) is
+  declared as package data so it ships in the installed distribution. No source
+  or test files changed; all capability scorecards byte-identical; the
+  account-name determinism canary untouched.
+
 ## [1.1.0] - 2026-08-03
 
 ### Added
