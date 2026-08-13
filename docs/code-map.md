@@ -74,6 +74,7 @@ exhaustive, test-guarded inventory.
 | `src/okojo/config.py` | Global constants and the deterministic seed the whole synthetic world regenerates from. | `SEED`, `SIM_START`, `SIM_END`, `SYNTHETIC_DIR`, `RING_JURISDICTIONS`, `jurisdiction_label` |
 | `src/okojo/provenance.py` | The grounding primitive — a fact bound to the record it came from. | `Provenance`, `GroundedFact` |
 | `src/okojo/eval/metrics.py` | Set-based precision / recall / F1 used by every capability eval. | `Score`, `precision`, `recall`, `f1`, `score` |
+| `src/okojo/eval/rfi_key.py` | Evaluation-only reader of the RFI answer key (loads per-claim labels straight from `claims_json`), kept off runtime records. | `rfi_claim_answer_key` |
 | `src/okojo/scenario/models.py` | Typed record shapes for every synthetic table. | `Account`, `Transaction`, `AddressBookEntry`, `Designation`, `Rfi`, `SdnEntry` (+ 23 more) |
 | `src/okojo/scenario/generator.py` | Deterministic synthetic-scenario generator (seeded; regenerates byte-identically). | `generate_scenario` |
 | `src/okojo/scenario/_fakelite.py` | Dependency-free stand-in for the Faker subset used, so the generator still runs without Faker. | `FakeLite` |
