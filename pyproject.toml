@@ -3,10 +3,11 @@
 # NO behavior. Runtime pins mirror requirements.txt exactly; pytest is a dev extra
 # (it lives under the "# Tests" heading in requirements.txt — a test tool, not runtime).
 #
-# Version note: the authoritative release record is CHANGELOG.md (latest 1.1.0); this
-# release cuts the next patch, 1.1.1, for the packaging addition. src/okojo/__init__.py
-# still carries __version__ = "0.0.1", an unused attribute (imported nowhere); it is left
-# untouched here because src/ is frozen for this packaging slice.
+# Version note: the [project].version below is the single authoritative version
+# source. src/okojo/__init__.py derives __version__ from this package's installed
+# metadata (with a source-tree fallback that reads this file), so the importable
+# okojo.__version__ always equals the version here — asserted by
+# tests/test_packaging.py. The release record is CHANGELOG.md.
 
 [build-system]
 requires = ["setuptools>=61.0"]
