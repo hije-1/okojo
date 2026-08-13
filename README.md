@@ -236,6 +236,14 @@ Every scoring formula, retrieval gate, rubric, and decision threshold is a
 document matches the code, and the config is stamped into the audit chain of
 every run — so any historical result can be reproduced and defended.
 
+### Independently audited
+
+Okojo's code has been through an external, third-party audit: an independent
+auditor, operating under a written read-only brief, ran an adversarial review of
+its code quality, correctness, and security. The findings were triaged, accepted,
+and fixed with regression tests (see the CHANGELOG for v1.1.2). This is a
+point-in-time review of a synthetic-data research prototype, not a certification.
+
 ---
 
 ## Evidence: every capability ships its eval

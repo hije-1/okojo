@@ -9,6 +9,53 @@ financial-crime investigations at a crypto exchange. It is not production
 screening, not legal or compliance advice, and not a SAR-filing tool; a human
 always reviews, decides, and files. All data is synthetic or public.
 
+## [1.1.2] - 2026-08-13
+
+This release remediates the findings of an external, third-party code audit. An
+independent auditor — ChatGPT Codex, operated under a written, read-only audit
+brief — ran an adversarial review of Okojo's code quality, correctness, and
+security at v1.1.1. Seven findings (five medium, two low) were triaged, accepted,
+and fixed, each with regression tests. No public API contract changed and all
+deterministic capability scorecards remain byte-identical.
+
+### Security
+- **Bounded designation-name variant expansion.** The advanced designation input
+  now caps designated-name length and token count at the validation boundary and
+  enforces a hard variant-expansion budget before the romanization Cartesian
+  product is enumerated, so an oversized paste is a clean rejection rather than an
+  unbounded expansion.
+
+### Fixed
+- **Runtime RFI records no longer carry the scenario answer key.** The RFI view
+  returned at runtime no longer exposes per-claim ground-truth labels or authored
+  rebuttal notes; evaluation reads those only from the answer-key files. The
+  generator and its outputs are unchanged.
+- **Coverage assessment consumes its published configuration.** The
+  institution-level coverage assessment now builds its footprint legs by
+  iterating the versioned footprint configuration instead of a hard-coded list,
+  so a configuration edit drives runtime behavior. Default output is unchanged.
+- **Boundary-aware territory/IP matching.** Territory matching over free-text IP
+  geolocation (the ordinary and VPN-slip paths) now uses tokenized,
+  boundary-aware matching instead of raw substring containment, so a code or
+  place token embedded inside a longer word no longer produces a false location
+  signal.
+- **Honest bootstrap regeneration.** When the synthetic dataset is incomplete,
+  the boot-time hook now generates into a temporary sibling directory and swaps
+  the complete dataset in atomically; a failed regeneration leaves the existing
+  dataset intact. The documentation now states that an incomplete dataset is
+  replaced wholesale (no per-file preservation).
+- **Single version source.** `okojo.__version__` now derives from the installed
+  package metadata (with a source-tree fallback) instead of a stale literal, so
+  the importable version matches the distribution version.
+
+### Changed
+- **Pinned GitHub Actions and least-privilege workflows.** The CI and security
+  workflows pin `actions/checkout` and `actions/setup-python` to full commit SHAs
+  (the version tag retained in a comment) and declare a workflow-level
+  `permissions: contents: read`.
+
+[1.1.2]: https://github.com/hije-1/okojo/releases/tag/v1.1.2
+
 ## [1.1.1] - 2026-08-11
 
 ### Added

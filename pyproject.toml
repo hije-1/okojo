@@ -15,7 +15,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "okojo"
-version = "1.1.1"
+version = "1.1.2"
 description = "Okojo — an agentic crypto-investigations co-pilot (synthetic-data research prototype)."
 readme = "README.md"
 requires-python = ">=3.12"
