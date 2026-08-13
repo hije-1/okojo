@@ -69,6 +69,52 @@ def test_ip_geolocation_skips_vpn_and_non_territory():
     assert collect_ip_geolocation(rows, TERR) == []
 
 
+# --- F-018: boundary-aware matching (no substring collisions) ----------------
+#
+# TERR's code tokens are "zz"/"xq" and its place aliases are "Zerran Free Zone",
+# "Zerran", "Zerran City". Under the old raw-substring test, a code or place
+# token embedded inside a longer word produced a false location signal. These
+# assert the boundary-aware matcher rejects the collision while still hitting the
+# genuine forms.
+
+_IP_COLLISIONS = [
+    "Buzzard Point",     # "zz" inside "buzzard" (code collision)
+    "Xquisite Heights",  # "xq" inside "xquisite" (code collision)
+    "Zerrania City",     # "zerran" inside "zerrania" (alias collision)
+    "Free Zone Plaza",   # "zone"/"free" present but not the contiguous alias run
+]
+
+
+def test_ip_geolocation_rejects_embedded_token_collisions():
+    for geo in _IP_COLLISIONS:
+        rows = [_ip("2026-01-10T00:00:00", geo, False)]
+        assert collect_ip_geolocation(rows, TERR) == [], geo
+
+
+def test_ip_geolocation_still_hits_whole_word_code_and_alias():
+    # Whole-word code ("ZZ"), and a multi-word alias run ("Zerran City").
+    for geo in ["Metropolis ZZ", "Port of Zerran City", "Zerran City XQ"]:
+        rows = [_ip("2026-01-10T00:00:00", geo, False)]
+        assert [s.signal_id for s in collect_ip_geolocation(rows, TERR)] == \
+            ["ip_geolocation"], geo
+
+
+def test_vpn_slip_rejects_embedded_token_collision_in_gap():
+    # A collision string sitting in the VPN gap must NOT become a slip; a genuine
+    # territory IP in the same gap must. Same bracketing VPN window for both.
+    def _bracketed(mid_geo):
+        return [
+            _ip("2026-01-01T00:00:00", "VPN/unknown", True),
+            _ip("2026-01-05T00:00:00", mid_geo, False),
+            _ip("2026-01-09T00:00:00", "VPN/unknown", True),
+        ]
+
+    assert collect_vpn_slip(_bracketed("Zerrania City"), TERR) == []   # collision
+    assert collect_vpn_slip(_bracketed("Buzzard Point"), TERR) == []   # collision
+    genuine = collect_vpn_slip(_bracketed("Zerran City XQ"), TERR)
+    assert [s.signal_id for s in genuine] == ["vpn_slip"]
+
+
 # --- (b) phone prefix / (c) exclusive carrier --------------------------------
 
 

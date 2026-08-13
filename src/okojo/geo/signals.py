@@ -33,12 +33,32 @@ Design discipline (mirrors the identity layer):
 
 from __future__ import annotations
 
+import re
 from typing import Optional
 
 from pydantic import BaseModel
 
 from ..connectors import Record
 from ..provenance import Provenance
+
+
+def _word_tokens(value: object) -> list[str]:
+    """Lowercased alphanumeric word tokens of a free-text value, splitting on any
+    non-alphanumeric boundary. This is the normalisation that makes territory
+    matching boundary-aware: ``"Qazrun City QZ"`` -> ``["qazrun", "city", "qz"]``,
+    so a code or place token can be compared as a WHOLE word rather than as a raw
+    substring that could hit inside a longer word (``"qz"`` inside ``"quartz"``)."""
+    return [t for t in re.split(r"[^0-9a-z]+", str(value).lower()) if t]
+
+
+def _contains_word_run(words: list[str], run: list[str]) -> bool:
+    """True iff the ordered ``run`` tokens appear as a CONTIGUOUS whole-word run
+    inside ``words`` — the boundary-aware form of substring containment for a
+    (possibly multi-word) place alias."""
+    n, m = len(words), len(run)
+    if m == 0 or m > n:
+        return False
+    return any(words[i:i + m] == run for i in range(n - m + 1))
 
 # Weight classes a signal can carry — a tunable, published attribute consumed by
 # the (later) proposal rule; declared here so the dossier records it now.
@@ -72,10 +92,46 @@ class TerritoryProfile(BaseModel):
 
     def geo_tokens(self) -> set[str]:
         """Lowercased tokens that indicate the territory / its country — the
-        in-vs-out test for IP geolocation, KYC-issuing geography, declared
-        residence, and the counter-evidence 'issued outside' check."""
+        in-vs-out test for the STRUCTURED single-value fields (KYC-issuing
+        geography, declared residence, and the counter-evidence 'issued outside'
+        check), which each hold one jurisdiction code compared by exact
+        membership. Free-text geolocation is NOT matched against this set — see
+        :meth:`matches_free_text_geo`."""
         base = [self.territory_code, self.territory_label, self.country_code]
         return {t.strip().lower() for t in (base + list(self.ip_tokens)) if t and t.strip()}
+
+    def code_tokens(self) -> set[str]:
+        """The structured jurisdiction codes (territory + country), lowercased.
+        In free text these must match a WHOLE word exactly — a code is never a
+        substring hit."""
+        return {c.strip().lower() for c in (self.territory_code, self.country_code)
+                if c and c.strip()}
+
+    def place_aliases(self) -> list[list[str]]:
+        """Free-text place aliases (the label + the configured ip_tokens), each as
+        its ordered word tokens — matched boundary-aware (a contiguous whole-word
+        run), never as a raw substring."""
+        out: list[list[str]] = []
+        for alias in [self.territory_label, *self.ip_tokens]:
+            toks = _word_tokens(alias)
+            if toks:
+                out.append(toks)
+        return out
+
+    def matches_free_text_geo(self, geo: object) -> bool:
+        """True iff a free-text geolocation string indicates this territory, using
+        tokenized, boundary-aware matching: an exact jurisdiction-code word, or a
+        place alias appearing as a contiguous run of whole words. This replaces
+        raw substring containment, so a code or place token embedded inside a
+        longer word (``"QZ"`` inside ``"quartz"``, ``"Qazrun"`` inside
+        ``"Qazrunia"``) can never fabricate a location signal, while every genuine
+        hit (``"Qazrun City QZ"``) still matches."""
+        words = _word_tokens(geo)
+        if not words:
+            return False
+        if self.code_tokens() & set(words):
+            return True
+        return any(_contains_word_run(words, alias) for alias in self.place_aliases())
 
 
 class GeoSignal(BaseModel):
@@ -176,14 +232,13 @@ def collect_ip_geolocation(ip_records: list[Record],
     up as markers by :func:`collect_vpn_markers`. A territory IP that is a
     VPN-slip is emitted by :func:`collect_vpn_slip` as a higher-value signal and
     is NOT double-counted here."""
-    tokens = territory.geo_tokens()
     slip_ts = {r["timestamp"] for r in _vpn_slip_records(ip_records, territory)}
     out: list[GeoSignal] = []
     for r in ip_records:
         if _truthy(r.get("is_vpn")):
             continue
-        geo = _s(r["geolocation"]).lower()
-        if geo and any(tok in geo for tok in tokens) and _s(r["timestamp"]) not in slip_ts:
+        geo = _s(r["geolocation"])
+        if geo and territory.matches_free_text_geo(geo) and _s(r["timestamp"]) not in slip_ts:
             out.append(GeoSignal(
                 signal_id="ip_geolocation", value=_s(r["geolocation"]),
                 detail=f"a login IP resolved to {_s(r['geolocation'])}, which "
@@ -309,7 +364,6 @@ def _vpn_slip_records(ip_records: list[Record],
     """The NON-VPN territory IP rows that sit in a gap of otherwise-continuous VPN
     use — a VPN record exists both BEFORE and AFTER them in the timeline. Ordered
     by timestamp; deterministic."""
-    tokens = territory.geo_tokens()
     rows = sorted(ip_records, key=lambda r: _s(r["timestamp"]))
     vpn_ts = [_s(r["timestamp"]) for r in rows if _truthy(r.get("is_vpn"))]
     if not vpn_ts:
@@ -319,9 +373,9 @@ def _vpn_slip_records(ip_records: list[Record],
     for r in rows:
         if _truthy(r.get("is_vpn")):
             continue
-        geo = _s(r["geolocation"]).lower()
+        geo = _s(r["geolocation"])
         ts = _s(r["timestamp"])
-        if geo and any(tok in geo for tok in tokens) and first_vpn < ts < last_vpn:
+        if geo and territory.matches_free_text_geo(geo) and first_vpn < ts < last_vpn:
             slips.append(r)
     return slips
 
