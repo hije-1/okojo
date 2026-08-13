@@ -2,14 +2,21 @@
 
 Loads the subject's Request-For-Information record and parses its decomposed
 claims for display. This *surfaces* the RFI — the question, the account holder's
-narrative response, and the scenario's declared per-claim ground-truth labels —
-so an investigator can read it alongside the rest of the case.
+narrative response, and the decomposed claim text — so an investigator can read
+it alongside the rest of the case.
+
+The runtime view is deliberately BLIND to the scenario's answer key: it carries
+each claim's text but NOT its ground-truth label or scenario-authored rebuttal
+notes. Those authoring fields still live in the generated data (``rfi.csv``'s
+``claims_json`` / ``ground_truth.json``) for evaluation, and are read there ONLY
+via the eval helper ``okojo.eval.rfi_claim_answer_key`` — never surfaced on a
+runtime record that a downstream integrator, notebook, or UI could mistake for a
+live analytical conclusion.
 
 It does NOT adjudicate: the live, claim-by-claim contradiction engine (testing
 each claim against device/on-chain/registry evidence with structured pointers and
 a confidence per claim) is the Phase 5 RFI Contradiction-Checker. Everything here
-is a grounded read of `rfi.csv`; claim labels are scenario ground truth, not the
-output of an analysis.
+is a grounded read of `rfi.csv`.
 """
 
 from __future__ import annotations
@@ -24,10 +31,12 @@ from ..provenance import Provenance
 
 
 class RfiClaim(BaseModel):
+    # The decomposed claim as surfaced at runtime: id + text only. The scenario's
+    # per-claim ground-truth label and authored rebuttal notes are intentionally
+    # ABSENT here (read only via okojo.eval.rfi_claim_answer_key for evaluation),
+    # so a runtime model dump can never carry the answer key.
     claim_id: str
     text: str
-    ground_truth: str               # e.g. "false" | "partly_true_but_omits_control" | "unverifiable"
-    contradicted_by: list[str] = []  # scenario-declared prose notes (present on lies)
 
 
 class RfiView(BaseModel):
@@ -57,8 +66,6 @@ def load_rfi(conn: Connectors, uid: int) -> Optional[RfiView]:
         RfiClaim(
             claim_id=str(c.get("claim_id", "")),
             text=str(c.get("text", "")),
-            ground_truth=str(c.get("ground_truth", "")),
-            contradicted_by=list(c.get("contradicted_by", []) or []),
         )
         for c in parsed
     ]

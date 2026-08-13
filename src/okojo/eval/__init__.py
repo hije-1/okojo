@@ -9,5 +9,6 @@ serves the network, tell-miner, and risk-scorer evals.
 from __future__ import annotations
 
 from .metrics import Score, f1, precision, recall, score
+from .rfi_key import rfi_claim_answer_key
 
-__all__ = ["Score", "precision", "recall", "f1", "score"]
+__all__ = ["Score", "precision", "recall", "f1", "score", "rfi_claim_answer_key"]
