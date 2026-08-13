@@ -179,3 +179,57 @@ def test_p8g_deingesting_domestic_moves_ae_out_of_covered(conn):
     assert "AE" not in flipped.covered_jurisdictions
     assert "AE" in flipped.ingestion_gaps
     assert LIST_SOURCE_REGISTRY["SYN-DOMESTIC-OFAC"]["ingested"] is True
+
+
+# ---- F-017: the published FOOTPRINT_LEGS config drives the assessment -------- #
+
+def test_footprint_legs_config_is_consumed_not_hardcoded(conn):
+    """Injecting a temporary EXTRA leg into the footprint config must make the
+    assessment build it — proving the runtime iterates the published config
+    rather than a hard-coded repeat. The extra leg re-counts an existing account
+    field under a new name, so no jurisdiction/coverage verdict shifts; only the
+    legs list grows. Default output is unchanged (the eval above pins it)."""
+    from okojo.coverage import FOOTPRINT_LEGS
+
+    baseline = run_coverage_assessment(conn)
+    assert [leg.leg for leg in baseline.footprint_legs] == [
+        "residence", "kyc_issuing", "nationality"
+    ]
+
+    extra = list(FOOTPRINT_LEGS) + [{
+        "leg": "residence_shadow", "source": "accounts",
+        "field": "residence_country",
+        "label": "shadow residence leg (test-injected)", "count_unit": "customers",
+    }]
+    out = run_coverage_assessment(conn, footprint_legs=extra)
+
+    # The injected leg is present, with the injected label, and its counts equal
+    # the residence leg's (same field) — the config was actually read.
+    names = [leg.leg for leg in out.footprint_legs]
+    assert names == ["residence", "kyc_issuing", "nationality", "residence_shadow"]
+    shadow = next(leg for leg in out.footprint_legs if leg.leg == "residence_shadow")
+    residence = next(leg for leg in out.footprint_legs if leg.leg == "residence")
+    assert shadow.label == "shadow residence leg (test-injected)"
+    assert shadow.counts == residence.counts
+    assert shadow.provenance == ["accounts[*].residence_country"]
+
+    # The frozen module-level config was never mutated by the injection.
+    assert [leg["leg"] for leg in FOOTPRINT_LEGS] == [
+        "residence", "kyc_issuing", "nationality"
+    ]
+
+
+def test_changing_a_footprint_leg_field_changes_the_count(conn):
+    """A CHANGED leg (same name, different field) drives a different count — the
+    assessment reads the config's field, not a constant."""
+    from okojo.coverage import FOOTPRINT_LEGS
+
+    changed = copy.deepcopy(list(FOOTPRINT_LEGS))
+    # Point the residence leg at nationality instead; its counts must now equal
+    # the nationality leg's, not the residence leg's.
+    changed[0]["field"] = "nationality_country"
+    out = run_coverage_assessment(conn, footprint_legs=changed)
+
+    by_leg = {leg.leg: leg for leg in out.footprint_legs}
+    assert by_leg["residence"].counts == by_leg["nationality"].counts
+    assert by_leg["residence"].provenance == ["accounts[*].nationality_country"]

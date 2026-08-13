@@ -80,31 +80,53 @@ def _leg(rows, leg: str, label: str, count_unit: str,
     )
 
 
+# Which connector accessor supplies the rows for each footprint-leg ``source``.
+# The published ``FOOTPRINT_LEGS`` config names its source as a string ("accounts"
+# / "kyc_docs"); this map is the ONE place that binds those names to the actual
+# read, so the assessment builds its legs by iterating the config rather than
+# repeating the source/field/label values inline. Adding a leg over a new source
+# is a config edit here plus one entry — never a second hard-coded read.
+_LEG_SOURCE_ACCESSORS = {
+    "accounts": lambda conn: conn.all_accounts(),
+    "kyc_docs": lambda conn: conn.all_kyc(),
+}
+
+
 def run_coverage_assessment(
     conn: Connectors, *,
     coverage_map: Optional[dict] = None,
     list_source_registry: Optional[dict] = None,
+    footprint_legs: Optional[list] = None,
 ) -> CoverageAssessment:
     """Assess the customer base's footprint against enabled list coverage.
 
-    ``coverage_map`` / ``list_source_registry`` default to the published policy
-    and the frozen sweep registry; both are injectable so a test can flip a
-    regime's ingested status (P8-G) WITHOUT ever editing the frozen sweep_config.
+    ``coverage_map`` / ``list_source_registry`` / ``footprint_legs`` default to
+    the published policy, the frozen sweep registry, and the published footprint
+    configuration; all are injectable so a test can flip a regime's ingested
+    status (P8-G) or add/change a footprint leg WITHOUT ever editing the frozen
+    config. The legs are BUILT BY ITERATING ``footprint_legs`` (through
+    ``_LEG_SOURCE_ACCESSORS``), so a config edit drives runtime behavior — the
+    versioned policy is the single source of truth, not a hard-coded repeat.
     """
     coverage_map = REGIME_JURISDICTION_COVERAGE if coverage_map is None else coverage_map
     registry = LIST_SOURCE_REGISTRY if list_source_registry is None else list_source_registry
+    leg_specs = FOOTPRINT_LEGS if footprint_legs is None else footprint_legs
 
-    accounts = conn.all_accounts()
-    kyc = conn.all_kyc()
-
-    legs = [
-        _leg(accounts, "residence", "declared residence country", "customers",
-             "accounts", "residence_country"),
-        _leg(kyc, "kyc_issuing", "KYC document issuing country", "documents",
-             "kyc_docs", "issuing_country"),
-        _leg(accounts, "nationality", "declared nationality", "customers",
-             "accounts", "nationality_country"),
-    ]
+    # Fetch each distinct source once, then build every leg from the config.
+    row_cache: dict[str, list] = {}
+    legs = []
+    for spec in leg_specs:
+        source = spec["source"]
+        if source not in row_cache:
+            try:
+                row_cache[source] = _LEG_SOURCE_ACCESSORS[source](conn)
+            except KeyError:
+                raise ValueError(
+                    f"footprint leg {spec.get('leg')!r} names an unknown source "
+                    f"{source!r}; add it to _LEG_SOURCE_ACCESSORS"
+                ) from None
+        legs.append(_leg(row_cache[source], spec["leg"], spec["label"],
+                         spec["count_unit"], source, spec["field"]))
 
     footprint = sorted(set().union(*(set(leg.counts) for leg in legs)))
 
