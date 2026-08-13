@@ -97,6 +97,59 @@ def test_rejected_payload_writes_nothing(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
+# --------------------------------------------------------------------------- #
+# F-015 — the designated-name resource bounds (length / token / variant budget)
+# are enforced at THIS input boundary, so an explosive paste is a clean
+# validation rejection, never an out-of-memory or hang in the sweep. The public
+# demo's advanced-paste path is the scenario protected here: it wraps
+# parse_designation in a try/except and renders a clean rejection, so the bound
+# must bite at parse time (before run_sweep is ever called).
+# --------------------------------------------------------------------------- #
+def test_parse_rejects_overlong_designated_name():
+    from okojo.sweep.designation import MAX_DESIGNATED_NAME_LENGTH
+
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID,
+                           "designated_name": "x" * (MAX_DESIGNATED_NAME_LENGTH + 1)})
+
+
+def test_parse_rejects_too_many_name_tokens():
+    from okojo.sweep.designation import MAX_DESIGNATED_NAME_TOKENS
+
+    over = " ".join(["Name"] * (MAX_DESIGNATED_NAME_TOKENS + 1))
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID, "designated_name": over})
+
+
+def test_parse_rejects_variant_explosion_within_structural_caps():
+    """The repeated-equivalence-token case: a name that is WITHIN the length and
+    token caps can still expand geometrically (a 3-form Arabic article repeated n
+    times is 3**n). The variant-budget check rejects it before enumeration, so
+    the work cannot grow unbounded even for a structurally small paste.
+
+    ``al`` x9 is 9 tokens (under the 16-token cap) and 32 chars (under the length
+    cap), yet expands to 3**9 = 19683 variants — over the 8192 budget.
+    """
+    from okojo.identity.variants import MAX_VARIANT_BUDGET, name_variant_budget
+
+    exploding = " ".join(["al"] * 9)
+    assert len(exploding.split()) < 16 and len(exploding) < 256   # within caps
+    assert name_variant_budget(exploding) > MAX_VARIANT_BUDGET      # over budget
+    with pytest.raises(DesignationParseError):
+        parse_designation({**_VALID, "designated_name": exploding})
+
+
+def test_parse_accepts_real_transliterable_name_under_budget():
+    """The bound never rejects a real designated name: the most variant-rich name
+    in scope (an Arabic given name + article + surname) expands to 45 variants,
+    comfortably under budget, and parses clean."""
+    from okojo.identity.variants import MAX_VARIANT_BUDGET, name_variant_budget
+
+    assert name_variant_budget("Muhammad Al-Sayigh") <= MAX_VARIANT_BUDGET
+    d = parse_designation({**_VALID, "designated_name": "Muhammad Al-Sayigh"})
+    assert d.designated_name == "Muhammad Al-Sayigh"
+
+
 def test_malformed_date_rejected():
     with pytest.raises(DesignationParseError):
         parse_designation({**_VALID, "designation_date": "January 30, 2026"})

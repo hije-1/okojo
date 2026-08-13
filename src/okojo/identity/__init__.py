@@ -187,8 +187,11 @@ def identity_config() -> dict:
 
 
 from .variants import (  # noqa: E402
+    MAX_VARIANT_BUDGET,
+    NameVariantBudgetError,
     VariantNameMatch,
     expand_name_variants,
+    name_variant_budget,
     screen_name_variants,
 )
 from .ownership import (  # noqa: E402
@@ -212,8 +215,11 @@ __all__ = [
     "PROXIMITY_SIGNAL_REGISTRY",
     "TRANSLITERATION_FAMILIES",
     "identity_config",
+    "MAX_VARIANT_BUDGET",
+    "NameVariantBudgetError",
     "VariantNameMatch",
     "expand_name_variants",
+    "name_variant_budget",
     "screen_name_variants",
     "OwnershipWalkResult",
     "OwnershipPropagation",

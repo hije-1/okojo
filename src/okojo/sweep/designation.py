@@ -36,6 +36,17 @@ from . import NAME_MATCH_THRESHOLD
 # nothing a filesystem could interpret.
 DESIGNATION_ID_PATTERN = r"^[A-Z]{3}-\d{4}-\d{4}$"
 
+# Conservative bounds on the free-text designated name, enforced at this input
+# boundary so an oversized or explosive paste is a clean validation rejection —
+# never an out-of-memory or hang further downstream. The name later drives
+# romanization variant expansion (a Cartesian product over per-token equivalence
+# classes), so a length cap and a token-count cap bound the structural input and
+# a variant-budget check (below) bounds the product itself. The real designated
+# names in scope are <=26 chars / <=4 tokens / <=45 variants, so these are orders
+# of magnitude of headroom while still refusing a denial-of-service paste.
+MAX_DESIGNATED_NAME_LENGTH = 256
+MAX_DESIGNATED_NAME_TOKENS = 16
+
 
 class DesignationParseError(ValueError):
     """A designation payload was rejected. Nothing was written anywhere."""
@@ -47,7 +58,7 @@ class Designation(BaseModel):
     model_config = ConfigDict(frozen=True, extra="forbid", str_strip_whitespace=True)
 
     designation_id: str = Field(pattern=DESIGNATION_ID_PATTERN)
-    designated_name: str = Field(min_length=1)
+    designated_name: str = Field(min_length=1, max_length=MAX_DESIGNATED_NAME_LENGTH)
     program: str = Field(min_length=1)
     # Phase 8 Part III adds the TERRITORY kind: a designation of a geography, not
     # a party (no on-chain addresses, no name screen — location signals are
@@ -66,6 +77,36 @@ class Designation(BaseModel):
                        "counterparty_service"]
     obligation_vs_signal: Literal["obligation", "signal"]
     listed_since: str
+
+    @field_validator("designated_name")
+    @classmethod
+    def _name_bounded(cls, v: str) -> str:
+        """Reject a name that is too many tokens, or that would expand into more
+        romanization variants than the budget allows — BEFORE the sweep runs any
+        expansion. The length cap is enforced by ``Field(max_length=...)``; this
+        adds the token-count cap and the variant-budget cap. The budget helper
+        lives in the identity layer (which the sweep already depends on); it is
+        imported lazily so this module carries no import-order coupling to it.
+        """
+        token_count = len(v.replace("-", " ").split())
+        if token_count > MAX_DESIGNATED_NAME_TOKENS:
+            raise ValueError(
+                f"designated_name has {token_count} tokens, exceeding the "
+                f"{MAX_DESIGNATED_NAME_TOKENS}-token cap"
+            )
+        # Lazy import: identity -> sweep is the established dependency direction
+        # (sweep.pipeline already imports identity); importing at call time keeps
+        # this validator free of any module-load ordering concern.
+        from ..identity.variants import MAX_VARIANT_BUDGET, name_variant_budget
+
+        budget = name_variant_budget(v)
+        if budget > MAX_VARIANT_BUDGET:
+            raise ValueError(
+                f"designated_name would expand into {budget} romanization "
+                f"variants, exceeding the {MAX_VARIANT_BUDGET}-variant budget; "
+                "rejected before expansion"
+            )
+        return v
 
     @field_validator("designated_addresses")
     @classmethod

@@ -25,6 +25,64 @@ from ..connectors import Connectors
 from ..provenance import Provenance
 from . import VARIANT_MATCH_THRESHOLD, _equivalence_classes
 
+# Hard ceiling on the number of romanization variants a single designated name
+# may expand into. A safety bound (NOT a scored policy parameter — deliberately
+# kept out of ``identity_config`` so it neither versions nor drifts a methodology
+# doc): variant enumeration is a Cartesian product over per-token equivalence
+# classes, so a name that repeats a multi-form token grows the product
+# geometrically (a 3-form article repeated n times is 3**n). The real designated
+# names in scope expand to at most ~45 variants, so 8192 is orders of magnitude
+# of headroom while still refusing any product that could exhaust the process.
+# The product SIZE is computed cheaply (a running multiply over the per-token
+# option counts) and checked BEFORE any product is materialized, so an oversized
+# name is rejected in O(tokens), never enumerated.
+MAX_VARIANT_BUDGET = 8192
+
+
+class NameVariantBudgetError(ValueError):
+    """A designated name would expand into more variants than the budget allows.
+
+    Raised before any Cartesian product is materialized, so the rejection costs
+    O(tokens), never the (unbounded) expansion itself.
+    """
+
+
+def _per_token_options(tokens: list[str],
+                       classes: list[dict]) -> list[list[tuple[str, str | None]]]:
+    """Per-token variant options: the original token (rule ``None``) first, then
+    each equivalence-class form the token belongs to, in class order. Shared by
+    the budget probe and the expander so the two can never disagree on the count.
+    """
+    per_token: list[list[tuple[str, str | None]]] = []
+    for tok in tokens:
+        opts: list[tuple[str, str | None]] = [(tok, None)]
+        for cls in classes:
+            if tok in cls["forms"]:
+                for form in cls["forms"]:
+                    if form != tok:
+                        opts.append((form, cls["id"]))
+        per_token.append(opts)
+    return per_token
+
+
+def name_variant_budget(name: str) -> int:
+    """The number of raw (pre-dedup) variants ``name`` would expand into.
+
+    This is the size of the Cartesian product over the per-token options — the
+    exact count :func:`expand_name_variants` would iterate. Computed as a running
+    multiply so it is cheap even for a name deliberately built to explode, and it
+    is the single source of truth the Pydantic designation boundary consults to
+    reject an oversized paste before the sweep runs.
+    """
+    classes = _equivalence_classes()
+    tokens = _tokenize(name)
+    budget = 1
+    for opts in _per_token_options(tokens, classes):
+        budget *= len(opts)
+        if budget > MAX_VARIANT_BUDGET:
+            return budget  # already over — no need to keep multiplying
+    return budget
+
 
 def _norm_token(tok: str) -> str:
     """Lowercase, strip surrounding punctuation/whitespace — the comparison form."""
@@ -50,15 +108,22 @@ def expand_name_variants(name: str) -> list[tuple[str, tuple[str, ...]]]:
 
     # Per-token options: (form, rule_id_or_None). The original token first
     # (rule None), then each class form the token belongs to, in class order.
-    per_token: list[list[tuple[str, str | None]]] = []
-    for tok in tokens:
-        opts: list[tuple[str, str | None]] = [(tok, None)]
-        for cls in classes:
-            if tok in cls["forms"]:
-                for form in cls["forms"]:
-                    if form != tok:
-                        opts.append((form, cls["id"]))
-        per_token.append(opts)
+    per_token = _per_token_options(tokens, classes)
+
+    # Bounded expansion: refuse a name whose product would exceed the budget
+    # BEFORE materializing any product (defense in depth — the Pydantic
+    # designation boundary already rejects such a paste, but a direct caller of
+    # this function must not be able to trigger unbounded work either). The
+    # count is the exact size of the product below, computed in O(tokens).
+    budget = 1
+    for opts in per_token:
+        budget *= len(opts)
+    if budget > MAX_VARIANT_BUDGET:
+        raise NameVariantBudgetError(
+            f"designated name expands into {budget} variants, exceeding the "
+            f"{MAX_VARIANT_BUDGET}-variant budget; expansion refused before "
+            "enumeration"
+        )
 
     seen: dict[str, tuple[str, ...]] = {}
     for combo in itertools.product(*per_token):

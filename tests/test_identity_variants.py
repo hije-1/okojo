@@ -9,11 +9,16 @@ from __future__ import annotations
 
 from rapidfuzz import fuzz
 
+import pytest
+
 from okojo.identity import (
     IDENTITY_VERSION,
+    MAX_VARIANT_BUDGET,
+    NameVariantBudgetError,
     VARIANT_MATCH_THRESHOLD,
     expand_name_variants,
     identity_config,
+    name_variant_budget,
 )
 from okojo.sweep import NAME_MATCH_THRESHOLD
 
@@ -78,6 +83,28 @@ def test_inert_on_names_without_romanization_triggers():
     designations)."""
     variants = expand_name_variants("Bandar Petrochemical Front")
     assert [v for v, _ in variants] == ["bandar petrochemical front"]
+
+
+def test_variant_budget_counts_the_product_exactly():
+    """The budget probe equals the real (pre-dedup) product size, so the value
+    the Pydantic boundary checks is the exact work the expander would do."""
+    # muhammad(5 forms) x al(3) x sayigh(3) = 45; the expander de-dups to 45 here
+    # because no two paths collide, so the probe and the enumeration agree.
+    assert name_variant_budget("Muhammad Al-Sayigh") == 45
+    assert len(expand_name_variants("Muhammad Al-Sayigh")) == 45
+    # An ordinary Latin name has no equivalence-class token: exactly one variant.
+    assert name_variant_budget("Bandar Petrochemical Front") == 1
+
+
+def test_expand_refuses_over_budget_before_enumerating():
+    """Defense in depth: even a direct caller of expand_name_variants cannot
+    trigger unbounded work — the budget is enforced before any product is built.
+    A 3-form article repeated 12 times is 3**12 = 531441 variants, far over
+    budget, and the refusal is a fast, clean exception (never an OOM/hang)."""
+    exploding = " ".join(["al"] * 12)
+    assert name_variant_budget(exploding) > MAX_VARIANT_BUDGET
+    with pytest.raises(NameVariantBudgetError):
+        expand_name_variants(exploding)
 
 
 def test_shared_surname_alone_does_not_match():
