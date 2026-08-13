@@ -9,9 +9,15 @@ needs is to regenerate it in-process before any connector tries to read it.
 This module is that hook, and nothing more. Its guarantees:
 
 - it runs the generator **only** when the dataset is missing or incomplete;
-- it **never overwrites** a dataset that is already present — every existing
-  local and CI path already has data on disk, so the hook is a no-op there
-  (byte-identical by construction);
+- a **complete** dataset is left byte-untouched — every existing local and CI
+  path already has data on disk, so the hook is a no-op there;
+- an **incomplete** dataset is replaced **wholesale**: the whole synthetic set is
+  regenerated and the complete result is swapped in atomically. This is NOT a
+  per-file merge — any surviving generated file in an incomplete directory is
+  replaced, not preserved (the files are reproducible synthetic outputs, so there
+  is nothing to preserve). Regeneration happens in a temporary sibling directory
+  and is swapped in only once complete, so a boot never observes a half-written
+  dataset, and a **failed** regeneration leaves the existing files intact;
 - it is **deterministic**: the seeded generator reproduces exactly the committed
   bytes, so a boot-regenerated dataset equals a committed-generator one.
 
@@ -21,6 +27,9 @@ The default hook is cached to run at most once per process.
 from __future__ import annotations
 
 import functools
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional
 
@@ -45,14 +54,50 @@ def provision_scenario_dataset(
     """Generate the synthetic scenario dataset iff it is missing/incomplete.
 
     Returns ``True`` if it regenerated, ``False`` if a complete dataset was
-    already present (and left byte-untouched). Non-destructive by construction:
-    it never writes when the data is already there, so it can never clobber a
-    committed or previously generated dataset.
+    already present (and left byte-untouched).
+
+    Regeneration is all-or-nothing and honest about it:
+
+    - a complete dataset is left untouched (a no-op ``False``);
+    - an incomplete dataset is regenerated into a temporary sibling directory and
+      swapped in atomically once complete, so a concurrent boot never sees a
+      half-written dataset. This **replaces the directory wholesale** — a
+      surviving generated file is not preserved (the outputs are reproducible);
+    - if generation fails, the existing directory is left exactly as it was.
     """
     target = Path(data_dir) if data_dir is not None else SYNTHETIC_DIR
     if scenario_dataset_present(target):
         return False
-    generate_scenario(out_dir=target, seed=seed)
+
+    target.parent.mkdir(parents=True, exist_ok=True)
+    # Generate into a temp sibling on the SAME filesystem, so the final move is an
+    # atomic rename. The dataset is only ever the pre-existing (possibly partial)
+    # set or the complete new one — never a partially-written mixture.
+    staging = Path(tempfile.mkdtemp(prefix=f".{target.name}.staging-",
+                                    dir=target.parent))
+    try:
+        generate_scenario(out_dir=staging, seed=seed)
+    except BaseException:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise  # generation failed: the original directory is untouched
+
+    # Atomic swap: move any existing directory aside, move the complete staged
+    # dataset into place, then drop the old one. If the second rename fails, the
+    # original is restored so a failure never leaves the target missing.
+    backup = target.with_name(f".{target.name}.old-{staging.name}")
+    moved_aside = False
+    if target.exists():
+        os.replace(target, backup)
+        moved_aside = True
+    try:
+        os.replace(staging, target)
+    except BaseException:
+        if moved_aside:
+            os.replace(backup, target)
+        shutil.rmtree(staging, ignore_errors=True)
+        raise
+    if moved_aside:
+        shutil.rmtree(backup, ignore_errors=True)
     return True
 
 

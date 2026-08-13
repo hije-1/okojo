@@ -10,6 +10,9 @@ from __future__ import annotations
 import hashlib
 from pathlib import Path
 
+import pytest
+
+import okojo.bootstrap as bootstrap
 from okojo.bootstrap import (
     ensure_default_scenario_dataset,
     provision_scenario_dataset,
@@ -70,6 +73,60 @@ def test_partial_dataset_counts_as_missing(tmp_path):
 
     assert provision_scenario_dataset(tmp_path) is True
     assert scenario_dataset_present(tmp_path)
+
+
+def test_incomplete_dataset_replaced_wholesale_not_preserved(tmp_path):
+    """F-020 documented behavior: an incomplete dataset is regenerated WHOLESALE.
+    A surviving file that was locally modified is REPLACED (not preserved), a
+    missing file is restored, and the directory equals a fresh committed dataset
+    afterward — no per-file preservation promise."""
+    target = tmp_path / "synthetic"
+    provision_scenario_dataset(target)  # seed a complete dataset
+    names = list(TABLES.values())
+    survivor, missing = target / names[0], target / names[1]
+
+    survivor.write_bytes(b"SENTINEL-LOCAL-EDIT")  # locally modify a survivor
+    missing.unlink()                               # and drop another -> incomplete
+    assert not scenario_dataset_present(target)
+
+    assert provision_scenario_dataset(target) is True
+
+    assert scenario_dataset_present(target)
+    # The sentinel edit was replaced wholesale, not kept.
+    assert survivor.read_bytes() != b"SENTINEL-LOCAL-EDIT"
+    # The whole directory equals a fresh committed-generator dataset.
+    ref = tmp_path / "ref"
+    ref.mkdir()
+    generate_scenario(out_dir=ref)
+    assert _dir_hash(target) == _dir_hash(ref)
+    # No staging/backup sibling directories are left behind after the swap.
+    assert [p.name for p in tmp_path.iterdir()
+            if p.name.startswith(".synthetic.")] == []
+
+
+def test_generation_failure_leaves_original_intact(tmp_path, monkeypatch):
+    """If regeneration fails, the pre-existing (incomplete) directory is left
+    exactly as it was — the atomic swap never runs, so nothing is half-written or
+    lost, and no staging directory is orphaned."""
+    target = tmp_path / "synthetic"
+    provision_scenario_dataset(target)
+    names = list(TABLES.values())
+    (target / names[1]).unlink()  # make it incomplete so provision will regen
+    before = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("simulated generation failure")
+
+    monkeypatch.setattr(bootstrap, "generate_scenario", _boom)
+
+    with pytest.raises(RuntimeError):
+        provision_scenario_dataset(target)
+
+    # Every surviving file is byte-identical, and no staging/backup was orphaned.
+    after = {p.name: p.read_bytes() for p in target.iterdir() if p.is_file()}
+    assert after == before
+    assert [p.name for p in tmp_path.iterdir()
+            if p.name.startswith(".synthetic.")] == []
 
 
 def test_boot_regen_is_byte_identical_to_committed_generator(tmp_path):
