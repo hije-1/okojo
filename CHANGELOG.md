@@ -18,6 +18,12 @@ security at v1.1.1. Seven findings (five medium, two low) were triaged, accepted
 and fixed, each with regression tests. No public API contract changed and all
 deterministic capability scorecards remain byte-identical.
 
+> **[Correction, 2026-08-17]** "No public API contract changed" is wrong. This
+> release *did* change a public contract: the answer-key removal below also
+> removed `ground_truth` and `contradicted_by` from the public `RfiClaim` model
+> and from the `CaseResult.rfi` shape. See [1.1.3] for the migration note. The
+> scorecard byte-identity claim is unaffected.
+
 ### Security
 - **Bounded designation-name variant expansion.** The advanced designation input
   now caps designated-name length and token count at the validation boundary and
@@ -44,6 +50,9 @@ deterministic capability scorecards remain byte-identical.
   the complete dataset in atomically; a failed regeneration leaves the existing
   dataset intact. The documentation now states that an incomplete dataset is
   replaced wholesale (no per-file preservation).
+  **[Correction, 2026-08-17]** "atomically" overstated it — the swap is two
+  sequential renames with a brief window in which the target path is absent.
+  See [1.1.3].
 - **Single version source.** `okojo.__version__` now derives from the installed
   package metadata (with a source-tree fallback) instead of a stale literal, so
   the importable version matches the distribution version.
