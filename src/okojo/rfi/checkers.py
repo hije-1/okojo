@@ -41,12 +41,10 @@ from ..entity import EntityBackbone
 from ..provenance import Provenance
 from .claims import ExtractedClaim
 
-# --------------------------------------------------------------------------- #
 # Policy parameters — published lexicons and evidence weights.
 #
 # These are *tunable policy*, not magic numbers: they are versioned, stamped into
 # the audit trail, and mirrored by docs/rfi-contradiction-methodology.md.
-# --------------------------------------------------------------------------- #
 
 # A claim that denies a relationship with another named party.
 RELATIONSHIP_DENIAL_TERMS: tuple[str, ...] = (
@@ -100,9 +98,6 @@ class Rebuttal(BaseModel):
         return "; ".join(p.cite() for p in self.provenance)
 
 
-# --------------------------------------------------------------------------- #
-# Small shared helpers
-# --------------------------------------------------------------------------- #
 def _mentions(text: str, terms: tuple[str, ...]) -> bool:
     low = text.lower()
     return any(t in low for t in terms)
@@ -131,9 +126,6 @@ def _refs_for(entity) -> set[str]:
     return {f"uid:{entity.uid}"} | {a.address for a in entity.addresses}
 
 
-# --------------------------------------------------------------------------- #
-# 1) Corporate-registry OSINT
-# --------------------------------------------------------------------------- #
 def check_registry(
     conn: Connectors, backbone: EntityBackbone, claim: ExtractedClaim, subject_uid: int,
 ) -> list[Rebuttal]:
@@ -176,9 +168,6 @@ def check_registry(
     return out
 
 
-# --------------------------------------------------------------------------- #
-# 2) The subject's own prior RFI answers
-# --------------------------------------------------------------------------- #
 def check_prior_rfi(
     conn: Connectors, backbone: EntityBackbone, claim: ExtractedClaim, subject_uid: int,
 ) -> list[Rebuttal]:
@@ -217,9 +206,6 @@ def check_prior_rfi(
     return out
 
 
-# --------------------------------------------------------------------------- #
-# 3) On-chain flows
-# --------------------------------------------------------------------------- #
 def _sanctioned_flow(conn: Connectors, start_refs: set[str]) -> list:
     """Transactions on a value path from ``start_refs`` to a sanctioned address.
 
@@ -354,9 +340,6 @@ def check_onchain(
     return out
 
 
-# --------------------------------------------------------------------------- #
-# 4) Device data
-# --------------------------------------------------------------------------- #
 def check_device(
     conn: Connectors, backbone: EntityBackbone, claim: ExtractedClaim, subject_uid: int,
 ) -> list[Rebuttal]:

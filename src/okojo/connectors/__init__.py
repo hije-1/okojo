@@ -39,7 +39,6 @@ class Connectors:
     def close(self) -> None:
         self.store.close()
 
-    # -- internal helper ---------------------------------------------------- #
     def _records(self, table: str, sql: str, params: list, key) -> list[Record]:
         recs: list[Record] = []
         for row in self.store.query(sql, params):
@@ -47,7 +46,6 @@ class Connectors:
             recs.append(Record(row, Provenance(source=table, row_key=key(row))))
         return recs
 
-    # -- accounts / KYC ----------------------------------------------------- #
     def get_account(self, uid: int) -> Optional[Record]:
         recs = self._records(
             "accounts", "SELECT * FROM accounts WHERE uid = ?", [uid],
@@ -81,7 +79,6 @@ class Connectors:
             lambda r: f"uid:{r['uid']}",
         )
 
-    # -- devices / IP ------------------------------------------------------- #
     def devices_for(self, uid: int) -> list[Record]:
         return self._records(
             "devices", "SELECT * FROM devices WHERE uid = ?", [uid],
@@ -113,7 +110,6 @@ class Connectors:
             lambda r: f"uid:{r['uid']}@{r['timestamp']}",
         )
 
-    # -- addresses ---------------------------------------------------------- #
     def addresses_for(self, uid: int) -> list[Record]:
         return self._records(
             "addresses", "SELECT * FROM addresses WHERE controller_uid = ?", [uid],
@@ -139,7 +135,6 @@ class Connectors:
             lambda r: r["address"],
         )
 
-    # -- transactions / remarks / gas -------------------------------------- #
     # The default transaction accessors return the FLOW/VALUE ledger — exchange
     # records (uid: legs) and self-hosted chain records — and EXCLUDE hot-wallet
     # settlement legs (the on-chain shadow of an already-counted withdrawal;
@@ -206,7 +201,6 @@ class Connectors:
             lambda r: f"{r['funder_address']}->{r['funded_address']}",
         )
 
-    # -- sanctions watchlist ------------------------------------------------ #
     def sdn_list(self) -> list[Record]:
         """The synthetic SDN/alias watchlist (Tell Miner fuzzy-match target)."""
         return self._records(
@@ -214,7 +208,6 @@ class Connectors:
             lambda r: r["sdn_id"],
         )
 
-    # -- RFI ---------------------------------------------------------------- #
     def rfi_for(self, uid: int) -> list[Record]:
         return self._records(
             "rfi", "SELECT * FROM rfi WHERE uid = ?", [uid],
@@ -244,7 +237,6 @@ class Connectors:
             lambda r: r["rfi_id"],
         )
 
-    # -- designations / sanctions holds (Phase 8) ---------------------------- #
     def all_designations(self) -> list[Record]:
         """Synthetic OFAC-style designations (the remediation sweep's trigger)."""
         return self._records(
@@ -292,7 +284,6 @@ class Connectors:
         )
         return recs[0] if recs else None
 
-    # -- KYC artifacts / staff register (Phase 8 Part I-B) ------------------- #
     def kyc_artifacts(self) -> list[Record]:
         """Onboarding artifacts on file, one row per (account, artifact type)."""
         return self._records(
@@ -314,7 +305,6 @@ class Connectors:
             lambda r: r["staff_id"],
         )
 
-    # -- counterparty-lifecycle acknowledgments (Phase 8 Part IV) ------------ #
     def acknowledgments(self) -> list[Record]:
         """Customer acknowledgments of designated counterparties (read-only
         evidence, human-entered). Deterministic order (uid, then designation)."""
@@ -333,7 +323,6 @@ class Connectors:
             lambda r: f"uid:{r['uid']}:{r['counterparty_designation_id']}",
         )
 
-    # -- identity resolution (Phase 8 Part II) ------------------------------- #
     def designation_identifiers(self) -> list[Record]:
         """Identifying data a sanctions list published per designation (T2)."""
         return self._records(
@@ -367,7 +356,6 @@ class Connectors:
         )
         return recs[0] if recs else None
 
-    # -- KYB ownership / officers (Phase 8 Part II T3) ---------------------- #
     def beneficial_ownership(self) -> list[Record]:
         """Beneficial-ownership edges (owner -> company, with stake)."""
         return self._records(
@@ -402,7 +390,6 @@ class Connectors:
             lambda r: r["appointment_id"],
         )
 
-    # -- proximity ring (Phase 8 Part II T4) -------------------------------- #
     def relationships(self) -> list[Record]:
         """Declared-relationship metadata between customers."""
         return self._records(
@@ -419,7 +406,6 @@ class Connectors:
             lambda r: r["assertion_id"],
         )
 
-    # -- geo triangulation (Phase 8 Part III) ------------------------------- #
     def territory_profile_for(self, designation_id: str) -> Optional[Record]:
         """The territory a TERRITORY designation triangulates against (its codes,
         IP tokens, phone prefixes, and timezones)."""
@@ -467,7 +453,6 @@ class Connectors:
             lambda r: f"uid:{r['uid']}:{r['artifact_type']}",
         )
 
-    # -- corporate registry (OSINT) ----------------------------------------- #
     def registry_for(self, uid: int) -> list[Record]:
         """Registry rows naming this uid as either the company or an officer."""
         return self._records(

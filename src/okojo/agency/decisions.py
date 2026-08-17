@@ -73,7 +73,7 @@ from ..sar import CritiqueHistory
 # policy and lives here; it never mutates a hold, only proposes.
 AGENCY_VERSION = "1.5.0"
 
-# --- Tunable policy thresholds (see docs/agency-methodology.md) --------------
+# Tunable policy thresholds (see docs/agency-methodology.md)
 
 # Keep expanding while the last hop discovered at least this many new accounts
 # (a hop whose frontier is empty is a no-op, so stopping is provably lossless).
@@ -93,7 +93,7 @@ RE_RFI_MIN_CONTRADICTED = 1
 # fail-closed drafter needs to attempt a citable narrative.
 SUFFICIENCY_MIN_EVENTS = 1
 
-# --- geo_action policy (Part III): totality dossier -> a proposal ------------
+# geo_action policy (Part III): totality dossier -> a proposal
 # The numeric weights the geo signal WEIGHT CLASSES (geo_config, frozen) map to
 # when a geo totality dossier is scored. A distinctive locator (a region-locked
 # carrier, a VPN-slip) outweighs an ordinary IP hit, which outweighs a coarse
@@ -326,7 +326,6 @@ def agency_config() -> dict:
     }
 
 
-# --- The five decision rules -------------------------------------------------
 
 
 def decide_expand(hops_done: int, cap: int, new_accounts_last_hop: int, *,
@@ -494,7 +493,7 @@ def decide_sar_bar(history: CritiqueHistory, *,
                           evidence=evidence, provenance=list(provenance or []))
 
 
-# --- Corroboration (Part II): identity match vs published identifiers ---------
+# Corroboration (Part II): identity match vs published identifiers
 
 # The hard identifiers compared, in the order they appear in a recorded reason.
 # ``doc_number`` is decisive on its own (a shared government document number is
@@ -580,7 +579,7 @@ def decide_corroboration(candidate_uid: int, designated_name: str,
                           evidence=evidence, provenance=list(provenance or []))
 
 
-# --- geo_action (Part III): totality dossier -> a REVIEW-tier proposal ---------
+# geo_action (Part III): totality dossier -> a REVIEW-tier proposal
 
 
 def _geo_band(net: int) -> str:
@@ -679,7 +678,7 @@ def decide_geo_action(uid: int,
                           evidence=evidence, provenance=list(provenance or []))
 
 
-# --- counterparty_lifecycle (Part IV): relationship disposition --------------
+# counterparty_lifecycle (Part IV): relationship disposition
 
 
 def decide_counterparty_lifecycle(uid: int, *,
@@ -760,7 +759,7 @@ def decide_counterparty_lifecycle(uid: int, *,
                           evidence=evidence, provenance=list(provenance or []))
 
 
-# --- Anti-tipping-off validator (subject-facing text only) -------------------
+# Anti-tipping-off validator (subject-facing text only)
 
 
 class TippingOffRisk(ValueError):
@@ -837,7 +836,7 @@ def assert_no_tipping_off(text: str) -> None:
         )
 
 
-# --- Follow-up request drafting (discrete routine asks, never a letter) ------
+# Follow-up request drafting (discrete routine asks, never a letter)
 
 # Approved neutral templates. Each is a complete, individually-usable routine
 # ask built from administrative lead-ins only — safe by construction, and

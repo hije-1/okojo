@@ -44,9 +44,6 @@ NARRATOR_VERSION = "1.0.0"
 RecordSource = Union[str, Path, Iterable[dict]]
 
 
-# --------------------------------------------------------------------------- #
-# Artifact types
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class RecordRef:
     """A pointer to the chain record a sentence reads: its seq and hash."""
@@ -139,9 +136,6 @@ class AuditBatchNarrative:
         return self.rollup.provenance()
 
 
-# --------------------------------------------------------------------------- #
-# Grounding + calibration (fail-closed, over narrator output)
-# --------------------------------------------------------------------------- #
 class NarrativeGroundingError(ValueError):
     """Raised when a narrative sentence cites a record not in the chain."""
 
@@ -179,9 +173,6 @@ def assert_calibrated(narrative: AuditChainNarrative) -> None:
         )
 
 
-# --------------------------------------------------------------------------- #
-# Detail helpers (deterministic, defensive)
-# --------------------------------------------------------------------------- #
 def _one_line(value) -> str:
     return " ".join(str(value).split()) if value is not None else ""
 
@@ -231,9 +222,6 @@ def _compact(detail) -> str:
     return ", ".join(parts) if parts else _one_line(detail)
 
 
-# --------------------------------------------------------------------------- #
-# CASE-family template registry
-# --------------------------------------------------------------------------- #
 @dataclass(frozen=True)
 class _Template:
     register: str
@@ -391,7 +379,6 @@ CASE_TEMPLATES: dict[tuple, _Template] = {
     ("human_reviewer", "reviewer_disposition"): _Template("action", _disposition_render),
 }
 
-# --------------------------------------------------------------------------- #
 # SWEEP-family template registry
 #
 # The Designation-Triggered Remediation Sweep writes its own hash-chained trail
@@ -401,7 +388,6 @@ CASE_TEMPLATES: dict[tuple, _Template] = {
 # actually carries, and nothing more. Setup register for the three versioned
 # policy stamps (``sweep_config`` / ``identity_config`` / ``geo_config``); the
 # action register for every consequential step.
-# --------------------------------------------------------------------------- #
 def _sweep_open_render(rec: dict) -> str:
     d = _json_dict(rec.get("detail")) or {}
     name = d.get("designated_name") or "the designated party"
@@ -560,7 +546,6 @@ SWEEP_TEMPLATES: dict[tuple, _Template] = {
     ("sweep_packager", "packaged"): _Template("action", _sweep_packaged_render),
 }
 
-# --------------------------------------------------------------------------- #
 # COVERAGE-family template registry
 #
 # The institution-level screening coverage-gap assessment writes its own
@@ -568,7 +553,6 @@ SWEEP_TEMPLATES: dict[tuple, _Template] = {
 # actions. Each template is a faithful 1:1 reading of the record's own detail.
 # Setup register for the versioned policy stamp; the action register for the
 # consequential steps.
-# --------------------------------------------------------------------------- #
 def _coverage_open_render(rec: dict) -> str:
     d = _json_dict(rec.get("detail")) or {}
     legs = d.get("footprint_legs") or []
@@ -653,9 +637,6 @@ def _narrate_record(rec: dict, family: str) -> NarrativeSentence:
                              templated=False)
 
 
-# --------------------------------------------------------------------------- #
-# Entry point
-# --------------------------------------------------------------------------- #
 def _load_records(source: RecordSource) -> list[dict]:
     if isinstance(source, (str, Path)):
         out: list[dict] = []
@@ -778,9 +759,7 @@ def narrate_chain_batch(chains: Iterable[tuple[Optional[str], RecordSource]]) ->
                           chain_narratives=chain_narratives, rollup=rollup)
 
 
-# --------------------------------------------------------------------------- #
 # Versioned policy (pinned through the artifact, doc<->code anti-drift guarded)
-# --------------------------------------------------------------------------- #
 def narrator_config() -> dict:
     """The versioned narration policy.
 

@@ -48,7 +48,7 @@ from ..sweep.lifecycle import (
     is_stop_verified,
 )
 
-# --- badge states (subject's own posture) ------------------------------------
+# badge states (subject's own posture)
 BADGE_NO_MATCH = "no_match"                 # green
 BADGE_POSSIBLE = "possible_match"           # amber
 BADGE_CORROBORATED = "match_corroborated"   # red
@@ -263,7 +263,7 @@ def run_designation_check(conn: Connectors, subject_uid: int,
         meta = _meta(d)
         source_regimes.add(d.source_regime)
 
-        # -- name + variant screen (cluster-scoped), with corroboration -------- #
+        # name + variant screen (cluster-scoped), with corroboration
         name_hits = [m for m in match_designated_name(conn, d) if m.uid in cluster]
         name_uids = {m.uid for m in name_hits}
         variant_hits = [m for m in screen_name_variants(conn, d.designated_name,
@@ -312,7 +312,7 @@ def run_designation_check(conn: Connectors, subject_uid: int,
                         meta=meta, uid=m.uid, entity_name=m.entity_name,
                         kind=kind, provenance=prov))
 
-        # -- address membership (subject own -> hit; cluster -> notice) -------- #
+        # address membership (subject own -> hit; cluster -> notice)
         designated_addr = set(d.designated_addresses)
         for uid in sorted(cluster):
             hit_addrs = sorted(controlled.get(uid, set()) & designated_addr)
@@ -329,7 +329,7 @@ def run_designation_check(conn: Connectors, subject_uid: int,
                     entity_name=str(accounts.get(uid, {}).get("entity_name", f"uid {uid}")),
                     kind="address", provenance=prov))
 
-        # -- flow exposure (subject own -> line; cluster -> notice) ------------ #
+        # flow exposure (subject own -> line; cluster -> notice)
         if d.designated_addresses:
             exp = sweep_exposure(conn, d.designated_addresses)
             for e in exp.exposed:
@@ -346,7 +346,7 @@ def run_designation_check(conn: Connectors, subject_uid: int,
                         meta=meta, uid=e.uid, entity_name=e.entity_name, kind="flow",
                         hops=e.hops, provenance=[p.cite() for p in e.provenance]))
 
-            # -- counterparty lifecycle STATE (display-only) ------------------ #
+            # counterparty lifecycle STATE (display-only)
             if d.list_type == "counterparty_service" and subject_uid in exp.exposed_uids():
                 dealings = counterparty_dealings(conn, d, subject_uid)
                 acks = conn.acknowledgments_for(subject_uid)
@@ -364,7 +364,7 @@ def run_designation_check(conn: Connectors, subject_uid: int,
                     acknowledged=acknowledged, stop_verified=stop_verified,
                     provenance=[t.provenance.cite() for t in dealings]))
 
-    # -- territory branch (subject-seeded geo dossier per territory) ----------- #
+    # territory branch (subject-seeded geo dossier per territory)
     territory_lines: list[TerritoryLine] = []
     subj_acct = accounts.get(subject_uid)
     for d in territory:
@@ -394,7 +394,7 @@ def run_designation_check(conn: Connectors, subject_uid: int,
             surfaced=dossier.surfaced, signal_ids=dossier.signal_ids(),
             note=note, provenance=[p.cite() for p in dossier.provenance]))
 
-    # -- coverage statement (visible absence) ---------------------------------- #
+    # coverage statement (visible absence)
     declared_not_ingested = [reg["name"] for reg in LIST_SOURCE_REGISTRY.values()
                              if not reg["ingested"]]
     coverage = CoverageStatement(

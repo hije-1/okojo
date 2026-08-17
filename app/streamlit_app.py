@@ -119,7 +119,6 @@ _ROLE_LABEL = {
     "noise": "Ordinary",
 }
 
-# ---------------------------------------------------------------------------- #
 # Guided walkthrough — a display-only narrative layer over both modes.
 #
 # A sidebar toggle (ON by default) shows a fixed, Jennifer-approved narrative
@@ -130,7 +129,6 @@ _ROLE_LABEL = {
 # / "Guided walkthrough" label, so the band needs no separate label chip. Blue
 # is chrome-only in this app (see the semantic-colour note above), and the
 # walkthrough is chrome — so the band's blue accent carries no data meaning.
-# ---------------------------------------------------------------------------- #
 _WT_KEY = "guided_walkthrough"
 
 _WT_CASE_INTRO = (
@@ -522,7 +520,7 @@ def _tell_note_source(tell) -> str:
     return "fixed alias-tell descriptor"
 
 
-# --- v1.1 subject-as-seed designation check (Sanctions-tab addendum) --------- #
+# v1.1 subject-as-seed designation check (Sanctions-tab addendum)
 # Display-only slug -> plain language, like _RISK_REASON_LABEL: the raw states
 # stay the module's tested contract (DesignationCheckResult), so these maps only
 # change how the posture reads on screen, never the audit record or the data.
@@ -567,7 +565,7 @@ def _render_designation_posture(dc) -> None:
         f"#### Designation & sanctions posture — {dc.subject_name} "
         f"(uid {dc.subject_uid})")
 
-    # -- the headline badge (subject's OWN posture only) ------------------- #
+    # the headline badge (subject's OWN posture only)
     if badge == "match_corroborated":
         st.error(f"**{label}.** This subject's own name/identity matches a "
                  "designation and the published identifiers corroborate it. "
@@ -580,7 +578,7 @@ def _render_designation_posture(dc) -> None:
         st.success(f"**{label}.** This subject's own accounts match no active "
                    "designation name, variant, or designated address.")
 
-    # -- the subject's badge-driving hits, each cited --------------------- #
+    # the subject's badge-driving hits, each cited
     for h in dc.subject_hits:
         line = f"- **{_match_kind_label(h.match_kind)}** — {_designation_meta_line(h.meta)}"
         if h.matched_form:
@@ -592,7 +590,7 @@ def _render_designation_posture(dc) -> None:
             st.caption("identifiers that differ: " + ", ".join(h.mismatched_fields))
         _str_cite_caption(h.provenance)
 
-    # -- Q2b: the ALWAYS-visible dismissal line (cited, never an expander) - #
+    # Q2b: the ALWAYS-visible dismissal line (cited, never an expander)
     for d in dc.dismissals:
         st.warning(
             "**Name collision screened and dismissed** — "
@@ -601,7 +599,7 @@ def _render_designation_posture(dc) -> None:
             f"{', '.join(d.mismatched_fields)}).")
         _str_cite_caption(d.provenance)
 
-    # -- fund-flow exposure (Q2a: warning styling, a separate fact) -------- #
+    # fund-flow exposure (Q2a: warning styling, a separate fact)
     for f in dc.flow_exposures:
         reach = "direct" if f.direct else f"{f.hops}-hop"
         st.warning(
@@ -610,14 +608,14 @@ def _render_designation_posture(dc) -> None:
             "Exposure is a separate fact from a name match.")
         _str_cite_caption(f.provenance)
 
-    # -- counterparty lifecycle state (display-only; no proposal) --------- #
+    # counterparty lifecycle state (display-only; no proposal)
     for c in dc.counterparty_states:
         st.markdown(
             f"- **Counterparty lifecycle state:** "
             f"{_CP_STATE_LABEL.get(c.state, c.state)} — {_designation_meta_line(c.meta)}")
         _str_cite_caption(c.provenance)
 
-    # -- territory read (location signals indicate, never prove) ---------- #
+    # territory read (location signals indicate, never prove)
     for t in dc.territory_lines:
         if t.surfaced:
             st.warning(
@@ -627,7 +625,7 @@ def _render_designation_posture(dc) -> None:
         else:
             st.caption(f"Territory: {t.note} ({t.meta.designation_id}).")
 
-    # -- network notices: NAME the entity + designation + hops ------------ #
+    # network notices: NAME the entity + designation + hops
     if dc.network_notices:
         st.markdown("**Network notices** — cluster hits, not the subject's own "
                     "posture (the Network tab is the deep view):")
@@ -639,7 +637,7 @@ def _render_designation_posture(dc) -> None:
                         f"{_designation_meta_line(n.meta)}")
             _str_cite_caption(n.provenance)
 
-    # -- coverage footer (visible absence of the un-ingested list) -------- #
+    # coverage footer (visible absence of the un-ingested list)
     cov = dc.coverage
     footer = (f"Screened {cov.designations_screened} designation(s) across "
               f"{cov.list_sources_screened} list source(s).")
@@ -1035,8 +1033,8 @@ _ARTIFACT_LABEL = {
     "beneficial_ownership": "Beneficial ownership",
 }
 
-# --- Part II identity-resolution plain-language maps (machine ids stay in
-# provenance/citations; only the on-screen wording changes). -----------------
+# Part II identity-resolution plain-language maps (machine ids stay in
+# provenance/citations; only the on-screen wording changes).
 
 # Corroboration outcome -> compliance-officer wording (the dismissal is a
 # feature: a same-name collision resolved to a different person).
@@ -1193,7 +1191,6 @@ def _render_identity_resolution(res, names) -> bool:
         "resolves. No identity or kinship is asserted as fact."
     )
 
-    # -- corroboration ------------------------------------------------------ #
     if res.corroboration:
         st.markdown("**Corroboration — name match vs. published identity details**")
         for c in res.corroboration:
@@ -1209,7 +1206,6 @@ def _render_identity_resolution(res, names) -> bool:
             if c.provenance:
                 st.caption("source: " + "; ".join(c.provenance))
 
-    # -- ownership + officer walk ------------------------------------------- #
     if not res.ownership.is_empty():
         own = res.ownership
         st.markdown(
@@ -1240,7 +1236,6 @@ def _render_identity_resolution(res, names) -> bool:
             )
             _source_caption(ch.provenance)
 
-    # -- proximity ring ----------------------------------------------------- #
     if not res.proximity.is_empty():
         st.markdown(
             "**Proximity ring** — candidate relatives/associates of the resolved "
@@ -1261,7 +1256,6 @@ def _render_identity_resolution(res, names) -> bool:
             st.markdown(line)
             _source_caption(m.provenance)
 
-    # -- identity-review RFI ------------------------------------------------ #
     if res.identity_rfis or res.suppressed_identity_rfis:
         st.markdown("**Identity-review RFI — subject-facing, drafted never sent**")
         st.caption(
@@ -1331,7 +1325,6 @@ def _render_geo_triangulation(res, names) -> bool:
                 )
                 st.caption(p.plain_language)
 
-            # -- location signals ------------------------------------------- #
             st.markdown("**Location signals** — each *indicates possible presence*, "
                         "never proof:")
             for s in d.signals:
@@ -1342,7 +1335,7 @@ def _render_geo_triangulation(res, names) -> bool:
                 )
                 _source_caption(s.provenance)
 
-            # -- VPN markers (never location evidence) ---------------------- #
+            # VPN markers (never location evidence)
             if d.vpn_markers:
                 st.markdown(
                     "**VPN / anonymising logins** — recorded as obfuscation "
@@ -1352,7 +1345,6 @@ def _render_geo_triangulation(res, names) -> bool:
                     st.markdown(f"- a VPN login at {m.timestamp}")
                     _source_caption(m.provenance)
 
-            # -- counter-evidence + staleness ------------------------------- #
             if d.counter_evidence:
                 st.markdown(
                     "**Counter-evidence** — documents arguing *against* presence; "
@@ -1366,7 +1358,7 @@ def _render_geo_triangulation(res, names) -> bool:
                     )
                     _source_caption(c.provenance)
 
-            # -- control gaps (KYC-refresh; not a location signal) ---------- #
+            # control gaps (KYC-refresh; not a location signal)
             if d.control_gaps:
                 st.markdown(
                     "**Control gaps** — the exchange failed to re-verify a "
@@ -1377,7 +1369,7 @@ def _render_geo_triangulation(res, names) -> bool:
                     st.markdown(f"- {g.detail}")
                     _source_caption(g.provenance)
 
-            # -- the one-signal-rule verdict -------------------------------- #
+            # the one-signal-rule verdict
             # A plain restatement of dossier.note (which names raw signal ids as
             # analyst shorthand): the screen register stays plain, the machine
             # ids stay in the audit stamp.
@@ -1388,7 +1380,7 @@ def _render_geo_triangulation(res, names) -> bool:
                 "human resolves."
             )
 
-            # -- the drafted (never sent) EDD RFI, or its suppression ------- #
+            # the drafted (never sent) EDD RFI, or its suppression
             if p is not None and p.rfi_text:
                 st.markdown(
                     "**Enhanced due-diligence RFI — subject-facing, "
@@ -1456,12 +1448,12 @@ def _render_counterparty_lifecycle(res, names) -> bool:
     for d in sorted(res.lifecycle_dispositions, key=lambda x: x.uid):
         disposition = _CP_DISPOSITION_LABEL.get(d.outcome, d.outcome)
         with st.expander(f"uid {d.uid} ({names.get(d.uid, d.uid)}) · **{disposition}**"):
-            # -- the reached lifecycle state, plain ------------------------- #
+            # the reached lifecycle state, plain
             st.markdown(
                 f"**Lifecycle state:** {_CP_STATE_LABEL.get(d.state, d.state)}"
             )
 
-            # -- the disposition + its plain rationale ---------------------- #
+            # the disposition + its plain rationale
             # The screen shows the plain proposal label + the decision's
             # plain_language gloss; the raw outcome slug never reaches the screen.
             st.markdown(f"**Proposed disposition — {disposition}**")
@@ -1481,7 +1473,7 @@ def _render_counterparty_lifecycle(res, names) -> bool:
                 )
             _source_caption(d.provenance)
 
-            # -- the drafted (never sent) customer notification ------------- #
+            # the drafted (never sent) customer notification
             n = notes.get(d.uid)
             if n is not None:
                 st.markdown(
@@ -1623,7 +1615,7 @@ def _render_sweep_mode(conn: Connectors) -> None:
     res = run_sweep(designation, conn=conn)
 
     d = res.designation
-    # -- valid-payload result (MODE LEVEL, above the tab bar) --------------- #
+    # valid-payload result (MODE LEVEL, above the tab bar)
     # The acceptance line and the clean-probe outcome render ABOVE the tabs, so
     # they are visible whichever tab is open — a fail-closed sweep result must
     # never hide behind a tab. (The malformed-payload rejection already returned
@@ -1661,7 +1653,6 @@ def _render_sweep_mode(conn: Connectors) -> None:
         c4.metric("Hold-status gaps", len(res.gaps))
         c5.metric("Escalations drafted", len(res.escalations))
 
-        # -- worksheet ------------------------------------------------------ #
         st.markdown("#### Remediation worksheet")
         st.caption(
             "One row per surfaced account, in triage order (most severe action "
@@ -1699,7 +1690,7 @@ def _render_sweep_mode(conn: Connectors) -> None:
         else:
             st.info("No accounts surfaced for this designation.")
 
-        # -- early-warning signal-list notice (cross-list early warning) ----- #
+        # early-warning signal-list notice (cross-list early warning)
         # A foreign list-source designation is a timestamped RISK SIGNAL, not a
         # binding obligation of this synthetic exchange. Whenever the picked
         # designation is such a signal list (a known list-source regime — never a
@@ -1736,7 +1727,6 @@ def _render_sweep_mode(conn: Connectors) -> None:
                 )
                 _source_caption(r.provenance)
 
-        # -- hold-status reconciliation ------------------------------------- #
         st.markdown("#### Hold-status reconciliation")
         st.caption(
             f"Two mock systems: the **{_SYSTEM_LABEL['admin']}** vs. the "
@@ -1756,7 +1746,6 @@ def _render_sweep_mode(conn: Connectors) -> None:
         else:
             st.success("No reconciliation gaps: the two systems agree across the ledger.")
 
-        # -- escalation drafts ---------------------------------------------- #
         st.markdown("#### Escalation drafts")
         st.caption(
             "Internal-to-compliance drafts prepared for the human remediation owner "
@@ -1817,7 +1806,6 @@ def _render_sweep_mode(conn: Connectors) -> None:
 
     with tab_audit:
         _walkthrough(_WT_SWEEP["audit"])
-        # -- package + audit ------------------------------------------------ #
         st.markdown("#### Decision-ready package & audit trail")
         if res.package_path and res.package_path.exists():
             st.download_button(
@@ -2121,7 +2109,6 @@ def main() -> None:
         st.session_state["_case_run_key"] = _run_key
     res = st.session_state["_case_res"]
 
-    # -- header metrics ---------------------------------------------------- #
     # The Advisory tile carries the one long value in the row (an advisory id
     # like "FIN-2025-A002"), so it gets double weight to render untruncated.
     c1, c2, c3, c4, c5, c6 = st.columns([1, 1, 1, 1, 1, 2])
@@ -2172,7 +2159,6 @@ def main() -> None:
          "Decisions", "SAR draft", "Audit trail"]
     )
 
-    # -- Sanctions (gating control: watchlist name-match + on-chain exposure) -- #
     with tab_sanctions:
         _walkthrough(_WT_CASE["sanctions"])
         st.subheader("Sanctions & watchlist screening")
@@ -2295,7 +2281,6 @@ def main() -> None:
         else:
             st.info("No on-chain sanctioned exposure for this cluster.")
 
-    # -- Timeline ---------------------------------------------------------- #
     with tab_timeline:
         _walkthrough(_WT_CASE["timeline"])
         st.subheader(f"{res.subject_name} — anomaly-flagged timeline")
@@ -2357,7 +2342,6 @@ def main() -> None:
             ])
             st.dataframe(ev, use_container_width=True, hide_index=True)
 
-    # -- Network ----------------------------------------------------------- #
     with tab_network:
         _walkthrough(_WT_CASE["network"])
         st.subheader("Network expansion")
@@ -2404,7 +2388,6 @@ def main() -> None:
         else:
             st.info("Graph not rendered.")
 
-        # -- gas-funding collapse callout ---------------------------------- #
         gas_links = res.expansion.gas_funding_links
         if gas_links:
             controllers = sorted({l["controller_uid"] for l in gas_links})
@@ -2440,7 +2423,6 @@ def main() -> None:
                               store=CaseGraphStore(cases_dir / "case_graph.sqlite"))
         _render_roster(roster, risk_by_uid)
 
-    # -- Tells ------------------------------------------------------------- #
     with tab_tells:
         _walkthrough(_WT_CASE["tells"])
         st.subheader("Tells")
@@ -2511,12 +2493,10 @@ def main() -> None:
         else:
             st.info("No remark tells surfaced across the dataset.")
 
-    # -- RFI --------------------------------------------------------------- #
     with tab_rfi:
         _walkthrough(_WT_CASE["rfi"])
         _render_rfi(res.rfi, res.contradictions, res.rfi_decomposition)
 
-    # -- Advisory ---------------------------------------------------------- #
     with tab_advisory:
         _walkthrough(_WT_CASE["advisory"])
         st.subheader("Regulatory advisory match")
@@ -2579,12 +2559,10 @@ def main() -> None:
         else:
             st.info("No advisory matched (event-triggered on RFI key terms).")
 
-    # -- Decisions (bounded agency + case-graph memory) --------------------- #
     with tab_decisions:
         _walkthrough(_WT_CASE["decisions"])
         _render_decisions(res)
 
-    # -- SAR draft --------------------------------------------------------- #
     with tab_sar:
         _walkthrough(_WT_CASE["sar"])
         st.subheader("Grounded, self-critiquing SAR draft")
@@ -2612,7 +2590,6 @@ def main() -> None:
                     "row — grounding contract satisfied (fail-closed)."
                 )
 
-            # -- Critic review (deterministic FinCEN rubric) --------------- #
             crit = res.critique
             history = res.critique_history
             if crit is not None:
@@ -2659,7 +2636,6 @@ def main() -> None:
                             "never fabricated."
                         )
 
-    # -- Audit trail ------------------------------------------------------- #
     with tab_audit:
         _walkthrough(_WT_CASE["audit"])
         st.subheader("Tamper-evident audit trail")
@@ -2727,7 +2703,7 @@ def main() -> None:
             )
             st.caption(f"SHA-256: `{res.package_sha256}`")
 
-            # -- Reviewer decision (session-local sandbox) --------------------- #
+            # Reviewer decision (session-local sandbox)
             # A human reviewer's decision on the finished package, written INTO
             # the chain beside it. Two dispositions (ruling); recorded and
             # surfaced only — re-runs nothing, changes no case state.

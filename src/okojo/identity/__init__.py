@@ -32,8 +32,8 @@ IDENTITY_VERSION = "1.0.0"
 # Intentional divergence must be argued through an IDENTITY_VERSION bump.
 VARIANT_MATCH_THRESHOLD = 85
 
-# --- RESERVED for later Part-II slices (declared complete here, consumed with
-# no further version bump) -------------------------------------------------- #
+# RESERVED for later Part-II slices (declared complete here, consumed with
+# no further version bump)
 # T3 (beneficial-owner + officer walk): the documented ownership fraction at or
 # above which designation status propagates through an ownership edge. A tunable
 # POLICY parameter stated at principle level (majority-ownership control), never
@@ -55,7 +55,6 @@ PROXIMITY_SIGNAL_REGISTRY = [
     {"id": "kyc_document_cross_holding", "description": "KYC documents of one party inside another's account"},
 ]
 
-# --------------------------------------------------------------------------- #
 # Transliteration equivalence rule tables — CYRILLIC and ARABIC romanization
 # families, built ONLY from PUBLISHED romanization conventions (cited per
 # family). These are bounded, illustrative equivalence classes, NOT a complete
@@ -65,7 +64,6 @@ PROXIMITY_SIGNAL_REGISTRY = [
 # often past a single-script fuzzy, screen). Each class names the underlying
 # name-part and the standards whose romanizations it unifies. No proprietary or
 # scraped table is used; every form is a documented public romanization.
-# --------------------------------------------------------------------------- #
 TRANSLITERATION_FAMILIES = {
     "cyrillic": {
         "romanization_standards": [

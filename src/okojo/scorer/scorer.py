@@ -284,7 +284,7 @@ def score_risk(conn: Connectors, expansion: NetworkExpansion) -> RiskScoring:
     scores: list[RiskScore] = []
     exposed_uids: list[int] = []
 
-    # --- money-flow-exposed accounts (counted in the metric) ------------------ #
+    # money-flow-exposed accounts (counted in the metric)
     for nid, data in g.nodes(data=True):
         if data.get("kind") != "account" or nid not in dist:
             continue
@@ -314,7 +314,7 @@ def score_risk(conn: Connectors, expansion: NetworkExpansion) -> RiskScoring:
         ))
         exposed_uids.append(uid)
 
-    # --- gas-only controllers (echoed, kept OUT of the metric) ---------------- #
+    # gas-only controllers (echoed, kept OUT of the metric)
     exposed_set = set(exposed_uids)
     gas_only_controllers = sorted(gas_controllers - exposed_set)
     if gas_only_controllers:

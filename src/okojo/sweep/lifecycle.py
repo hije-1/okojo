@@ -120,7 +120,7 @@ def derive_counterparty_lifecycle_state(*, notification_drafted: bool,
     return "exposure_detected"
 
 
-# --- customer notification (subject-facing, T&C matter) ----------------------
+# customer notification (subject-facing, T&C matter)
 
 # Approved neutral template — a Terms-and-Conditions notification, authored
 # guard-safe. Its widened-but-bounded sayable scope (Q4): the counterparty's
@@ -228,7 +228,7 @@ def draft_counterparty_notifications(
     return drafts, suppressed
 
 
-# --- lifecycle disposition (the record the wiring stamps) --------------------
+# lifecycle disposition (the record the wiring stamps)
 
 
 class LifecycleDisposition(BaseModel):

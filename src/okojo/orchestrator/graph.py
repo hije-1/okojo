@@ -117,7 +117,6 @@ class CaseState(TypedDict, total=False):
     no checkpointer exists to try).
     """
 
-    # run inputs
     subject_uid: int
     max_hops: int
     render_graph: bool

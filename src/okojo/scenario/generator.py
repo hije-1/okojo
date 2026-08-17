@@ -43,7 +43,7 @@ try:  # prefer the real Faker (see requirements.txt); fall back if unavailable
 except ModuleNotFoundError:  # pragma: no cover
     from ._fakelite import FakeLite as Faker
 else:
-    # ---- cross-platform determinism pin ---------------------------------- #
+    # cross-platform determinism pin
     # Faker's date_time provider chooses its RNG draw by host OS: on Windows
     # ``_rand_seconds`` uses ``random.randint`` (integer seconds), everywhere
     # else it uses ``random.uniform`` (float). The two consume DIFFERENT
@@ -129,9 +129,6 @@ _HOT_WALLET_ADDR = "THotWalletOmnibusSettlement0000001"
 _HOT_WALLET_LABEL = "exchange-hot-wallet"
 
 
-# --------------------------------------------------------------------------- #
-# small deterministic helpers
-# --------------------------------------------------------------------------- #
 def _tron_addr(rng: random.Random) -> str:
     return "T" + "".join(rng.choice(_BASE58) for _ in range(33))
 
@@ -283,9 +280,7 @@ def _designation_exposure(
     return exposed, hops, direct
 
 
-# --------------------------------------------------------------------------- #
 # the ring specification (structure is fixed; names/ids are generated)
-# --------------------------------------------------------------------------- #
 # (key, entity_type, role_in_ring, jurisdiction)
 _RING_SPEC = [
     ("KINGPIN", "individual", "ultimate_controller", "AE"),
@@ -304,7 +299,6 @@ _RING_SPEC = [
 _NOISE_ACCOUNTS = 12  # ordinary users so the ring isn't trivially separable
 
 
-# --------------------------------------------------------------------------- #
 # Which evidence rebuts which RFI claim — ONE definition, three consumers.
 #
 # Consumed by (a) the claim's ``contradicted_by`` prose in ``rfi.csv``, (b)
@@ -391,7 +385,7 @@ _DECOY_DESIGNATION_ADDRS = [
 ]
 
 
-# ---- Phase 8 Part II (T1): identity-resolution variant-screen plants -------- #
+# Phase 8 Part II (T1): identity-resolution variant-screen plants
 # INVENTED, plausible romanization personas — NO source-document provenance.
 # Each designated name is ONE published romanization of an underlying name; the
 # matching customer opened under a DIFFERENT published romanization, so an
@@ -416,7 +410,7 @@ _IDENTITY_PLANTS = [
      "Mohammed El-Sayegh", "Khalid El-Sayegh", "AE"),
 ]
 
-# ---- Phase 8 Part II (T2): corroboration name-COLLISION plant --------------- #
+# Phase 8 Part II (T2): corroboration name-COLLISION plant
 # A third foreign name-only designation whose published-romanization variant
 # ("Alexander Volkoff") matches an EXISTING-looking customer who is NOT the
 # designated party — same Cyrillic name family, different individual. The
@@ -462,7 +456,7 @@ _CORROBORATION_CUSTOMER_KYC = {
     "DES-2026-0007": ("PASSPORT", "P-AE-770033"),
 }
 
-# ---- Phase 8 Part II (T3): beneficial-owner + officer walk plants ----------- #
+# Phase 8 Part II (T3): beneficial-owner + officer walk plants
 # Hung off the DES-2026-0005 resolved true-hit (the corroborated Zhukovsky
 # customer) — the walk runs from a party the screen matched AND corroboration did
 # not dismiss. All accounts here are NEW, non-transacting company/officer
@@ -492,7 +486,7 @@ _T3_FICTITIOUS_OFFICER = "Reinhardt Voss"
 _T3_POST_OFFICER = ("POST_DIRECTOR", "Dana Krieg")
 _T3_POST_APPOINTED = "2026-02-15"
 
-# ---- Phase 8 Part II (T4): proximity-ring plants ---------------------------- #
+# Phase 8 Part II (T4): proximity-ring plants
 # Relatives/associates of the DES-2026-0005 resolved party (Evgenii Zhukovsky),
 # surfaced for REVIEW (never exposure, never asserted kinship). NEW, non-
 # transacting individual personas appended after every per-account loop; INVENTED,
@@ -511,7 +505,7 @@ _T4_RING = [
     ("STRANGER", "James Miller", "active", "none"),
 ]
 
-# ---- Phase 8 Part III (U1b): geo-triangulation TERRITORY + personas --------- #
+# Phase 8 Part III (U1b): geo-triangulation TERRITORY + personas
 # A TERRITORY designation (DES-2026-0008) names a fictional sanctioned region —
 # NOT a party — so there is no name screen; the sweep collects location signals
 # per account and triangulates. Everything here is SYNTHETIC and PM-eyeballed
@@ -552,7 +546,7 @@ _GEO_PERSONAS = [
     ("TRAVELLER",    "Emil Navarrete",   "AE", "XV", "AE", True),
 ]
 
-# ---- Phase 8 Part IV: counterparty-designation lifecycle ------------------- #
+# Phase 8 Part IV: counterparty-designation lifecycle
 # A COUNTERPARTY-SERVICE designation (DES-2026-0009) names a designated VASP /
 # exchange ("Kavelith Digital Exchange"), a company WITH on-chain service
 # addresses — customers who dealt with its hosted wallets are surfaced by the
@@ -621,7 +615,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         kyc_docs[doc.kyc_doc_id] = doc
         return doc
 
-    # ---- ring accounts ---------------------------------------------------- #
     for key, etype, role, jur in _RING_SPEC:
         uid = next_uid
         next_uid += 1
@@ -647,7 +640,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             )
         )
 
-    # ---- reused-KYC-document pattern -------------------------------------- #
+    # reused-KYC-document pattern
     # The SHELL_AE company account is opened with the SIBLING's KYC document,
     # and a second EMPLOYEE account reuses the EMPLOYEE's document. These are
     # the "separate entities, same paperwork" tells.
@@ -678,7 +671,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     )
     reused_kyc[employee_kyc] = [key_to_uid["EMPLOYEE"], emp2_uid]
 
-    # ---- noise accounts --------------------------------------------------- #
     for _ in range(_NOISE_ACCOUNTS):
         uid = next_uid
         next_uid += 1
@@ -702,7 +694,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
 
     ring_uids = [key_to_uid[k] for k, *_ in _RING_SPEC] + [emp2_uid]
 
-    # ---- shared-device pattern ------------------------------------------- #
     device_links: list[DeviceLink] = []
     shared_devices: dict[str, list[int]] = {}
 
@@ -721,7 +712,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     for a in accounts:
         device_links.append(DeviceLink(device_fingerprint=_device_fp(rng), uid=a.uid))
 
-    # ---- IP logs (sanctioned-jurisdiction leakage) ----------------------- #
+    # IP logs (sanctioned-jurisdiction leakage)
     ip_logs: list[IpLog] = []
     leak_uids = {key_to_uid["TRUST"], key_to_uid["SHELL_HK"], key_to_uid["KINGPIN"]}
     for a in accounts:
@@ -734,7 +725,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             else:
                 ip_logs.append(IpLog(a.uid, f"{rng.randint(11,220)}.{rng.randint(0,255)}.{rng.randint(0,255)}.{rng.randint(1,254)}", a.residence_country, False, _rand_ts(rng)))
 
-    # ---- addresses, controllers, sanctions ------------------------------- #
     addresses: list[Address] = []
     address_controllers: dict[str, int] = {}
 
@@ -745,7 +735,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         addresses.append(Address(addr, "TRX", None, "IRGC-STYLE-SYNTHETIC", True))
         sanctioned_addrs.append(addr)
 
-    # controller addresses for key ring members
     controller_addr: dict[str, str] = {}
     for key in ["KINGPIN", "EMPLOYEE", "TRUST", "SHELL_AE", "SHELL_TR", "SHELL_HK", "SHELL_NZ", "SHELL_CN"]:
         addr = _tron_addr(rng)
@@ -768,11 +757,9 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     # cite it are appended at the very end of generation.
     addresses.append(Address(_HOT_WALLET_ADDR, "TRX", None, _HOT_WALLET_LABEL, False))
 
-    # ---- gas-funding pattern --------------------------------------------- #
     # KINGPIN's wallet funds the gas of the "non-custodial" hops — the tell.
     gas_funds: list[GasFund] = [GasFund(controller_addr["KINGPIN"], h) for h in hop_addrs]
 
-    # ---- transactions ----------------------------------------------------- #
     txs: list[Transaction] = []
     structured_tx_ids: list[str] = []
     betraying_remarks: list[dict] = []
@@ -887,7 +874,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         rng.choice(["deposit", "withdrawal"])   # draw preserved for byte-identity; outbound noise is a withdrawal
         _tx(f"uid:{_nuid}", _naddr, _namt, _nremark, "withdrawal")
 
-    # ---- registration-date coherence pass (RNG-free) ---------------------- #
+    # registration-date coherence pass (RNG-free)
     # registration_date was drawn independently of the activity above, which
     # could place logins and transactions BEFORE the account existed — an
     # impossibility a chronological view surfaces immediately. Clamp each
@@ -918,7 +905,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             opened = datetime.fromisoformat(first[:10]) - timedelta(days=30)
             a.registration_date = opened.date().isoformat()
 
-    # ---- RFI with ground-truth contradictions ---------------------------- #
+    # RFI with ground-truth contradictions
     # Everything from here on is RNG-FREE: it derives from data already drawn
     # above, so the pre-existing tables regenerate byte-identically.
     accounts_by_uid = {a.uid: a for a in accounts}
@@ -964,7 +951,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         ],
     )
 
-    # ---- corporate-registry OSINT (contradiction substrate) --------------- #
+    # corporate-registry OSINT (contradiction substrate)
     # Built from the ordered _REGISTRY_SPEC over personas/jurisdictions/dates
     # already generated: no new identity, no PII, and no rng draw. The planted
     # fact is the shared director across the trust and SHELL_NZ, which the RFI
@@ -987,7 +974,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             officer_uid=officer.uid,
         ))
 
-    # ---- the subject's own PRIOR RFI answer ------------------------------- #
+    # the subject's own PRIOR RFI answer
     # Kept in its own table so rfi.csv (the RFI under review) is untouched. The
     # earlier answer concedes exactly the relationship the current answer denies.
     # Asked 30 days after the later of the two incorporations, so the earlier
@@ -1021,7 +1008,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         }],
     )
 
-    # ---- derived Phase-2 labels (no RNG; stay in sync by construction) ---- #
+    # derived Phase-2 labels (no RNG; stay in sync by construction)
     # Answer keys for the On-chain Risk Scorer + network sanctioned-exposure eval,
     # the IP-leak detector, and the layering detector. Computed from the data
     # already planted above, so the CSVs remain byte-identical.
@@ -1030,7 +1017,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     )
     sanctioned_ip_leak_uids = sorted(leak_uids)
 
-    # ---- synthetic SDN / alias watchlist (Tell Miner fuzzy-match target) -- #
+    # synthetic SDN / alias watchlist (Tell Miner fuzzy-match target)
     # Watchlisted ring members carry an alias that is a transliteration variant of
     # their registered name (evasion of exact-match screening); decoys must not
     # match any account. Built from already-generated names — no RNG, no CSV drift.
@@ -1050,7 +1037,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     sdn_entries.append(SdnEntry("SDN-0004", "Reza Oil Logistics",
                                 "Reza Oil Logistics;ROL Shipping", "SYNTHETIC-IRGC-STYLE", "company"))
 
-    # ---- designations (Phase 8: the remediation sweep's trigger input) ---- #
+    # designations (Phase 8: the remediation sweep's trigger input)
     # RNG-free: names and addresses derive from personas and wallets already
     # generated above. The live designation targets SHELL_NZ's controller
     # wallet plus one KINGPIN-controlled "non-custodial" hop, so the exposed
@@ -1089,7 +1076,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="obligation",
             listed_since=designation_date,
         ),
-        # ---- Part I-B: two FOREIGN national-CT plants (signal, not obligation) #
+        # Part I-B: two FOREIGN national-CT plants (signal, not obligation) #
         # A foreign national-list entry is a timestamped RISK SIGNAL, never a
         # legal effect binding this synthetic exchange. designation_date is the
         # common sweep reference date; listed_since is when the FOREIGN list
@@ -1131,7 +1118,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="signal",
             listed_since="2025-03-01",
         ),
-        # ---- Part II (T1): two foreign name-only plants for VARIANT screening #
+        # Part II (T1): two foreign name-only plants for VARIANT screening #
         # Each designated_name is a published romanization of an underlying name;
         # a customer opened under a DIFFERENT published romanization (planted in
         # accounts.csv below the boundary) is caught by the variant layer but
@@ -1156,7 +1143,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             )
             for did, _family, desig_name, _cust, _decoy, _country in _IDENTITY_PLANTS
         ],
-        # ---- Part II (T2): the corroboration name-COLLISION plant ---------- #
+        # Part II (T2): the corroboration name-COLLISION plant
         # Same national_ct/signal/name-only shape as the T1 identity plants; its
         # variant screen surfaces a customer whose KYC identity attributes do NOT
         # corroborate the designated party (a same-name collision), so the
@@ -1174,7 +1161,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="signal",
             listed_since=designation_date,
         ),
-        # ---- Part III (U1b): the TERRITORY designation --------------------- #
+        # Part III (U1b): the TERRITORY designation
         # Designates a fictional GEOGRAPHY (Qazrun Free Zone), not a party — so
         # it carries NO on-chain addresses (the empty-address path, permitted for
         # a territory) and there is no name screen. The sweep triangulates
@@ -1194,7 +1181,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             obligation_vs_signal="signal",
             listed_since=designation_date,
         ),
-        # ---- Part IV: the COUNTERPARTY-SERVICE designation ----------------- #
+        # Part IV: the COUNTERPARTY-SERVICE designation
         # Designates a synthetic VASP/exchange (Kavelith Digital Exchange), a
         # company WITH on-chain service addresses — customers who dealt with them
         # are surfaced by the flow sweep. A NEW list_type ("counterparty_service")
@@ -1221,7 +1208,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         ),
     ]
 
-    # ---- sanctions-hold mock systems (warehouse feed vs. admin record) ---- #
+    # sanctions-hold mock systems (warehouse feed vs. admin record)
     # Full per-account coverage in BOTH systems, so reconciliation is a real
     # comparison rather than a presence check. Two gaps are planted, one in
     # each drift direction, both on accounts the live designation exposes.
@@ -1260,7 +1247,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
          "admin_status": "no_hold", "gap_type": "unrecorded_unblock"},
     ]
 
-    # ---- KYC artifacts on file (Part I-B S3: the completeness data plane) --- #
+    # KYC artifacts on file (Part I-B S3: the completeness data plane)
     # Full per-account coverage: one row per (account, artifact) for the
     # artifacts the entity type carries. Every artifact is on file (present) with
     # exactly ONE planted gap — the ultimate controller (KINGPIN) is missing a
@@ -1274,7 +1261,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
             present = not (a.uid == key_to_uid["KINGPIN"] and art == "proof_of_address")
             kyc_artifacts.append(KycArtifact(uid=a.uid, artifact_type=art, present=present))
 
-    # ---- staff-account register (Part I-B S3: the insider-linkage data plane) #
+    # staff-account register (Part I-B S3: the insider-linkage data plane) #
     # The employee-account register an exchange keeps for conflict-of-interest
     # monitoring. EMPLOYEE (the staff cutout) is on it; a second, ordinary staff
     # member (a noise account with no ring linkage) is also on it, so the insider
@@ -1297,7 +1284,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     ]
     staff_uids = {s.uid for s in staff_register}
 
-    # ---- derived Phase-8 designation labels (no RNG; in sync by construction) #
+    # derived Phase-8 designation labels (no RNG; in sync by construction)
     all_uids = [a.uid for a in accounts]
 
     def _split_addrs(joined: str) -> list[str]:
@@ -1326,7 +1313,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
                 adjacent.update(u for u in group if u not in exposed_set)
         des_adjacent[d.designation_id] = sorted(adjacent)
 
-    # ---- Part I-B cross-list early warning (no RNG) ---------------------- #
+    # Part I-B cross-list early warning (no RNG)
     # Lead-time window = [listed_since, designation_date]: positive only for a
     # foreign plant; zero for domestic (listed_since == designation_date, IB-B).
     #
@@ -1395,7 +1382,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "DES-2026-0004": [key_to_uid["SIBLING"]],
     }
 
-    # ---- Part I-B S3: pre/post-designation exposure timing (no RNG) ------- #
+    # Part I-B S3: pre/post-designation exposure timing (no RNG)
     # For each exposed account, WHEN did its exposure-driving flow occur relative
     # to the designation date? Control of a designated wallet (hops == 0) is a
     # TIMELESS fact — no transaction dates it — the same discipline that excludes
@@ -1421,7 +1408,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
                 timing[str(uid)] = "pre_designation"
         designation_exposure_timing[d.designation_id] = timing
 
-    # ---- Part I-B S3: KYC completeness + insider-linkage answer keys ------ #
+    # Part I-B S3: KYC completeness + insider-linkage answer keys
     # KYC gaps: required-and-absent artifacts per account, from the DATA plane
     # (kyc_artifacts) against the emitted-artifact list (which mirrors the sweep
     # standard). Exactly one: KINGPIN missing proof_of_address.
@@ -1448,7 +1435,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     }
     insider_linkage_uids = sorted(staff_uids & device_adjacent)
 
-    # ---- Part II (T1): identity-resolution personas (RNG-free, additive) --- #
+    # Part II (T1): identity-resolution personas (RNG-free, additive)
     # Appended AFTER every per-account loop above (holds, KYC artifacts, staff
     # register, and every legacy/Part-I-B answer key), so those tables and keys
     # never see these accounts and regenerate byte-identically. The customers
@@ -1510,7 +1497,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         identity_decoy_uid[did] = decoy_uid
     identity_variant_decoy_uids = sorted(identity_variant_decoy_uids)
 
-    # ---- Part II (T2): the corroboration name-COLLISION customer ----------- #
+    # Part II (T2): the corroboration name-COLLISION customer
     # Alexander Volkoff — a same-name-family customer the DES-0007 variant screen
     # surfaces but corroboration DISMISSES (a different individual). Additive:
     # accounts.csv + kyc_docs.csv only; not in identity_variant_matches.
@@ -1534,7 +1521,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     identity_subject_attrs.append(
         (collision_uid, "1984-05-14", col_country, col_doc_type, col_doc_number))
 
-    # ---- Part II (T3): beneficial-owner + officer walk personas + tables --- #
+    # Part II (T3): beneficial-owner + officer walk personas + tables
     # NEW company + officer personas hung off the DES-2026-0005 resolved party,
     # appended here (after every per-account loop) so holds / KYC-artifacts /
     # staff tables stay byte-identical. Company names are DISTINCT from every
@@ -1621,7 +1608,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     fictitious_executive_flags = ["OFF-2026-0002"]
     post_designation_control_changes = ["OFF-2026-0003"]
 
-    # ---- Part II (T4): proximity-ring personas + tables + answer key ------- #
+    # Part II (T4): proximity-ring personas + tables + answer key
     # Relatives/associates of the DES-2026-0005 resolved party, appended here
     # (after every per-account loop) so all hold/KYC/staff tables stay byte-
     # identical. relationships.csv + relationship_assertions.csv are NEW sibling
@@ -1677,7 +1664,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "DES-2026-0006": [identity_decoy_uid["DES-2026-0006"]],
     }
 
-    # ---- Part II (T2): the two new corroboration tables + answer keys ------ #
+    # Part II (T2): the two new corroboration tables + answer keys
     # designation_identifiers.csv: what the FOREIGN list published for each
     # identity designation's designated party. kyc_identity_attributes.csv: the
     # matched customer's identity attributes (the shared substrate T4 reuses).
@@ -1735,7 +1722,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         if data[4] in ("corroborated_true_hit", "possible_match_needs_human")
     }
 
-    # ---- Part III (U1b): geo-triangulation personas + sibling tables ------- #
+    # Part III (U1b): geo-triangulation personas + sibling tables
     # The seven planted personas for the TERRITORY designation, appended AFTER
     # every per-account loop (so holds / KYC-artifacts / staff / exposure keys
     # stay byte-identical) and carrying role "geo_review_subject" (excluded from
@@ -1848,7 +1835,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     geo_counter_evidence_uids = [geo_uid["TRAVELLER"]]
     geo_decoy_absent_uids = [geo_uid["DECOY"]]
 
-    # ---- Part IV: counterparty-lifecycle personas + ledger + exposure ------ #
+    # Part IV: counterparty-lifecycle personas + ledger + exposure
     # Appended AFTER the geo block (and after the per-designation loops), so every
     # legacy CSV stays byte-identical. Unlike the review-subject personas above,
     # these customers have FLOW exposure to the counterparty, so DES-0009's
@@ -1932,7 +1919,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
     counterparty_exposed_uids = sorted(cp_exposed)
     counterparty_clean_uid = cp_uid["CLEAN"]
 
-    # ---- assemble ground truth ------------------------------------------- #
     ground_truth = {
         "readme": "Fabricated data. Labels below are the answer key for scoring Okojo's capabilities.",
         "ultimate_controller_uid": key_to_uid["KINGPIN"],
@@ -2093,7 +2079,7 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         "coverage_declared_not_ingested_regimes": ["SYN-UN-CONSOLIDATED"],
     }
 
-    # ---- on-chain settlement legs (hot-wallet chain shadows) -------------- #
+    # on-chain settlement legs (hot-wallet chain shadows)
     # Every customer withdrawal settles on-chain FROM the omnibus hot wallet
     # (binding constraint; Q6: emit a shadow for ALL withdrawals). Appended AFTER
     # all gold is frozen and after the current max SIMTX id (Q3), so no existing
@@ -2114,7 +2100,6 @@ def generate_scenario(out_dir: Optional[Path] = None, seed: int = SEED) -> dict:
         _ex.settlement_ref = _shadow.tx_id
         txs.append(_shadow)
 
-    # ---- write outputs ---------------------------------------------------- #
     def _write(name: str, rows: list) -> None:
         pd.DataFrame([asdict(r) for r in rows]).to_csv(out_dir / name, index=False)
 

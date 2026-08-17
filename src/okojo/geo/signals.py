@@ -210,10 +210,8 @@ class GeoDossier(BaseModel):
                 + [g.provenance for g in self.control_gaps])
 
 
-# --------------------------------------------------------------------------- #
 # The six signal collectors + VPN discipline + staleness. Each is pure over its
 # rows and the territory profile; each grounds every signal it emits.
-# --------------------------------------------------------------------------- #
 
 
 def _s(v: object) -> str:

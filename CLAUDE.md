@@ -356,3 +356,16 @@ outputs: **pydantic** · UI: **Streamlit** · tests: **pytest**.
 - Keep a steady public commit cadence.
 - Use **plan mode** (Shift+Tab) when standing up a new subsystem.
 - Each new capability ships with an eval against `ground_truth.json`.
+
+## Comment style
+- Comments explain **why**, never **what**. If a comment restates the adjacent
+  code, delete it — the code is the statement.
+- No step-by-step narration inside functions; no banner or section-divider
+  comments; no docstrings on trivial helpers that only restate the signature.
+- **Keep** the guardrail commentary: leak-surface and answer-key boundaries,
+  determinism/byte-identity notes, grounding and provenance contracts,
+  lock-order and fail-closed rationale, and references to `docs/DECISIONS.md`
+  rulings. When in doubt, keep it and flag it.
+- Public API docstrings stay; tighten bloated wording, never remove.
+- Build the simplest thing that works. No new abstraction without a second
+  consumer.

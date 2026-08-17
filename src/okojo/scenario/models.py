@@ -275,14 +275,12 @@ class KycIdentityAttribute:
     doc_number: str
 
 
-# --------------------------------------------------------------------------- #
 # Phase 8 Part III (geo triangulation). A TERRITORY designation names a
 # geography, not a party — so there is no name screen; the sweep collects
 # location signals per account and triangulates. Everything below is a NEW
 # sibling table, so every existing CSV stays byte-identical (Q2/Q3 rulings).
 # All fields are fully synthetic (a fictional region, invented carriers, and
 # territory/country codes named by no advisory).
-# --------------------------------------------------------------------------- #
 
 
 @dataclass

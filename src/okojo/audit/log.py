@@ -87,7 +87,6 @@ class AuditLog:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._seq, self._last_hash = self._tail()
 
-    # -- hashing ------------------------------------------------------------ #
     @staticmethod
     def _digest(payload: dict) -> str:
         blob = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
@@ -107,7 +106,6 @@ class AuditLog:
         rec = json.loads(last_line)
         return int(rec["seq"]), str(rec["hash"])
 
-    # -- write -------------------------------------------------------------- #
     def append(
         self,
         actor: str,
@@ -134,7 +132,6 @@ class AuditLog:
         self._last_hash = record["hash"]
         return record
 
-    # -- read / verify ------------------------------------------------------ #
     def read_all(self) -> list[dict]:
         if not self.path.exists():
             return []

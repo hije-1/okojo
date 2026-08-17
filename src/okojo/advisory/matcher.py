@@ -132,16 +132,12 @@ class AdvisoryMatch(BaseModel):
     matched_terms: list[str]                 # keyword trigger terms hit (back-compat)
     red_flags: list[str]
     provenance: list[Provenance]
-    # Phase 3 hybrid detail:
     signals: list[str] = []                  # which of keyword/semantic/structured fired
     semantic_indicators: list[SemanticIndicator] = []
     corroborators: list[Corroborator] = []
     corroborated: bool = False
 
 
-# --------------------------------------------------------------------------- #
-# Corpus loading / parsing
-# --------------------------------------------------------------------------- #
 def _parse_meta(text: str, label: str) -> str:
     m = re.search(rf"-\s*\*\*{re.escape(label)}:\*\*\s*(.+)", text)
     return m.group(1).strip() if m else ""
@@ -191,9 +187,6 @@ def load_advisories(corpus_dir: Optional[Path] = None) -> list[Advisory]:
     return [load_advisory(p) for p in sorted(corpus_dir.glob("*.md"))]
 
 
-# --------------------------------------------------------------------------- #
-# Retrieval / structured helpers
-# --------------------------------------------------------------------------- #
 def build_advisory_retriever(advisory: Advisory, embedder=None) -> CosineRetriever:
     """Index the advisory's numbered red-flag indicators for semantic retrieval."""
     items = [(rf.text, {"rf_id": rf.rf_id, "text": rf.text}) for rf in advisory.red_flag_items]
@@ -254,9 +247,6 @@ def _corroborators_for(advisory: Advisory, structured: StructuredContext) -> lis
     return out
 
 
-# --------------------------------------------------------------------------- #
-# Matching
-# --------------------------------------------------------------------------- #
 def _term_pattern(term: str) -> re.Pattern:
     # Word-boundary match for alphanumeric terms; substring for the rest.
     escaped = re.escape(term)
@@ -286,7 +276,6 @@ def match_advisory(
     patterns = [(t, _term_pattern(t)) for t in adv.trigger_terms]
     docs = [(text, prov) for text, prov in documents if text]
 
-    # -- keyword pass ------------------------------------------------------- #
     keyword_terms: dict[str, None] = {}   # ordered, deduped
     provenance: list[Provenance] = []
     seen_prov: set[Provenance] = set()
@@ -305,7 +294,6 @@ def match_advisory(
         if hit_here:
             _add_prov(prov)
 
-    # -- semantic pass ------------------------------------------------------ #
     semantic: dict[str, SemanticIndicator] = {}   # rf_id -> best indicator
     if retriever is not None:
         for text, prov in docs:
@@ -322,7 +310,6 @@ def match_advisory(
         for ind in semantic.values():
             _add_prov(ind.provenance)
 
-    # -- structured corroboration ------------------------------------------ #
     corroborators = _corroborators_for(adv, structured) if structured is not None else []
 
     primary_hit = bool(keyword_terms) or bool(semantic)

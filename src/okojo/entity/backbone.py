@@ -105,7 +105,6 @@ class EntityBackbone:
         self.watchlist = watchlist
         self._by_uid = {e.uid: e for e in entities}
 
-    # -- account lookups ---------------------------------------------------- #
     def account(self, uid: int) -> Optional[Entity]:
         return self._by_uid.get(uid)
 
@@ -127,7 +126,6 @@ class EntityBackbone:
     def entities_controlling_sanctioned_address(self) -> list[Entity]:
         return [e for e in self.entities if e.controls_sanctioned_address()]
 
-    # -- watchlist ---------------------------------------------------------- #
     def watchlist_aliases(self) -> list[tuple[WatchlistEntity, str]]:
         """(watchlist-entity, alias) pairs, in ``sdn_list`` / split order.
 

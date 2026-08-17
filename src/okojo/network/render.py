@@ -145,7 +145,6 @@ def _node_style(data: dict) -> tuple[str, str, str]:
             return "#dc2626", "triangle", f"SANCTIONED (synthetic): {data.get('address')}"
         label = data.get("addr_label") or "address"
         return "#0ea5e9", "dot", f"{label}: {data.get('address')}"
-    # account
     if data.get("is_subject"):
         return "#f59e0b", "star", f"SUBJECT — {data.get('label')} ({data.get('role')})"
     role = data.get("role")

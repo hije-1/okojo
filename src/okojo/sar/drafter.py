@@ -414,14 +414,12 @@ def build_sar(
     return draft
 
 
-# --------------------------------------------------------------------------- #
 # Gap-targeted claim builders (the Critic's revision inputs).
 #
 # Each fills one FinCEN-rubric element the template-first draft omits, *only*
 # from evidence already retrieved for this case. Every builder returns a grounded
 # claim or ``None`` — ``None`` means the element is genuinely unsupported by the
 # evidence, so the Critic loop flags it for human review rather than inventing it.
-# --------------------------------------------------------------------------- #
 
 def _dedup(prov: list[Provenance]) -> list[Provenance]:
     """Order-preserving de-duplication (Provenance is frozen/hashable)."""

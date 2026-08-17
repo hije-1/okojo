@@ -148,7 +148,7 @@ def build_proximity_ring(conn: Connectors, party_uids: list[int],
             primary: list[ProximitySignal] = []
             weighting: list[ProximitySignal] = []
 
-            # -- PRIMARY: shared surname/patronymic --------------------------
+            # PRIMARY: shared surname/patronymic
             cand_surname = _surname(acct["entity_name"])
             if cand_surname and cand_surname == pinfo["surname"]:
                 primary.append(ProximitySignal(
@@ -158,7 +158,7 @@ def build_proximity_ring(conn: Connectors, party_uids: list[int],
                     provenance=acct.provenance,
                 ))
 
-            # -- PRIMARY: declared-relationship metadata ---------------------
+            # PRIMARY: declared-relationship metadata
             for r in rels:
                 pair = {int(r["uid_a"]), int(r["uid_b"])}
                 if pair == {uid, party}:
@@ -169,7 +169,7 @@ def build_proximity_ring(conn: Connectors, party_uids: list[int],
                         provenance=r.provenance,
                     ))
 
-            # -- PRIMARY: relationship remark / KYC-document cross-holding ----
+            # PRIMARY: relationship remark / KYC-document cross-holding
             for a in assertions:
                 pair = {int(a["subject_uid"]), int(a["related_uid"])}
                 if pair != {uid, party}:
@@ -184,7 +184,7 @@ def build_proximity_ring(conn: Connectors, party_uids: list[int],
             if not primary:
                 continue
 
-            # -- WEIGHTING: shared KYC attribute / email handle (evidence only)
+            # WEIGHTING: shared KYC attribute / email handle (evidence only)
             cand_kyc = kyc.get(uid)
             if cand_kyc is not None:
                 addr = _distinct_address(cand_kyc["address"])

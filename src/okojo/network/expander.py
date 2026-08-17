@@ -221,7 +221,6 @@ def _score_nodes(g: nx.MultiDiGraph, exposed_nodes: set[str], gas_controllers: s
             data["risk"], data["risk_reasons"] = round(min(risk, 1.0), 3), reasons
             continue
 
-        # account node
         risk = 0.0
         if nid in exposed_nodes:
             risk += _W_SANCTIONED_EXPOSURE
@@ -286,14 +285,12 @@ def step_walk(conn: Connectors, walk: ExpansionWalk) -> int:
         acct = conn.get_account(uid)
         src_acct = b.add_account(uid)
 
-        # controls edges + gather this account's refs
         refs = [f"uid:{uid}"]
         for addr_rec in conn.addresses_for(uid):
             addr = addr_rec["address"]
             refs.append(addr)
             b.add_edge(src_acct, b.add_address(addr), "controls", addr_rec.provenance.cite())
 
-        # transaction edges + counterparty discovery
         for ref in refs:
             for tx in conn.transactions_touching(ref):
                 fn = b.ensure_ref(tx["from_ref"])
@@ -316,7 +313,6 @@ def step_walk(conn: Connectors, walk: ExpansionWalk) -> int:
                         discovered.add(cid)
                         next_frontier.add(cid)
 
-        # shared-device edges
         for dev in conn.devices_for(uid):
             for co in conn.accounts_on_device(dev["device_fingerprint"]):
                 cu = co["uid"]
@@ -327,7 +323,6 @@ def step_walk(conn: Connectors, walk: ExpansionWalk) -> int:
                     discovered.add(cu)
                     next_frontier.add(cu)
 
-        # reused-KYC edges
         if acct is not None:
             for co in conn.accounts_with_kyc(acct["kyc_doc_id"]):
                 cu = co["uid"]

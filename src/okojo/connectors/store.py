@@ -94,7 +94,6 @@ class Store:
         for name, fname in TABLES.items():
             df = pd.read_csv(self.data_dir / fname)
             self._frames[name] = df
-            # Register the DataFrame as a DuckDB view for SQL access.
             self.con.register(name, df)
 
     def frame(self, name: str) -> pd.DataFrame:
