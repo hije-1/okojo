@@ -35,11 +35,13 @@ the seven fixes and returned these two findings.
   so a process killed in that window leaves the dataset only under an internal
   backup name. The description is now accurate — a staged regeneration with two
   sequential renames and a brief window in which the target path is absent — and
-  the bootstrap now recovers: at boot, if the dataset is missing or incomplete
-  and a backup directory from an interrupted swap is present, that backup is
-  restored before the ordinary missing/incomplete logic runs. Fault-injection
-  tests cover failure at each rename, the in-process rollback, and the
-  orphaned-backup recovery path.
+  the bootstrap now recovers: at boot, if a backup directory from an interrupted
+  swap is present, a complete backup is restored before the ordinary
+  missing/incomplete logic runs; an incomplete backup is discarded and the
+  deterministic dataset regenerated, since a partial dataset is not loadable and
+  the documented policy is wholesale replacement. Fault-injection tests cover
+  failure at each rename, the in-process rollback, the orphaned-backup recovery
+  path, and the incomplete-orphan discard.
 
 ### Changed
 - **Comment cleanup across the codebase.** Narration and section-banner comments
