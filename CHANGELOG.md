@@ -9,6 +9,46 @@ financial-crime investigations at a crypto exchange. It is not production
 screening, not legal or compliance advice, and not a SAR-filing tool; a human
 always reviews, decides, and files. All data is synthetic or public.
 
+## [1.1.3] - 2026-08-17
+
+This release corrects two claims made in the v1.1.2 release notes and adds the
+recovery path the corrected description implies. Both arose from the external
+auditor's verification pass over the v1.1.2 remediation, which confirmed six of
+the seven fixes and returned these two findings.
+
+### Fixed
+- **Correction: v1.1.2 did change the runtime RFI schema.** The v1.1.2 notes
+  said "No public API contract changed." That was wrong. Removing the scenario
+  answer key from runtime RFI records also removed two fields — `ground_truth`
+  and `contradicted_by` — from the public `RfiClaim` model (re-exported from
+  `okojo.rfi`), and therefore from the `CaseResult.rfi` serialization shape.
+  Code that read either attribute, or that deserializes the pre-1.1.2 shape,
+  needs updating. Evaluation code should read those labels from
+  `okojo.eval.rfi_claim_answer_key`, the only supported reader. The removal
+  itself stands — keeping the answer key out of runtime records is the point of
+  that fix; the defect was the compatibility claim and the missing migration
+  note.
+- **Bootstrap regeneration: honest wording, plus recovery.** The v1.1.2 notes
+  and the `okojo.bootstrap` docstrings described the dataset swap as "atomic".
+  Each of the two renames is atomic on its own, but the pair is not an atomic
+  directory exchange: between them the configured dataset path does not exist,
+  so a process killed in that window leaves the dataset only under an internal
+  backup name. The description is now accurate — a staged regeneration with two
+  sequential renames and a brief window in which the target path is absent — and
+  the bootstrap now recovers: at boot, if the dataset is missing or incomplete
+  and a backup directory from an interrupted swap is present, that backup is
+  restored before the ordinary missing/incomplete logic runs. Fault-injection
+  tests cover failure at each rename, the in-process rollback, and the
+  orphaned-backup recovery path.
+
+### Changed
+- **Comment cleanup across the codebase.** Narration and section-banner comments
+  removed so the remaining commentary explains *why* rather than restating what
+  the code plainly does; guardrail, determinism, provenance, and public-API
+  commentary kept. No code changes.
+
+[1.1.3]: https://github.com/hije-1/okojo/releases/tag/v1.1.3
+
 ## [1.1.2] - 2026-08-13
 
 This release remediates the findings of an external, third-party code audit. An

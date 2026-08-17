@@ -241,7 +241,9 @@ every run — so any historical result can be reproduced and defended.
 Okojo's code has been through an external, third-party audit: an independent
 auditor, operating under a written read-only brief, ran an adversarial review of
 its code quality, correctness, and security. The findings were triaged, accepted,
-and fixed with regression tests (see the CHANGELOG for v1.1.2). This is a
+and fixed with regression tests (see the CHANGELOG for v1.1.2 and v1.1.3). A
+follow-up verification pass over that remediation confirmed the fixes and
+returned two further findings, also triaged, accepted, and fixed. This is a
 point-in-time review of a synthetic-data research prototype, not a certification.
 
 ---
