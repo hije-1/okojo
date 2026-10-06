@@ -16,4 +16,4 @@
 # After installing, re-calibrate the semantic threshold against the gold set for this
 # embedder and record it in docs/advisory-methodology.md (the cosine geometry differs
 # from the lexical fallback).
-sentence-transformers==3.3.1
+sentence-transformers==5.6.0
